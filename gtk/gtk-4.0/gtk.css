@@ -1,0 +1,3 @@
+/* A18: the upstream theme libadwaita override first (unchanged file), then the the reference design window chrome layer. */
+@import url("gtk-Dark.css");
+@import url("a18-chrome.css");

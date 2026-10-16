@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-session@vitre-desktop",
+  "name": "Vitre Session",
+  "description": "The Vitre glass look for the lock screen and system dialogs (Log Out, Restart, Power Off, Run, password prompts): a big light clock with the Vitre mark, a glass unlock card with a capsule password field, and glass that stretches out of the top bar into each dialog. Decorates GNOME's own dialogs after they are built, so the stock dialog always remains the fallback; disabling restores everything.",
+  "shell-version": [
+    "51"
+  ],
+  "session-modes": [
+    "user",
+    "unlock-dialog"
+  ],
+  "version": 1,
+  "url": "https://github.com/chrismteryli/vitre"
+}

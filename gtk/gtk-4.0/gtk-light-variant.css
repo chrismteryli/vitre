@@ -1,0 +1,4 @@
+/* A18: NOT wired (the live ~/.config/gtk-4.0 links both gtk.css and gtk-dark.css to the Dark file, i.e. Dark Style only).
+   If Dark Style is ever turned off, the standard the upstream theme dual layout is: gtk.css = this file, gtk-dark.css = the dark one. */
+@import url("gtk-Light.css");
+@import url("a18-chrome.css");

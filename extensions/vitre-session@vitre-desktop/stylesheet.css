@@ -1,0 +1,276 @@
+/* Vitre Session: the lock screen (UnlockDialog) and the end-session dialog in the Vitre glass style.
+ *
+ * Palette (identity/brand/tokens.json): ink #081226, cyan #22d3ee / #7dd3fc, white glass rims.
+ * Every rule is scoped under a class that only this extension adds (.vitre-lock on the unlock dialog, .vitre-es on the
+ * end-session card), so with the extension off, or when a decoration step fails, GNOME's own styling applies untouched.
+ *
+ * CASCADE NOTE: this GNOME Shell's St cascade lets the EARLIER of two equal-specificity rules win (see the Control
+ * Center stylesheet), and the default theme / the upstream theme / Liquid Glass use long selectors and !important. Every rule here
+ * repeats its scope class to out-rank them. The lock screen runs under GNOME's default theme (user-theme is not enabled
+ * in the unlock-dialog session mode), the end-session dialog under the upstream theme-Dark-A16 + Liquid Glass.
+ */
+
+/* ======================================================================================================== LOCK == */
+
+/* a navy veil over the blurred wallpaper: the lock screen reads as one calm sheet of dark glass */
+.vitre-lock-scrim {
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(8, 18, 38, 0.08);
+  background-gradient-end: rgba(8, 18, 38, 0.40);
+}
+
+/* ---- the mark (small bead at the top) ---- */
+.vitre-lock-mark {
+  icon-size: 56px;
+}
+.vitre-lock-ring {
+  border: 2px solid rgba(150, 240, 255, 0.85);
+  border-radius: 999px;
+  background-color: rgba(34, 211, 238, 0.06);
+}
+
+/* ---- clock page ---- */
+.vitre-lock.vitre-lock .unlock-dialog-clock {
+  margin-top: 0;
+  spacing: 0;
+  color: #ffffff;
+}
+.vitre-lock.vitre-lock .unlock-dialog-clock .unlock-dialog-clock-date {
+  font-weight: 600;
+  font-size: 23px;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 22px rgba(8, 18, 38, 0.55);
+  margin-bottom: 2px;
+}
+.vitre-lock.vitre-lock .unlock-dialog-clock .unlock-dialog-clock-time {
+  font-family: "Inter Display";
+  font-weight: 300;
+  font-size: 150px;
+  letter-spacing: -3px;
+  color: rgba(255, 255, 255, 0.97);
+  text-shadow: 0 8px 70px rgba(8, 18, 38, 0.55);
+}
+.vitre-lock.vitre-lock .unlock-dialog-clock .unlock-dialog-clock-hint {
+  margin-top: 34px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.90);
+  background-color: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* ---- prompt page: the unlock card ---- */
+.vitre-lock.vitre-lock .vitre-card {
+  min-width: 330px;
+  padding: 36px 36px 20px 36px;
+  border-radius: 40px;
+  background-color: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  transition-duration: 80ms;
+}
+/* while the drip intro draws the card's glass itself */
+.vitre-lock.vitre-lock .vitre-card.vitre-intro {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-layout {
+  spacing: 0;
+}
+.vitre-lock.vitre-lock .vitre-card .user-widget.vertical {
+  spacing: 12px;
+}
+.vitre-lock.vitre-lock .vitre-card .user-widget.vertical .user-icon {
+  icon-size: 104px;
+  background-color: rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 14px 34px rgba(4, 10, 26, 0.45);
+}
+.vitre-lock.vitre-lock .vitre-card .user-widget.vertical .user-icon StIcon {
+  padding: 22px;
+}
+.vitre-lock.vitre-lock .vitre-card .user-widget.vertical .user-widget-label {
+  font-weight: 600;
+  font-size: 21px;
+  color: #ffffff;
+  text-shadow: 0 1px 14px rgba(8, 18, 38, 0.5);
+  margin-bottom: 14px;
+}
+
+/* the password capsule */
+.vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry {
+  width: 272px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  font-size: 15px;
+  color: #ffffff;
+  caret-color: #7dd3fc;
+  selection-background-color: rgba(34, 211, 238, 0.45);
+  selected-color: #ffffff;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry:focus {
+  background-color: rgba(255, 255, 255, 0.17);
+  border-color: rgba(125, 211, 252, 0.80);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.24) !important;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry StLabel.hint-text {
+  color: rgba(255, 255, 255, 0.62);
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry StIcon {
+  color: rgba(255, 255, 255, 0.82);
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button {
+  width: 32px;
+  height: 32px;
+  margin-right: 6px;
+  border-radius: 999px;
+  color: #ffffff;
+  background-color: rgba(34, 211, 238, 0.34);
+  border: 1px solid rgba(125, 211, 252, 0.60);
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button:hover {
+  background-color: rgba(34, 211, 238, 0.50);
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-button.cancel-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0 4px 0 0;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-message {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  margin-top: 6px;
+  min-height: 0;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-message-warning {
+  color: #ffc2c2;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-input-well {
+  spacing: 0;
+}
+
+/* ---- bottom corners: Switch User, Login Options ---- */
+.vitre-lock.vitre-lock .login-dialog-bottom-button-group .login-dialog-button,
+.vitre-lock.vitre-lock .login-dialog-button.switch-user-button {
+  border-radius: 999px;
+  padding: 8px 18px;
+  margin: 0 0 24px 12px;
+  font-weight: 500;
+  font-size: 13px;
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.vitre-lock.vitre-lock .login-dialog-bottom-button-group .login-dialog-button:hover,
+.vitre-lock.vitre-lock .login-dialog-button.switch-user-button:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ============================================================================================ END SESSION == */
+
+/* the card: ink glass. With the glass sheet (class vitre-es-glass) the card paints nothing itself;
+ * without it (the sheet failed) the card keeps a solid ink fill so the text stays readable. */
+.vitre-es.vitre-es.vitre-es {
+  min-width: 400px;
+  max-width: 400px;
+  padding: 0;
+  border-radius: 36px;
+  background-color: rgba(10, 20, 44, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 30px 80px rgba(2, 6, 18, 0.55);
+}
+.vitre-es.vitre-es.vitre-es.vitre-es-glass {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.vitre-es.vitre-es .vitre-es-mark {
+  icon-size: 52px;
+  margin-top: 30px;
+}
+.vitre-es.vitre-es .modal-dialog-content-box {
+  padding: 14px 34px 4px 34px;
+  spacing: 12px;
+}
+.vitre-es.vitre-es .message-dialog-content {
+  spacing: 8px;
+}
+.vitre-es.vitre-es .message-dialog-title {
+  font-weight: 600;
+  font-size: 22px;
+  text-align: center;
+  color: #ffffff;
+}
+.vitre-es.vitre-es .message-dialog-description {
+  font-weight: 400;
+  font-size: 14px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.74);
+}
+.vitre-es.vitre-es .end-session-dialog-battery-warning,
+.vitre-es.vitre-es .dialog-list-title {
+  color: rgba(255, 255, 255, 0.74);
+}
+/* the countdown track */
+.vitre-es.vitre-es .vitre-es-track {
+  height: 4px;
+  margin: 10px 34px 0 34px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+.vitre-es.vitre-es .vitre-es-fill {
+  border-radius: 999px;
+  background-color: rgba(125, 211, 252, 0.92);
+}
+/* buttons: Control Center's glass pills */
+.vitre-es.vitre-es .modal-dialog-button-box {
+  padding: 20px 26px 28px 26px;
+  spacing: 12px;
+}
+.vitre-es.vitre-es .modal-dialog-button-box .modal-dialog-button {
+  min-height: 0;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  text-shadow: none;
+}
+.vitre-es.vitre-es .modal-dialog-button-box .modal-dialog-button:hover {
+  background-color: rgba(255, 255, 255, 0.20);
+}
+.vitre-es.vitre-es .modal-dialog-button-box .modal-dialog-button:active {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+.vitre-es.vitre-es .modal-dialog-button-box .modal-dialog-button:focus {
+  border-color: rgba(125, 211, 252, 0.85);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.30) !important;
+}
+.vitre-es.vitre-es .modal-dialog-button-box .modal-dialog-button:last-child {
+  background-color: rgba(34, 211, 238, 0.30);
+  border-color: rgba(125, 211, 252, 0.62);
+}
+.vitre-es.vitre-es .modal-dialog-button-box .modal-dialog-button:last-child:hover {
+  background-color: rgba(34, 211, 238, 0.44);
+}

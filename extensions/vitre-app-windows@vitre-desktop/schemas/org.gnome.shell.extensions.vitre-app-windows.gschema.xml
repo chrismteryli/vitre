@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-app-windows" path="/org/gnome/shell/extensions/vitre-app-windows/">
+    <key name="app-windows-shortcut" type="as">
+      <default>['&lt;Control&gt;Down']</default>
+      <summary>Optional shortcut for App Windows</summary>
+      <description>Control-Down is the default shortcut. Set an empty list to leave it unassigned. Registration must succeed without replacing another shortcut; the Quick Settings action remains available.</description>
+    </key>
+  </schema>
+</schemalist>

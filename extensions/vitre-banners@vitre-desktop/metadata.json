@@ -1,0 +1,13 @@
+{
+  "uuid": "vitre-banners@vitre-desktop",
+  "name": "Vitre Banners",
+  "description": "Vitre Banners: notification banners at the top right, slide in from the right, two-finger swipe right to dismiss.",
+  "shell-version": [
+    "51"
+  ],
+  "session-modes": [
+    "user"
+  ],
+  "version": 1,
+  "url": "https://github.com/chrismteryli/vitre"
+}

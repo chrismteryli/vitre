@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="vitre-swipe@vitre-desktop">
+  <schema id="org.gnome.shell.extensions.vitre-swipe" path="/org/gnome/shell/extensions/vitre-swipe/">
+    <key name="style" type="s">
+      <choices>
+        <choice value="depth"/>
+        <choice value="stock"/>
+      </choices>
+      <default>"depth"</default>
+      <summary>Overview swipe style</summary>
+      <description>depth: the three-finger swipe up (and the overview) uses the Depth and parallax motion. stock: GNOME's own overview motion, exactly as without this extension. Takes effect at the next overview (or at once if the overview is open).</description>
+    </key>
+    <key name="piles" type="s">
+      <choices>
+        <choice value="carry"/>
+        <choice value="stay"/>
+      </choices>
+      <default>"stay"</default>
+      <summary>Vitre Stage piles in the overview</summary>
+      <description>stay (default): the Vitre Stage piles stay on the left, fanned open, until the overview closes (the concept's behaviour); needs the Vitre Stage extension (this extension wraps four of its methods while the overview is in use, it does not edit it) and behaves like carry without it. carry: the parked windows fly from the rail into the overview grid (Stage's own overview hand-off).</description>
+    </key>
+  </schema>
+</schemalist>

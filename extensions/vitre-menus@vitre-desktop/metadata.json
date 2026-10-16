@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-menus@vitre-desktop",
+  "name": "Vitre Menus",
+  "description": "Glass menus for the top bar and beyond. The glass stretches out of the button you clicked and stays attached until it lands as the menu; closing plays it back. Covers top bar menus, app menus, Dock menus and other shell menus. Also owns the shared drip-style setting (liquid | classic) that Vitre Controls, Vitre Notices and the menu-bar HUD read. Disabling restores every menu exactly.",
+  "shell-version": [
+    "51"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-menus",
+  "version": 2,
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}

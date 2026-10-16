@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-search@vitre-desktop",
+  "name": "Vitre Search",
+  "description": "Vitre Search: a search bar with Liquid Glass motion, and the Apps view (the app grid in a glass panel, opened from the Dock's apps button, Super+A or the Apps button).",
+  "shell-version": [
+    "51"
+  ],
+  "version": 2,
+  "settings-schema": "org.gnome.shell.extensions.vitre-search",
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}

@@ -1,0 +1,17 @@
+Vitre-Glass: credits and licences
+
+What this is
+  A copy of the shell theme MacTahoe-Dark-A16 (its gnome-shell folder) and of the GTK 3, GTK 4 and window-frame folders of the
+  MacTahoe-Dark theme, under the name Vitre-Glass. Only names changed (index.theme, the window-frame theme name, six CSS comment
+  lines that named macOS features) and three shell assets that drew Apple art were replaced with Vitre art
+  (gnome-shell/assets/activities.svg, activities-white.svg, view-app-grid.svg). Everything else is a byte-for-byte copy.
+
+Credits and licences, as found in the copied files
+  - MacTahoe GTK theme by Vinceliuice and contributors, https://github.com/vinceliuice/MacTahoe-gtk-theme . The licence file that
+    comes with that project is included next to this file as COPYING (MIT licence, copyright line "WhiteSur Developers").
+  - metacity-1/metacity-theme-*.xml name their author (Vince Liuice) and say "GPL-3.0+" inside the file. Those lines are unchanged.
+  - gnome-shell/gnome-shell.css starts with the GNOME Shell copyright header (Red Hat, Intel; GNU Lesser General Public Licence 2.1).
+    That header is unchanged.
+  - The "A16" blocks at the end of gnome-shell.css and a16-panels.css are additions made for the Vitre desktop.
+  - The three replaced shell assets are original Vitre art.
+  Keep this file and COPYING with the theme when you copy or share it.

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-stage"
+          path="/org/gnome/shell/extensions/vitre-stage/">
+    <key name="enabled" type="b">
+      <default>false</default>
+      <summary>Vitre Stage is on</summary>
+    </key>
+    <key name="max-groups" type="i">
+      <range min="1" max="8"/>
+      <default>6</default>
+      <summary>Most recent app groups shown in the strip</summary>
+    </key>
+    <key name="thumbnail-tilt" type="d">
+      <default>0.0</default>
+      <summary>Perspective tilt of strip thumbnails, in degrees (0 = flat)</summary>
+    </key>
+    <key name="toggle-stage-manager" type="as">
+      <default>[]</default>
+      <summary>Keyboard shortcut that turns Vitre Stage on and off</summary>
+    </key>
+    <key name="dhruva-saved-effect" type="s">
+      <default>''</default>
+      <summary>Internal: Dhruva minimize effect to restore if a swap was interrupted</summary>
+    </key>
+  </schema>
+</schemalist>

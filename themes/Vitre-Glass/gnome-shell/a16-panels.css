@@ -1,0 +1,499 @@
+/* A16 panel refinements - authored theme source.
+ * Loaded at the custom stylesheet tier as a generated copy at the end of
+ * Liquid Glass stylesheet.css. This GNOME51 runtime does not carry the required
+ * important cascade through @import. Keep this source and generated copy equal.
+ */
+#calendarArea {
+  padding: 4px 0;
+  spacing: 12px;
+}
+
+/* Preserve native two-column layout and scrolling; no fixed popup height. */
+#calendarArea .message-list {
+  width: 25.5em;
+  padding: 0;
+  margin: 0;
+}
+
+#calendarArea .message-view:ltr,
+#calendarArea .message-view:rtl {
+  margin: 0;
+}
+
+#calendarArea .datemenu-calendar-column {
+  padding: 0;
+  margin: 0;
+  spacing: 6px;
+}
+
+/* The native grouped stack paints full messages behind its front message.
+ * These plates MUST be opaque, including hover/focus/insensitive states.
+ * The outer menu retains its Liquid Glass surface.
+ */
+#calendarArea .message {
+  background-color: #303034 !important;
+  color: #f5f5f7 !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.14) !important;
+  padding: 8px;
+  margin: 0 0 8px !important;
+}
+
+#calendarArea .message:hover,
+#calendarArea .message:focus {
+  background-color: #3a3a3f !important;
+}
+
+#calendarArea .message:active {
+  background-color: #444449 !important;
+}
+
+#calendarArea .message:insensitive {
+  background-color: #303034 !important;
+  color: #99999f !important;
+}
+
+#calendarArea .message:second-in-stack {
+  background-color: #29292d !important;
+  box-shadow: none !important;
+}
+
+#calendarArea .message:lower-in-stack {
+  background-color: #252529 !important;
+  box-shadow: none !important;
+}
+
+#calendarArea .message .message-header {
+  padding: 0 2px;
+  spacing: 6px;
+}
+
+#calendarArea .message .message-header-content {
+  spacing: 6px;
+  padding-bottom: 2px;
+}
+
+#calendarArea .message .message-source-title {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #d3d3d8 !important;
+}
+
+#calendarArea .message .event-time {
+  font-size: 0.8em;
+  font-weight: 400;
+  color: #a8a8b0 !important;
+}
+
+#calendarArea .message .message-box {
+  padding: 2px;
+  margin: 0;
+  spacing: 8px;
+}
+
+#calendarArea .message .message-icon {
+  icon-size: 36px;
+}
+
+#calendarArea .message .message-icon.message-themed-icon {
+  icon-size: 18px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 6px;
+}
+
+#calendarArea .message .message-title {
+  font-weight: 600;
+  color: #f5f5f7 !important;
+}
+
+#calendarArea .message .message-body {
+  color: #d7d7dd !important;
+}
+
+#calendarArea .message-group-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #f5f5f7 !important;
+}
+
+#calendarArea .message-list-controls {
+  padding: 8px 0 0;
+}
+
+#calendarArea .message-list-clear-button {
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #d7d7dd !important;
+}
+
+#calendarArea .datemenu-today-button {
+  padding: 4px 8px;
+  margin: 0 0 2px;
+  border-radius: 10px;
+}
+
+#calendarArea .datemenu-today-button .day-label {
+  font-size: 0.85em;
+  font-weight: 500;
+  color: #b8b8c0 !important;
+}
+
+#calendarArea .datemenu-today-button .date-label {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #f5f5f7 !important;
+}
+
+/* 32 logical-pixel cell pitch at normal text scale. Keep font-relative
+ * dimensions so larger accessibility text still increases the grid.
+ */
+#calendarArea .calendar {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-radius: 16px !important;
+  padding: 8px !important;
+  margin: 0 !important;
+}
+
+#calendarArea .calendar .calendar-day,
+#calendarArea .calendar .calendar-day-base {
+  font-size: 0.8em;
+  width: 2.55em;
+  height: 2.55em;
+  margin: 1px;
+  padding: 0;
+  color: #dedee3 !important;
+}
+
+#calendarArea .calendar .calendar-day-heading {
+  font-size: 0.75em;
+  font-weight: 500;
+  width: 2.73em !important;
+  height: 1.8em !important;
+  margin: 1px;
+  color: #9c9ca5 !important;
+}
+
+#calendarArea .calendar .calendar-month-label {
+  font-weight: 600;
+  padding: 2px 0;
+  color: #ededf1 !important;
+}
+
+#calendarArea .calendar .calendar-other-month,
+#calendarArea .calendar .calendar-other-month-day {
+  color: #81818b !important;
+}
+
+/* Match GNOME 51's current accent and its matching contrast foreground. */
+#calendarArea .calendar .calendar-today {
+  color: -st-accent-fg-color !important;
+  background-color: -st-accent-color !important;
+}
+
+/* Native GNOME 51 selects dates with :selected. Liquid Glass's broad
+ * transparent-day selector does not exclude it, so preserve it explicitly.
+ */
+#calendarArea .calendar .calendar-day:selected,
+#calendarArea .calendar .calendar-day-base:selected {
+  background-color: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45) !important;
+}
+
+#calendarArea .calendar .calendar-today:selected {
+  background-color: -st-accent-color !important;
+  color: -st-accent-fg-color !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65) !important;
+}
+
+#calendarArea .events-button,
+#calendarArea .world-clocks-button,
+#calendarArea .weather-button {
+  padding: 8px 10px !important;
+  margin: 0 !important;
+  border-radius: 12px !important;
+  background-color: rgba(255, 255, 255, 0.045) !important;
+  color: #d7d7dd !important;
+}
+
+#calendarArea .events-button:hover,
+#calendarArea .world-clocks-button:hover,
+#calendarArea .weather-button:hover {
+  background-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+#calendarArea .events-title,
+#calendarArea .events-section-title,
+#calendarArea .world-clocks-header,
+#calendarArea .weather-header {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #d7d7dd !important;
+}
+
+#calendarArea .event-placeholder {
+  font-size: 0.9em;
+  font-style: normal;
+  color: #a8a8b0 !important;
+}
+
+#calendarArea .datemenu-displays-box,
+#calendarArea .events-box,
+#calendarArea .events-list {
+  spacing: 6px;
+}
+
+/* Liquid Glass clears button shadows/borders globally. Restore clear keynav
+ * feedback in this panel; no can_focus/reactive/visibility properties change.
+ */
+#calendarArea StButton:focus,
+#calendarArea .message:focus,
+#calendarArea .calendar .calendar-day:focus,
+#calendarArea .calendar .calendar-day-base:focus {
+  box-shadow: inset 0 0 0 2px -st-accent-color !important;
+}
+
+#calendarArea .calendar .calendar-today:focus {
+  box-shadow: inset 0 0 0 2px #ffffff !important;
+}
+
+.quick-settings .quick-settings-grid {
+  spacing-rows: 8px;
+  spacing-columns: 8px;
+}
+
+.quick-settings .quick-toggle,
+.quick-settings .quick-toggle-has-menu,
+.quick-settings .quick-toggle:hover,
+.quick-settings .quick-toggle:active,
+.quick-settings .quick-toggle:checked,
+.quick-settings .quick-toggle:checked:hover,
+.quick-settings .quick-toggle:checked:active,
+.quick-settings .quick-toggle-has-menu:hover,
+.quick-settings .quick-toggle-has-menu:active,
+.quick-settings .quick-toggle-has-menu:checked {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none;
+  border-radius: 16px;
+  padding: 0 !important;
+  min-height: 0;
+  color: #1d1d1f !important;
+}
+
+.quick-settings .quick-toggle > StBoxLayout,
+.quick-settings .quick-toggle:ltr > StBoxLayout,
+.quick-settings .quick-toggle:rtl > StBoxLayout,
+.quick-settings .quick-toggle-has-menu > StBoxLayout {
+  background-color: rgba(236, 241, 247, 0.68);
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  min-height: 36px;
+  padding: 8px 10px;
+  spacing: 8px;
+}
+.quick-settings .quick-toggle:hover > StBoxLayout,
+.quick-settings .quick-toggle-has-menu:hover > StBoxLayout {
+  background-color: rgba(236, 241, 247, 0.76);
+}
+.quick-settings .quick-toggle:active > StBoxLayout,
+.quick-settings .quick-toggle-has-menu:active > StBoxLayout {
+  background-color: rgba(236, 241, 247, 0.86);
+}
+
+/* A has-menu module contains another QuickToggle: do not paint it twice. */
+.quick-settings .quick-toggle-has-menu .quick-toggle,
+.quick-settings .quick-toggle-has-menu .quick-toggle:ltr,
+.quick-settings .quick-toggle-has-menu .quick-toggle:rtl {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 10px;
+  padding: 0 !important;
+}
+.quick-settings .quick-toggle-has-menu .quick-toggle > StBoxLayout,
+.quick-settings .quick-toggle-has-menu .quick-toggle:ltr > StBoxLayout,
+.quick-settings .quick-toggle-has-menu .quick-toggle:rtl > StBoxLayout,
+.quick-settings .quick-toggle-has-menu .quick-toggle:hover > StBoxLayout,
+.quick-settings .quick-toggle-has-menu .quick-toggle:active > StBoxLayout {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 10px;
+  padding: 0;
+  spacing: 8px;
+}
+
+.quick-settings .quick-toggle .quick-toggle-title {
+  font-weight: 600;
+  color: #1d1d1f !important;
+}
+.quick-settings .quick-toggle .quick-toggle-subtitle {
+  color: #34383e !important;
+}
+.quick-settings .quick-toggle .quick-toggle-icon,
+.quick-settings .quick-toggle-has-menu .quick-toggle .quick-toggle-icon {
+  icon-size: 16px;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  padding: 8px;
+  border-radius: 9999px;
+  background-color: rgba(0, 0, 0, 0.07);
+  color: #1d1d1f;
+}
+.quick-settings .quick-toggle:checked .quick-toggle-icon,
+.quick-settings .quick-toggle-has-menu .quick-toggle:checked .quick-toggle-icon {
+  background-color: -st-accent-color;
+  color: #ffffff;
+}
+.quick-settings .quick-toggle-has-menu .quick-toggle-menu-button,
+.quick-settings .quick-toggle-has-menu .quick-toggle-menu-button:ltr,
+.quick-settings .quick-toggle-has-menu .quick-toggle-menu-button:rtl {
+  min-width: 24px;
+  min-height: 32px;
+  padding: 0;
+  margin: 0;
+  border-radius: 10px;
+  background-color: transparent !important;
+  color: #1d1d1f;
+}
+.quick-settings .quick-toggle-has-menu .quick-toggle-separator { width: 0; }
+
+/* Override Liquid Glass's 24px slider padding and 8px extra row margin. */
+.quick-settings .quick-slider,
+.quick-settings.liquid-glass-qs-root .quick-slider {
+  min-height: 32px;
+  padding: 8px 10px !important;
+  margin: 0 !important;
+  border-radius: 16px !important;
+  background-color: rgba(236, 241, 247, 0.68) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22) !important;
+  color: #1d1d1f;
+}
+.quick-settings .quick-slider .icon-button {
+  min-height: 24px;
+  min-width: 24px;
+  margin: 0;
+  padding: 4px;
+  border-radius: 10px;
+  background-color: transparent !important;
+  color: #1d1d1f;
+}
+.quick-settings .quick-slider StIcon { color: #1d1d1f; }
+.quick-settings .quick-slider .slider-bin { padding: 4px; }
+.quick-settings .quick-slider .slider,
+.quick-settings .quick-slider .slider:hover {
+  height: 16px;
+  color: #ffffff;
+  -slider-handle-radius: 7px;
+  -barlevel-height: 8px;
+  -barlevel-background-color: rgba(0, 0, 0, 0.20);
+  -barlevel-active-background-color: -st-accent-color;
+}
+
+/* Equal 36px system controls. Their StIcon children own the light material. */
+.quick-settings .quick-settings-system-item > StBoxLayout { spacing: 8px; }
+.quick-settings .quick-settings-system-item .icon-button {
+  min-height: 36px !important;
+  min-width: 36px !important;
+  padding: 0;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: #1d1d1f;
+}
+.quick-settings .quick-settings-system-item .icon-button > StIcon {
+  icon-size: 16px;
+  padding: 10px;
+  border-radius: 9999px;
+  background-color: rgba(236, 241, 247, 0.68);
+}
+.quick-settings .quick-settings-system-item .power-item > StBoxLayout {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+.quick-settings .quick-settings-system-item .power-item .quick-toggle-icon {
+  padding: 0;
+  background-color: transparent;
+}
+.quick-settings .quick-settings-system-item .icon-button:hover > StIcon {
+  background-color: rgba(236, 241, 247, 0.76);
+}
+.quick-settings .quick-settings-system-item .icon-button:active > StIcon {
+  background-color: rgba(236, 241, 247, 0.86);
+}
+
+/* Use shadows for arrow feedback; button fill alpha is owned by Liquid Glass. */
+.quick-settings .quick-toggle-menu-button:hover,
+.quick-settings .quick-slider .icon-button:hover {
+  box-shadow: inset 0 0 0 24px rgba(0, 0, 0, 0.07) !important;
+}
+.quick-settings .quick-toggle-menu-button:active,
+.quick-settings .quick-slider .icon-button:active {
+  box-shadow: inset 0 0 0 24px rgba(0, 0, 0, 0.13) !important;
+}
+.quick-settings .quick-toggle:focus > StBoxLayout,
+.quick-settings .quick-toggle-menu-button:focus,
+.quick-settings .quick-settings-system-item .icon-button:focus > StIcon,
+.quick-settings .quick-slider .icon-button:focus,
+.quick-settings .quick-slider .slider-bin:focus {
+  box-shadow: inset 0 0 0 2px -st-accent-color !important;
+}
+
+/* Unavailable controls remain visible and distinguishable. */
+.quick-settings .quick-toggle:insensitive .quick-toggle-title,
+.quick-settings .quick-toggle:insensitive .quick-toggle-subtitle,
+.quick-settings .quick-toggle:insensitive .quick-toggle-icon,
+.quick-settings .quick-toggle-has-menu:insensitive .quick-toggle-title,
+.quick-settings .quick-toggle-has-menu:insensitive .quick-toggle-subtitle,
+.quick-settings .quick-toggle-has-menu:insensitive .quick-toggle-icon,
+.quick-settings .quick-toggle-menu-button:insensitive,
+.quick-settings .quick-settings-system-item .icon-button:insensitive {
+  color: #525964 !important;
+}
+.quick-settings .quick-toggle:insensitive:checked .quick-toggle-icon,
+.quick-settings .quick-toggle-has-menu:insensitive .quick-toggle:checked .quick-toggle-icon {
+  background-color: #7c92af;
+  color: #ffffff !important;
+}
+
+/* GNOME places this submenu in a sibling overlay, outside .quick-settings. */
+.quick-toggle-menu {
+  background-color: rgba(236, 241, 247, 0.96) !important;
+  color: #1d1d1f !important;
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+}
+.quick-toggle-menu .header,
+.quick-toggle-menu .header .title,
+.quick-toggle-menu .header .subtitle,
+.quick-toggle-menu .popup-menu-item,
+.quick-toggle-menu .device-subtitle {
+  color: #1d1d1f !important;
+}
+.quick-toggle-menu .header .title { font-size: 1em; font-weight: 600; }
+.quick-toggle-menu .header .icon {
+  color: #1d1d1f;
+  background-color: rgba(0, 0, 0, 0.07);
+}
+.quick-toggle-menu .header .icon.active {
+  color: #ffffff;
+  background-color: -st-accent-color;
+}
+.quick-toggle-menu .popup-menu-item:hover,
+.quick-toggle-menu .popup-menu-item:focus,
+.quick-toggle-menu .popup-menu-item:selected {
+  background-color: rgba(0, 0, 0, 0.07) !important;
+  color: #1d1d1f !important;
+}
+.quick-toggle-menu .popup-menu-item:active {
+  background-color: rgba(0, 0, 0, 0.13) !important;
+}
+.quick-toggle-menu .popup-menu-item:focus {
+  box-shadow: inset 0 0 0 2px -st-accent-color !important;
+}
+.quick-toggle-menu .popup-menu-item:insensitive { color: #626a75 !important; }

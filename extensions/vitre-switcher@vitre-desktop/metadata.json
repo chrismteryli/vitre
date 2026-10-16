@@ -1,0 +1,13 @@
+{
+  "uuid": "vitre-switcher@vitre-desktop",
+  "name": "Vitre Switcher",
+  "description": "Glass app and window switcher (Super-Tab, Alt-Tab): glass panel, appears after a short delay, blur-fade dismissal. Overrides GNOME's switcherPopup/altTab at run time; no GNOME file is edited.",
+  "shell-version": [
+    "51"
+  ],
+  "session-modes": [
+    "user"
+  ],
+  "version": 1,
+  "url": "https://github.com/chrismteryli/vitre"
+}

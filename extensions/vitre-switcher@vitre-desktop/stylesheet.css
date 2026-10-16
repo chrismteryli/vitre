@@ -1,0 +1,68 @@
+/* Switcher Glass (vitre-switcher@vitre-desktop). Dynamic metrics (padding, radii, font size) are set inline
+ * from layout.js; this file holds the colours and the resets. Classes are our own (sg-*): the panel drops the
+ * stock "switcher-list" / "item-box" classes so the theme's switcher rules and Blur my Shell's switcher-list
+ * target do not apply on top of the glass. */
+.sg-switcher-list {
+  background-color: rgba(0, 0, 0, 0);
+  border: 0;
+  box-shadow: none;
+  color: #ffffff;
+  spacing: 0;
+}
+
+.sg-switcher-list .switcher-list-item-container,
+.sg-switcher-list .sg-item-container {
+  spacing: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.sg-item,
+.sg-item:hover,
+.sg-item:focus,
+.sg-item:active,
+.sg-item:selected,
+.sg-item:highlighted,
+.sg-item:outlined {
+  background-color: rgba(0, 0, 0, 0);
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  margin: 0;
+  color: #ffffff;
+}
+
+.sg-app {
+  spacing: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* the plate: the item itself (window switcher) or the icon holder (app switcher) */
+.sg-plate {
+  background-color: rgba(255, 255, 255, 0);
+  border: 0;
+  box-shadow: none;
+}
+
+.sg-plate:selected,
+.sg-item:selected.sg-plate {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+.sg-plate:highlighted,
+.sg-item:highlighted.sg-plate {
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sg-label {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 500;
+  text-align: center;
+  padding: 0;
+  margin: 0;
+}
+
+.sg-thumbs .thumbnail {
+  border-radius: 12px;
+}

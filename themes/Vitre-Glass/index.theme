@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=Vitre-Glass
+Comment=Vitre Glass: a dark glass theme for GNOME Shell and GTK. See NOTICE.txt for credits and licences.
+Encoding=UTF-8
+
+[X-GNOME-Metatheme]
+GtkTheme=Vitre-Glass
+MetacityTheme=Vitre-Glass
+IconTheme=Vitre-Icons
+CursorTheme=Vitre-Cursor
+ButtonLayout=close,minimize,maximize:menu

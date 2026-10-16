@@ -1,0 +1,21 @@
+/* Frameless window previews and compact app badges.
+   Corner radius and shadow of the previews are set from the extension (they scale with the
+   screen); the values below are the 1920-wide defaults. No hover highlight (the reference design has none). */
+.stage-manager-item {
+    padding: 0;
+    border-radius: 0;
+    background-color: transparent;
+}
+.stage-manager-item:focus {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
+}
+/* Both flight and rail use this same composition. */
+.stage-manager-preview {
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.10);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+.stage-manager-thumb-empty {
+    border-radius: 5px;
+    background-color: rgba(255, 255, 255, 0.08);
+}

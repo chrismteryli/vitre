@@ -1,0 +1,13 @@
+{
+  "uuid": "vitre-controls@vitre-desktop",
+  "name": "Vitre Controls",
+  "description": "Vitre Controls: floating glass modules over the desktop (no panel) that stretch out of the Controls icon. Restyles and re-lays out GNOME's own Quick Settings; restores it exactly on disable. Hover and press feedback: slider knob and glass lens, chevrons, press response.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 4,
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}

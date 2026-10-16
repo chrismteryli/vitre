@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-search" path="/org/gnome/shell/extensions/vitre-search/">
+    <key name="toggle-vitresearch" type="as">
+      <default>["&lt;Super&gt;space"]</default>
+      <summary>Open or close Vitre Search</summary>
+      <description>Accelerator that toggles the Vitre Search bar. It is registered only when no other GNOME keybinding uses it (GNOME uses Super+Space for switching input sources); otherwise the extension logs one line and leaves it unregistered. Set another accelerator, or move input switching, to activate it.</description>
+    </key>
+    <key name="use-remote-providers" type="b">
+      <default>true</default>
+      <summary>Search with GNOME's search providers</summary>
+      <description>Include the same search providers as the overview (Files, Calculator, Settings, ...), honouring the Settings search switches. Applications and system actions are always included.</description>
+    </key>
+    <key name="filters-on-pointer" type="b">
+      <default>true</default>
+      <summary>Show the filter buttons when the pointer moves over the bar</summary>
+      <description>The four filter buttons (Apps, Files, Actions, Clipboard) split out of the bar when Tab is pressed; when this is on, moving the pointer over an empty bar does the same.</description>
+    </key>
+  </schema>
+</schemalist>

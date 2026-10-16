@@ -1,0 +1,13 @@
+{
+  "uuid": "vitre-hud@vitre-desktop",
+  "name": "Menu-bar HUD",
+  "description": "Volume, brightness and keyboard-backlight indicator: a clear glass capsule that stretches out below the top bar under the Vitre Controls icon, replacing GNOME's centred on-screen display for those three. Every other OSD is untouched; disabling restores GNOME's OSD exactly.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 3,
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}

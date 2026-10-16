@@ -1,0 +1,265 @@
+/* A18: the reference design window + toolbar look, layered OVER the the upstream theme libadwaita override.
+   Never edits the theme: gtk.css / gtk-dark.css @import the the upstream theme file first, then this one.
+   Units: pt -> logical px with k = 1.15 (A9). 52 pt bar = 60 px, 14 pt disc = 16 px, 36 pt capsule = 41/42 px,
+   16 pt radius = 18.4 px (circle of equal corner area = 19 px), 13 pt title = 15 px, 11 pt subtitle = 13 px.
+   Values marked DERIVED are dark-mode values the light-mode measurement does not give. */
+
+/* ---- tokens (light, then dark) ---- */
+window {
+  --a18-title: alpha(black, 0.70);
+  --a18-subtitle: alpha(black, 0.50);
+  --a18-title-off: alpha(black, 0.31);
+  --a18-subtitle-off: alpha(black, 0.22);
+  --a18-glass: alpha(black, 0.02);
+  --a18-rim-x: alpha(black, 0.25);
+  --a18-rim-y: alpha(black, 0.06);
+  --a18-divider: alpha(black, 0.12);
+  --a18-hover: alpha(black, 0.06);
+  --a18-glass-hover: alpha(black, 0.07);
+  --a18-glass-press: alpha(black, 0.12);
+  --a18-glass-off: alpha(black, 0.01);
+  --a18-rim-x-off: alpha(black, 0.12);
+  --a18-rim-y-off: alpha(black, 0.03);
+  --a18-glyph-off: alpha(black, 0.35);
+  --a18-inner: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  window {
+    --a18-title: alpha(white, 0.85);
+    --a18-subtitle: alpha(white, 0.50);
+    --a18-title-off: alpha(white, 0.37);
+    --a18-subtitle-off: alpha(white, 0.22);
+    --a18-glass: alpha(white, 0.09);
+    --a18-rim-x: alpha(white, 0.20);
+    --a18-rim-y: alpha(white, 0.07);
+    --a18-divider: alpha(white, 0.14);
+    --a18-hover: alpha(white, 0.08);
+    --a18-glass-hover: alpha(white, 0.16);
+    --a18-glass-press: alpha(white, 0.24);
+    --a18-glass-off: alpha(white, 0.045);
+    --a18-rim-x-off: alpha(white, 0.10);
+    --a18-rim-y-off: alpha(white, 0.035);
+    --a18-glyph-off: alpha(white, 0.40);
+    --a18-inner: alpha(white, 0.08);
+  }
+}
+
+/* ---- window layer: 19 px circular corner (= the reference 16 pt continuous corner by area), hairline, 0 18pt 40pt shadow ---- */
+window.csd:not(#a18), window.csd.background:not(#a18) {
+  --window-radius: 19px;
+  border-radius: 19px;
+  outline: 0.58px solid var(--a18-inner);
+  outline-offset: -0.58px;
+  box-shadow: 0 0 0 0.58px alpha(black, 0.20), 0 20px 45.3px 0 alpha(black, 0.40);
+}
+window.csd:backdrop:not(#a18) {
+  box-shadow: 0 0 0 0.58px alpha(black, 0.20), 0 20px 45.3px 0 alpha(black, 0.18);
+}
+window.csd.maximized:not(#a18), window.csd.fullscreen:not(#a18) {
+  --window-radius: 0px; border-radius: 0; outline: none; box-shadow: none;
+}
+window.csd.tiled:not(#a18), window.csd.tiled-top:not(#a18), window.csd.tiled-left:not(#a18),
+window.csd.tiled-right:not(#a18), window.csd.tiled-bottom:not(#a18) {
+  --window-radius: 0px; border-radius: 0; outline: none;
+  box-shadow: 0 0 0 0.58px alpha(black, 0.20);
+}
+
+/* ---- toolbar band: 52 pt = 60 px, everything centred on y = 30 ---- */
+headerbar:not(#a18) { min-height: 60px; box-shadow: none; border-bottom: none; }
+/* reference has no toolbar hairline (the scroll edge effect separates content): drop libadwaita's raised/titlebar lines */
+toolbarview:not(#a18) > .top-bar:not(#a18), toolbarview:not(#a18) > .top-bar.raised:not(#a18),
+window:not(.ssd-frame):not(#a18) > .titlebar:not(.flat):not(#a18) { box-shadow: none; border-bottom: none; }
+headerbar:not(#a18) > windowhandle > box { padding: 9px 8px 10px 8px; }
+/* AdwHeaderBar fixes the start/end box spacing at 6 px (a GtkBox spacing property beats CSS border-spacing): 2 px of margin makes the 8 px gap */
+windowtitle:not(#a18) { padding-top: 4px; }
+windowtitle:not(#a18) .subtitle { margin-top: -1px; }
+
+toolbarview:not(#a18) > .bottom-bar:not(#a18) headerbar:not(#a18) { min-height: 47px; }
+
+/* ---- traffic lights: 14 pt = 16 px discs, centres at x = 30 / 56 / 83, y = 30. The disc is a 16x16 SVG centred in the button, so it
+        stays a circle even where an app makes the window-control button taller (Ptyxis' header) ---- */
+headerbar:not(#a18) windowcontrols:not(.empty).start { margin-left: 14px; margin-right: 6px; padding: 0; border-spacing: 10px; }
+headerbar:not(#a18) windowcontrols:not(.empty).end { margin-left: 6px; margin-right: 14px; padding: 0; border-spacing: 10px; }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18),
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18),
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) {
+  min-width: 16px; min-height: 16px; padding: 0; margin: 13px 0 12px 0;
+  border-radius: 0; border: none; border-width: 0; outline: none; box-shadow: none; filter: none;
+  background-color: transparent; background-repeat: no-repeat; background-position: center; background-size: 16px 16px;
+  color: transparent;
+}
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { margin-left: 1px; }
+headerbar:not(#a18) windowcontrols > button:not(#a18) > image { background: none; background-color: transparent; color: transparent; padding: 0; margin: 0; min-width: 0; min-height: 0; opacity: 0; box-shadow: none; -gtk-icon-size: 1px; }
+/* active: solid discs with a ring a shade darker, one device pixel wide at 1.5x; the SVGs are declared at 3x (48 px) so GTK
+   rasterizes them sharp in their 16 px slot (B20, 2026-10-15) */
+headerbar:not(#a18) windowcontrols > button.close:not(#a18) { background-image: url("a18-assets/tl-close.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18) { background-image: url("a18-assets/tl-minimize.svg"); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { background-image: url("a18-assets/tl-maximize.svg"); }
+/* hover over the group shows all three glyphs (GTK4 sets :hover on the parent too) */
+headerbar:not(#a18) windowcontrols:hover > button.close:not(#a18):not(:backdrop) { background-image: url("a18-assets/tl-close-hover.svg"); }
+headerbar:not(#a18) windowcontrols:hover > button.minimize:not(#a18):not(:backdrop) { background-image: url("a18-assets/tl-minimize-hover.svg"); }
+headerbar:not(#a18) windowcontrols:hover > button.maximize:not(#a18):not(:backdrop) { background-image: url("a18-assets/tl-maximize-hover.svg"); }
+headerbar:not(#a18) windowcontrols > button:active:not(#a18) { filter: brightness(0.85); }
+/* inactive window: pale grey discs (light: measured; dark: DERIVED) */
+headerbar:not(#a18) windowcontrols > button.close:backdrop:not(#a18) { background-image: url("a18-assets/tl-close-off-light.svg"); filter: none; opacity: 1; }
+headerbar:not(#a18) windowcontrols > button.minimize:backdrop:not(#a18) { background-image: url("a18-assets/tl-minimize-off-light.svg"); filter: none; opacity: 1; }
+headerbar:not(#a18) windowcontrols > button.maximize:backdrop:not(#a18) { background-image: url("a18-assets/tl-maximize-off-light.svg"); filter: none; opacity: 1; }
+@media (prefers-color-scheme: dark) {
+  headerbar:not(#a18) windowcontrols > button.close:backdrop:not(#a18) { background-image: url("a18-assets/tl-close-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.minimize:backdrop:not(#a18) { background-image: url("a18-assets/tl-minimize-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.maximize:backdrop:not(#a18) { background-image: url("a18-assets/tl-maximize-off-dark.svg"); }
+}
+
+/* ---- title + subtitle: 13 pt semibold / 11 pt regular ---- */
+headerbar:not(#a18) .title, windowtitle:not(#a18) .title { font-size: 15px; font-weight: 600; color: var(--a18-title); }
+headerbar:not(#a18) .subtitle, windowtitle:not(#a18) .subtitle { font-size: 13px; font-weight: 400; color: var(--a18-subtitle); }
+headerbar:not(#a18):backdrop .title, headerbar:not(#a18):backdrop windowtitle .title { color: var(--a18-title-off); }
+headerbar:not(#a18):backdrop .subtitle, headerbar:not(#a18):backdrop windowtitle .subtitle { color: var(--a18-subtitle-off); }
+
+/* ---- glass capsules: 36 pt high pills, circles for lone icon buttons, segmented groups with hairline dividers ---- */
+headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):not(.a18-skip), headerbar:not(#a18) menubutton > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) {
+  min-height: 41px; min-width: 41px; padding: 0 12px;
+  border-radius: 21px; border: none; outline: none;
+  background-image: none; background-color: var(--a18-glass);
+  box-shadow: inset 0.58px 0 0 var(--a18-rim-x), inset -0.58px 0 0 var(--a18-rim-x), inset 0 0.58px 0 var(--a18-rim-y), inset 0 -0.58px 0 var(--a18-rim-y);
+  color: @window_fg_color;
+}
+headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action).image-button { padding: 0; min-width: 42px; }
+headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):hover { background-color: var(--a18-glass-hover); }
+headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):active, headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):checked { background-color: var(--a18-glass-press); }
+headerbar:not(#a18):backdrop button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) {
+  background-color: var(--a18-glass-off);
+  box-shadow: inset 0.58px 0 0 var(--a18-rim-x-off), inset -0.58px 0 0 var(--a18-rim-x-off), inset 0 0.58px 0 var(--a18-rim-y-off), inset 0 -0.58px 0 var(--a18-rim-y-off);
+}
+/* prominent (suggested / destructive) header buttons keep their tint but take the capsule shape */
+headerbar:not(#a18) button.suggested-action:not(#a18), headerbar:not(#a18) button.destructive-action:not(#a18) { min-height: 41px; min-width: 41px; border-radius: 21px; padding: 0 16px; }
+/* search entries in the header: 36 pt glass capsule */
+headerbar:not(#a18) entry:not(#a18) { min-height: 41px; border-radius: 21px; background-color: var(--a18-glass); border: none;
+  box-shadow: inset 0.58px 0 0 var(--a18-rim-x), inset -0.58px 0 0 var(--a18-rim-x), inset 0 0.58px 0 var(--a18-rim-y), inset 0 -0.58px 0 var(--a18-rim-y); }
+headerbar:not(#a18) entry:not(#a18) button:not(#a18) { min-height: 0; min-width: 0; padding: 4px; margin: 0; border-radius: 999px; background-color: transparent; box-shadow: none; }
+/* segmented groups: the group is the capsule, its buttons are transparent segments (same selector weight as above, later in the file) */
+headerbar:not(#a18) .linked:not(#a18) { border-spacing: 0; border-radius: 21px; background-color: var(--a18-glass);
+  box-shadow: inset 0.58px 0 0 var(--a18-rim-x), inset -0.58px 0 0 var(--a18-rim-x), inset 0 0.58px 0 var(--a18-rim-y), inset 0 -0.58px 0 var(--a18-rim-y); }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) { background-color: transparent; box-shadow: none; border-radius: 0; margin: 0; min-width: 42px; padding: 0; }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):first-child { border-radius: 21px 0 0 21px; }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):last-child { border-radius: 0 21px 21px 0; }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):only-child { border-radius: 21px; }
+/* 3-segment groups: 37.2 pt per segment (measured on the the reference design Files window) instead of 36.5 */
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):first-child:nth-last-child(3),
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):nth-child(2):nth-last-child(2),
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):last-child:nth-child(3) { min-width: 43px; }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):not(:first-child) { box-shadow: inset 0.58px 0 0 var(--a18-divider); }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):hover { background-color: var(--a18-hover); }
+headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):active, headerbar:not(#a18) .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):checked { background-color: var(--a18-glass-press); }
+headerbar:not(#a18):backdrop .linked:not(#a18) { background-color: var(--a18-glass-off);
+  box-shadow: inset 0.58px 0 0 var(--a18-rim-x-off), inset -0.58px 0 0 var(--a18-rim-x-off), inset 0 0.58px 0 var(--a18-rim-y-off), inset 0 -0.58px 0 var(--a18-rim-y-off); }
+headerbar:not(#a18):backdrop .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) { background-color: transparent; box-shadow: none; }
+headerbar:not(#a18):backdrop .linked:not(#a18) > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):not(:first-child) { box-shadow: inset 0.58px 0 0 var(--a18-divider); }
+headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) image { -gtk-icon-size: 18px; }
+
+
+/* ---- the upstream theme wraps some header groups (Files nav + path bar + view toggles, split / stack / view switchers) in 3 px padded pills with a
+        0 6px 20px drop shadow. reference: one flat 36 pt glass capsule, no drop shadow; the inner buttons become transparent segments ---- */
+headerbar:not(#a18) splitbutton:not(#a18),
+headerbar:not(#a18) stackswitcher:not(#a18),
+headerbar:not(#a18) viewswitcher:not(#a18),
+#NautilusPathBar:not(#a18),
+.nautilus-pathbar:not(#a18),
+.nautilus-window:not(#a18) .mc-toggle-group:not(#a18),
+#NautilusFileChooser:not(#a18) .mc-toggle-group:not(#a18),
+.nautilus-file-chooser:not(#a18) .mc-toggle-group:not(#a18),
+.nautilus-window:not(#a18) headerbar > windowhandle > box > widget > box.start > stack > widget > box:not(#a18),
+.nautilus-window:not(#a18) headerbar > windowhandle > box > widget > box.start > box > stack > widget > box:not(#a18),
+#NautilusFileChooser:not(#a18) headerbar > windowhandle > box > widget > box.start > stack > widget > box:not(#a18),
+#NautilusFileChooser:not(#a18) headerbar > windowhandle > box > widget > box.start > box > stack > widget > box:not(#a18),
+.nautilus-file-chooser:not(#a18) headerbar > windowhandle > box > widget > box.start > stack > widget > box:not(#a18),
+.nautilus-file-chooser:not(#a18) headerbar > windowhandle > box > widget > box.start > box > stack > widget > box:not(#a18) {
+  padding: 0; min-height: 41px; border-radius: 21px; background-image: none; background-color: var(--a18-glass);
+  box-shadow: inset 0.58px 0 0 var(--a18-rim-x), inset -0.58px 0 0 var(--a18-rim-x), inset 0 0.58px 0 var(--a18-rim-y), inset 0 -0.58px 0 var(--a18-rim-y);
+}
+headerbar:not(#a18) splitbutton:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+headerbar:not(#a18) stackswitcher:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+headerbar:not(#a18) viewswitcher:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+#NautilusPathBar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-pathbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-window:not(#a18) .mc-toggle-group:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+#NautilusFileChooser:not(#a18) .mc-toggle-group:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-file-chooser:not(#a18) .mc-toggle-group:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-window:not(#a18) headerbar > windowhandle > box > widget > box.start > stack > widget > box:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-window:not(#a18) headerbar > windowhandle > box > widget > box.start > box > stack > widget > box:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+#NautilusFileChooser:not(#a18) headerbar > windowhandle > box > widget > box.start > stack > widget > box:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+#NautilusFileChooser:not(#a18) headerbar > windowhandle > box > widget > box.start > box > stack > widget > box:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-file-chooser:not(#a18) headerbar > windowhandle > box > widget > box.start > stack > widget > box:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action),
+.nautilus-file-chooser:not(#a18) headerbar > windowhandle > box > widget > box.start > box > stack > widget > box:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) { background-color: transparent; background-image: none; box-shadow: none; min-height: 41px; }
+
+/* ---- sidebar: edge to edge, flush with the window, no separator (reference; reference floated it) ---- */
+.sidebar-pane.sidebar-pane.sidebar-pane:dir(ltr), .sidebar-pane.sidebar-pane.sidebar-pane:dir(rtl) {
+  margin: 0; border-radius: 0; background-image: none; box-shadow: none;
+}
+
+/* capsule groups sit 8 px apart (AdwHeaderBar fixes the box spacing at 6 px; a GtkBox spacing property beats CSS border-spacing) */
+headerbar:not(#a18) box.start > *:not(:first-child):not(windowcontrols):not(#a18),
+headerbar:not(#a18) box.end > *:not(:first-child):not(windowcontrols):not(#a18) { margin-left: 2px; }
+
+/* ---- B15 (2026-10-15): app menus (popovers). The upstream popover is 96 % opaque with no blur behind it, so the
+   window's own text showed through as ghosts (his Files screenshot: "days ago" behind New Folder). Opaque glass-tone
+   fill with a lit rim and a soft drop, rounder rows, a hover fill instead of the square keyboard ring, quieter
+   separators and shortcuts. The drip itself is the shell's (vitre-menus appMenuDrip.js). ---- */
+popover > arrow,
+popover > contents,
+popover.menu > arrow,
+popover.menu.background > contents {
+  background-color: @popover_bg_color;
+  border: 1px solid alpha(currentColor, 0.11);
+  box-shadow: inset 0 1px alpha(currentColor, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.45), 0 14px 36px rgba(0, 0, 0, 0.42);
+}
+popover > contents {
+  border-radius: 14px;
+}
+popover.menu.background > contents {
+  padding: 6px;
+}
+popover.menu modelbutton {
+  min-height: 26px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  outline: none;
+}
+/* the first item has :focus whenever the menu opens (mouse too): no ring for that, a soft fill only for keyboard use */
+popover.menu modelbutton:focus {
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+popover.menu modelbutton:focus:focus-visible {
+  background-color: alpha(currentColor, 0.10);
+}
+popover.menu modelbutton:hover,
+popover.menu modelbutton:hover:focus {
+  background-color: @accent_bg_color;
+  color: #ffffff;
+  box-shadow: none;
+}
+popover.menu modelbutton:active,
+popover.menu modelbutton:selected:active {
+  background-color: color-mix(in srgb, #000000 12%, @accent_bg_color);
+  color: #ffffff;
+}
+popover.menu modelbutton:disabled,
+popover.menu modelbutton:disabled:hover {
+  background-color: transparent;
+  color: alpha(currentColor, 0.32);
+}
+popover.menu accelerator {
+  color: alpha(currentColor, 0.40);
+}
+popover.menu modelbutton:hover accelerator,
+popover.menu modelbutton:selected accelerator {
+  color: alpha(currentColor, 0.60);
+}
+popover.menu.background separator,
+popover > contents separator {
+  background-color: alpha(currentColor, 0.08);
+  min-height: 1px;
+  margin: 5px 10px;
+}

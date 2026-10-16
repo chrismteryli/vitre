@@ -1,0 +1,10 @@
+{
+  "uuid": "vitre-fullscreen-spaces@vitre-desktop",
+  "name": "Full Screen Spaces",
+  "description": "Give newly full-screen app windows their own workspace, then return them when full screen ends. Existing full-screen windows and manual workspace moves are preserved. Disable to return windows still owned by this feature.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 1,
+  "url": "https://github.com/chrismteryli/vitre"
+}

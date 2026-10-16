@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-menus" path="/org/gnome/shell/extensions/vitre-menus/">
+    <key name="drip-style" type="s">
+      <choices>
+        <choice value="liquid"/>
+        <choice value="classic"/>
+      </choices>
+      <default>'liquid'</default>
+      <summary>Pop-out motion style</summary>
+      <description>liquid: everything that pops out of the top bar (Vitre Controls, Vitre Notices, the volume capsule, every top-bar menu) drips out of its top-bar pill like glass liquid. classic: the measured motion of the earlier builds (Vitre Controls instant, Vitre Notices slide, HUD fade, menus as Liquid Glass / GNOME animate them); the value keeps its old name so saved settings still work. Read by Vitre Controls, Vitre Notices, the menu-bar HUD and this extension; applies to the next pop-out, no login needed.</description>
+    </key>
+  </schema>
+</schemalist>

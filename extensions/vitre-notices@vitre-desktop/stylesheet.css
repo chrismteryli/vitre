@@ -1,0 +1,202 @@
+/* Notification Center: the reference design look. A single column of separate items over the desktop:
+ * clear-glass notification cards, then widgets (solid dark surfaces). No panel behind it.
+ * Sizes are the reference points x 1.15 (helpers.js NCGEO): column 381, small widget 181 x 179,
+ * medium 381 x 182, gap 19, widget radius 25, card radius 23.
+ * Scope is .nc-panel (set only while this extension is enabled). The St cascade lets the
+ * EARLIER of two equal-specificity rules win, so refinements always add a class/pseudo-class:
+ * scope = three .nc-panel classes, base = 4, refinements 5+. */
+
+/* ---- no chrome: pointer, content box, scroll, column ------------------------------- */
+.nc-panel.nc-panel.nc-panel.popup-menu-boxpointer {
+  -arrow-rise: 0px;
+  -arrow-base: 0px;
+  -arrow-border-width: 0px;
+  -arrow-background-color: transparent;
+  -arrow-border-color: transparent;
+  -arrow-box-shadow: none;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0;
+  padding: 0;
+}
+.nc-panel.nc-panel.nc-panel .nc-surface.popup-menu-content {
+  background-color: transparent !important;
+  background-gradient-direction: none;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  spacing: 0;
+}
+.nc-panel.nc-panel.nc-panel .nc-scroll {
+  padding: 3px;
+  margin: 0;
+  -st-vfade-offset: 0;
+}
+.nc-panel.nc-panel.nc-panel .nc-column { width: 381px; spacing: 0; }
+.nc-panel.nc-panel.nc-panel .nc-notification-section { spacing: 0; }
+.nc-panel.nc-panel.nc-panel .nc-calendar-widget { margin-bottom: 19px; }
+.nc-panel.nc-panel.nc-panel .nc-notifications.message-list {
+  width: 381px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+.nc-panel.nc-panel.nc-panel .message-view { margin: 0; padding: 0; -st-vfade-offset: 0; spacing: 0; }
+.nc-panel.nc-panel.nc-panel .message-notification-group { spacing: 0; padding-bottom: 19px; }
+.nc-panel.nc-panel.nc-panel .message-group-header { padding: 4px 8px; }
+.nc-panel.nc-panel.nc-panel .message-group-title { font-size: 13px; font-weight: 600; color: #ffffff; }
+
+/* ---- cards: clear glass (the glass layer is a child of the plate) ---------------------- */
+.nc-panel.nc-panel.nc-panel .message,
+.nc-panel.nc-panel.nc-panel .message:hover,
+.nc-panel.nc-panel.nc-panel .message:focus,
+.nc-panel.nc-panel.nc-panel .message:active,
+.nc-panel.nc-panel.nc-panel .message:insensitive,
+.nc-panel.nc-panel.nc-panel .message:second-in-stack,
+.nc-panel.nc-panel.nc-panel .message:lower-in-stack {
+  background-color: transparent !important;
+  background-gradient-direction: none;
+  border: none !important;
+  border-radius: 23px !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.nc-panel.nc-panel.nc-panel .message:focus .nc-card-rim {
+  box-shadow: inset 0 0 0 2px -st-accent-color, inset 0 0 0 3px rgba(255, 255, 255, 0.6);
+}
+.nc-panel.nc-panel.nc-panel .nc-card-rim {
+  background-color: rgba(255, 255, 255, 0.012);
+  border-radius: 23px;
+  box-shadow: none;
+}
+.nc-panel.nc-panel.nc-panel .message .message-box { padding: 14px; margin: 0; spacing: 11px; }
+.nc-panel.nc-panel.nc-panel .message .message-icon { icon-size: 37px; margin: 0; padding: 0; }
+.nc-panel.nc-panel.nc-panel .message .message-icon.message-themed-icon {
+  icon-size: 20px; min-width: 37px; min-height: 37px; padding: 0; border-radius: 9px;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+.nc-panel.nc-panel.nc-panel .message .message-content { spacing: 1px; }
+.nc-panel.nc-panel.nc-panel .message .nc-title-row { spacing: 8px; }
+.nc-panel.nc-panel.nc-panel .message .message-title { font-size: 15px; font-weight: 600; color: #ffffff !important; }
+.nc-panel.nc-panel.nc-panel .message .message-body { font-size: 15px; font-weight: 400; color: rgba(255, 255, 255, 0.88) !important; }
+.nc-panel.nc-panel.nc-panel .message .event-time { font-size: 12.65px; font-weight: 400; color: rgba(255, 255, 255, 0.6) !important; padding-top: 2px; }
+.nc-panel.nc-panel.nc-panel .message .message-action-bin { padding: 0 14px 14px; spacing: 6px; }
+.nc-panel.nc-panel.nc-panel .message .message-action-bin .button { padding: 5px 10px; font-size: 13px; }
+/* hover-only buttons: close (top left), expand (bottom right) */
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button,
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button:hover {
+  width: 22px; height: 22px; min-width: 0; min-height: 0; padding: 0; margin: 6px;
+  border-radius: 11px; background-color: transparent; border: none; box-shadow: none; color: transparent;
+}
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button StIcon { icon-size: 12px; color: transparent; }
+.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button { background-color: rgba(120, 120, 128, 0.55); }
+.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button StIcon { color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button:hover { background-color: rgba(160, 160, 168, 0.7); }
+
+/* ---- Clear: a small glass pill, only while the pointer is over the notifications ---------- */
+.nc-panel.nc-panel.nc-panel .message-list-controls { padding: 0; spacing: 0; height: 0; margin: 0; }
+.nc-panel.nc-panel.nc-panel .message-list-clear-button {
+  font-size: 12.65px; font-weight: 500; padding: 4px 12px; border-radius: 999px;
+  color: rgba(255, 255, 255, 0); background-color: transparent; box-shadow: none;
+}
+.nc-panel.nc-panel.nc-panel .nc-notifications:hover .message-list-clear-button {
+  color: #ffffff; background-color: rgba(50, 50, 56, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+.nc-panel.nc-panel.nc-panel .message-list-placeholder { padding: 0; spacing: 0; color: #eeeef2; font-size: 12px; }
+.nc-panel.nc-panel.nc-panel .message-list-placeholder > StIcon { icon-size: 0; margin: 0; padding: 0; }
+
+/* ---- widgets: solid dark surfaces, 25 px radius ------------------------------------------- */
+.nc-panel.nc-panel.nc-panel .nc-widget {
+  border-radius: 25px;
+  background-color: #1c1c1e;
+  color: #ffffff;
+  border: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  padding: 16px;
+}
+.nc-panel.nc-panel.nc-panel .nc-widget.nc-medium { height: 150px; spacing: 10px; }
+.nc-panel.nc-panel.nc-panel .nc-widget.nc-small { width: 181px; height: 179px; }
+.nc-panel.nc-panel.nc-panel .nc-widgets-box { spacing: 19px; }
+.nc-panel.nc-panel.nc-panel .nc-widgets-row { spacing: 19px; }
+
+/* Calendar (medium, month style): weekday in red caps + date on the left, month on the right */
+.nc-panel.nc-panel.nc-panel .nc-calendar-summary { width: 150px; spacing: 2px; }
+.nc-panel.nc-panel.nc-panel .nc-date-header {
+  padding: 0; margin: 0; background-color: transparent; border: none; border-radius: 6px; box-shadow: none;
+}
+.nc-panel.nc-panel.nc-panel .nc-date-header:hover { background-color: rgba(255, 255, 255, 0.06); }
+.nc-panel.nc-panel.nc-panel .nc-date-header:focus { box-shadow: inset 0 0 0 2px -st-accent-color; }
+.nc-panel.nc-panel.nc-panel .nc-date-header .day-label { font-size: 12.65px; font-weight: 600; color: #ff453a; }
+.nc-panel.nc-panel.nc-panel .nc-date-header .date-label { font-size: 39px; font-weight: 300; color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .nc-agenda.events-button {
+  padding: 2px 0; margin: 0; border-radius: 6px; background-color: transparent; border: none; box-shadow: none;
+}
+.nc-panel.nc-panel.nc-panel .nc-agenda.events-button:hover { background-color: rgba(255, 255, 255, 0.06); }
+.nc-panel.nc-panel.nc-panel .nc-agenda.events-button:focus { box-shadow: inset 0 0 0 2px -st-accent-color; }
+.nc-panel.nc-panel.nc-panel .nc-agenda .events-title { font-size: 11.5px; color: rgba(255, 255, 255, 0.55); padding-bottom: 3px; }
+.nc-panel.nc-panel.nc-panel .nc-agenda .events-list { spacing: 5px; }
+.nc-panel.nc-panel.nc-panel .nc-agenda .event-box { spacing: 1px; padding-left: 6px; border-left: 2px solid #4b9cfa; border-radius: 0; }
+.nc-panel.nc-panel.nc-panel .nc-agenda .event-summary { font-size: 12.65px; font-weight: 600; color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .nc-agenda .event-time { font-size: 11.5px; color: rgba(255, 255, 255, 0.55); }
+.nc-panel.nc-panel.nc-panel .nc-agenda .event-placeholder { font-size: 12.65px; font-style: normal; color: rgba(255, 255, 255, 0.55); }
+.nc-panel.nc-panel.nc-panel .nc-month.calendar {
+  width: 170px; min-width: 0; padding: 0; margin: 0;
+  background-color: transparent !important; border: none; border-radius: 0; box-shadow: none;
+}
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header { padding: 0; margin: 0; spacing: 0; }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .calendar-month-label {
+  width: 160px; text-align: left; padding: 0; font-size: 12.65px; font-weight: 600; color: #ff453a !important;
+}
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .pager-button { width: 22px; height: 18px; min-height: 0; min-width: 0; padding: 0; color: rgba(255, 255, 255, 0.6); }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .pager-button StIcon { icon-size: 10px; }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-day {
+  width: 18px; height: 18px; min-width: 0; min-height: 0;
+  margin: 2px; padding: 0; font-size: 10.4px; font-weight: 500;
+  border: none; border-radius: 9px; color: #ffffff;
+}
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-day-heading {
+  width: 22px; height: 15px; min-width: 0; min-height: 0;
+  margin: 0; padding: 0; font-size: 10.4px; font-weight: 500; color: rgba(255, 255, 255, 0.55);
+}
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-other-month { color: rgba(255, 255, 255, 0.35); }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-day:hover { background-color: rgba(255, 255, 255, 0.12); }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-day:selected { background-color: rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-day:focus { box-shadow: inset 0 0 0 2px -st-accent-color; }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-today,
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-today:selected { background-color: #ff453a; color: #ffffff !important; font-weight: 600; }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-week-number { width: 16px; margin: 2px; padding: 0; font-size: 9px; }
+
+/* Clock (small): dark surface, white analog face drawn in cairo */
+.nc-panel.nc-panel.nc-panel .nc-widget.nc-small.nc-clock-widget { padding: 0 0 8px 0; width: 181px; height: 171px; }
+.nc-panel.nc-panel.nc-panel .nc-clock-city { font-size: 12.65px; font-weight: 600; color: rgba(255, 255, 255, 0.6); margin: 9px 0 0 14px; }
+
+/* Weather (small): blue */
+.nc-panel.nc-panel.nc-panel .nc-widget.nc-weather-widget {
+  background-gradient-direction: vertical;
+  background-gradient-start: #4a90e2;
+  background-gradient-end: #2563c9;
+  padding: 14px;
+  width: 153px;
+  height: 151px;
+}
+.nc-panel.nc-panel.nc-panel .nc-weather-city { font-size: 14.95px; font-weight: 600; color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .nc-weather-temp { font-size: 44px; font-weight: 300; color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .nc-weather-icon { icon-size: 20px; color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .nc-weather-condition { font-size: 12.65px; font-weight: 600; color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .nc-weather-range { font-size: 12.65px; color: rgba(255, 255, 255, 0.85); }
+
+/* ---- the top-bar clock is NOT highlighted while Notification Center is open -------------- */
+#panel .panel-button.clock-display.nc-button:active .clock,
+#panel .panel-button.clock-display.nc-button:checked .clock,
+#panel .panel-button.clock-display.nc-button:focus .clock,
+#panel .panel-button.clock-display.nc-button:active:hover .clock {
+  background-color: transparent;
+  box-shadow: none;
+}

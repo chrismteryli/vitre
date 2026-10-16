@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-swipe@vitre-desktop",
+  "name": "Vitre Swipe",
+  "description": "Three-finger swipe up into the overview with depth and parallax: a dead zone, windows that rise and spread with the fingers, a dimmed and blurred wallpaper that drifts in two layers, a glass Spaces strip, a landing with one small overshoot, and the Vitre Stage piles fanning open. Setting style = stock gives GNOME's own overview motion back.",
+  "shell-version": [
+    "51"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-swipe",
+  "version": 1,
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}

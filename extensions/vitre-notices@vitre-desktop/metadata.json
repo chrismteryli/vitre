@@ -1,0 +1,13 @@
+{
+  "uuid": "vitre-notices@vitre-desktop",
+  "name": "Vitre Notices",
+  "description": "Vitre Notices: a right-edge notification column with clear-glass cards and dark widgets, sliding in from the right edge. Native GNOME notifications and calendar data. Built for this GNOME 51 desktop. Hover and press feedback on cards and stacks.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 5,
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}

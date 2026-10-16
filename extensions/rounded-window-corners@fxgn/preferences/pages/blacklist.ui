@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0" />
+  <requires lib="adw" version="1.0" />
+  <template class="PrefsBlacklist" parent="AdwPreferencesPage">
+    <property name="title" translatable="yes">Blacklist / Whitelist</property>
+    <property name="icon-name">action-unavailable-symbolic</property>
+    <child>
+      <object class="AdwPreferencesGroup" id="blacklistGroup">
+        <property name="title" translatable="yes">Blacklist / Whitelist</property>
+        <property name="description" translatable="yes">Not all application can works well with rounded corners effects, add them to this list to disable effects.</property>
+        <child>
+          <object class="AdwSwitchRow" id="useWhitelist">
+            <property name="title" translatable="yes">Use as Whitelist</property>
+            <property name="subtitle" translatable="yes">When selected, instead of omitting certain windows, only allows certain windows.</property>
+          </object>
+        </child>
+        <property name="header-suffix">
+          <object class="GtkButton">
+            <property name="valign">start</property>
+            <property name="margin-start">4px</property>
+            <property name="margin-end">4px</property>
+            <child>
+              <object class="AdwButtonContent">
+                <property name="label" translatable="yes">Add window</property>
+                <property name="icon-name">list-add-symbolic</property>
+              </object>
+            </child>
+            <signal name="clicked" handler="addWindow"/>
+          </object>
+        </property>
+      </object>
+    </child>
+  </template>
+</interface>

@@ -1,0 +1,27 @@
+/* Menu-bar HUD (plan A15). Sizes come from geometry.js (set inline where they depend on the
+ * derived capsule); colours match Control Center's slider tile: white fill, white 25 % rest. */
+.mbhud-glyph {
+  color: #ffffff;
+  -st-icon-style: symbolic;
+}
+
+.mbhud-track {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.mbhud-fill {
+  background-color: #ffffff;
+}
+
+/* The top-bar replacement pill: the same highlight Control Center draws (white 22 % fill, a
+ * 1 px white 55 % rim), 21 px high, fully round. */
+.mbhud-pill {
+  background-color: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.mbhud-pill-glyph {
+  icon-size: 14px;
+  color: #ffffff;
+  -st-icon-style: symbolic;
+}

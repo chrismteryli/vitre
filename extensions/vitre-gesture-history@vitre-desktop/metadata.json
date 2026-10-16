@@ -1,0 +1,10 @@
+{
+  "uuid": "vitre-gesture-history@vitre-desktop",
+  "name": "Gesture History",
+  "description": "Keep stopped touchpad gestures from inheriting expired momentum in GNOME 51, and hand the fingers' release speed to the overview and workspace swipe animations.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 2,
+  "url": "https://github.com/chrismteryli/vitre"
+}

@@ -1,0 +1,9 @@
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-show-desktop" path="/org/gnome/shell/extensions/vitre-show-desktop/">
+    <key name="show-desktop-shortcut" type="as">
+      <default>['&lt;Super&gt;F3']</default>
+      <summary>Show Desktop shortcut</summary>
+      <description>Reveal or restore the desktop. An empty list disables the shortcut; the dock and Quick Settings remain available.</description>
+    </key>
+  </schema>
+</schemalist>

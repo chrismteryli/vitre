@@ -1,0 +1,194 @@
+/* VitreSearch (A11). White text on clear glass; the glass itself is drawn by glassField.js. */
+#vitresearch-root {
+  background-color: transparent;
+}
+
+.sp-bar {
+  padding: 0 22px 0 24px;
+  spacing: 14px;
+  background-color: transparent;
+}
+
+.sp-search-icon {
+  icon-size: 28px;
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.sp-bar .sp-entry,
+.sp-entry {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  min-height: 36px;
+  color: #ffffff;
+  caret-color: #ffffff;
+  caret-size: 2px;
+  font-size: 24px;
+  font-weight: 400;
+  selection-background-color: rgba(255, 255, 255, 0.30);
+  selected-color: #ffffff;
+}
+
+.sp-entry:focus {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+.sp-entry StLabel.hint-text {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sp-button {
+  border-radius: 999px;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #ffffff;
+}
+
+.sp-button:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.sp-button:active,
+.sp-button:checked {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+
+.sp-button-icon {
+  icon-size: 28px;
+  color: #ffffff;
+}
+
+.sp-list {
+  spacing: 0;
+}
+
+.sp-section {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  font-weight: 600;
+  height: 20px;
+  padding: 8px 12px 0 12px;
+}
+
+.sp-empty {
+  color: rgba(255, 255, 255, 0.60);
+  font-size: 15px;
+  height: 34px;
+  padding: 14px 12px 0 12px;
+}
+
+.sp-row {
+  height: 48px;
+  border-radius: 16px;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 12px;
+  color: #ffffff;
+}
+
+.sp-row:hover {
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sp-row:selected,
+.sp-row:focus,
+.sp-row.selected {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.sp-row-content {
+  spacing: 12px;
+}
+
+.sp-row-title {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.sp-row-sub {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.sp-row-kind {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+}
+
+/* ---- Apps view (A19) ---- */
+.sp-apps {
+  spacing: 0;
+}
+
+.sp-chips {
+  spacing: 6px;
+  height: 40px;
+  padding: 6px 0 0 0;
+}
+
+.sp-chip {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  box-shadow: none;
+}
+
+.sp-chip:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.sp-chip:checked {
+  background-color: rgba(255, 255, 255, 0.30);
+  color: #ffffff;
+}
+
+.sp-apps-hairline {
+  height: 1px;
+  margin: 4px 8px 4px 8px;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.sp-app {
+  border-radius: 18px;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 8px 4px 4px 4px;
+}
+
+.sp-app:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sp-app:selected {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.sp-app-box {
+  spacing: 7px;
+}
+
+.sp-app-label {
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+  max-width: 120px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}

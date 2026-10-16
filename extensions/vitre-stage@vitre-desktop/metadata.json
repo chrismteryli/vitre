@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-stage@vitre-desktop",
+  "name": "Vitre Stage",
+  "description": "Vitre Stage: the active app on stage, recent apps as window piles in a strip on the left.",
+  "shell-version": [
+    "51"
+  ],
+  "session-modes": [
+    "user"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-stage",
+  "version": 9,
+  "url": "https://github.com/chrismteryli/vitre"
+}

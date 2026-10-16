@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-app-windows@vitre-desktop",
+  "name": "App Windows",
+  "description": "Current-app window overview using GNOME's native window previews.",
+  "shell-version": [
+    "51"
+  ],
+  "session-modes": [
+    "user"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-app-windows",
+  "version": 1,
+  "url": "https://github.com/chrismteryli/vitre"
+}

@@ -1,0 +1,147 @@
+files  (files, azure tile)  replaces MacTahoe art: file-manager.svg, system-file-manager.svg
+  names (35): Insight-FileManager Thunar WorkerIcon48 athena caja-actions com.expidusos.file_manager com.vicr123.thefile d3lphin dde-file-manager dev.tchx84.Portfolio file-manager file-system-manager filerunner fma-config-tool io.elementary.files kfm nautilus nautilus-actions nautilus-actions-config-tool nemo org.cubocore.CoreFM org.gnome.Files org.gnome.Nautilus org.gnome.files org.gnome.nautilus org.kde.dolphin org.kde.index redhat-filemanager spacefm system-file-manager thefile thunar thunar-filemanager user-file-manager xfce-filemanager
+  left alone (also an action/status/place/mime/category/preferences icon): org.xfce.filemanager[preferences,preferences@2x] org.xfce.thunar[preferences,preferences@2x]
+
+store  (store, indigo tile)  replaces MacTahoe art: softwarecenter.svg
+  names (37): Appstore com.gnome.Software com.gnome.software com.vicr123.theshop deepin-app-store deepin-appstore deepin-software-center dk.yumex.Yumex gnome-software io.snapcraft.Store light-software-center litesoftware lubuntu-software-center mintinstall muon-discover muondis-cover muondiscover openstore org.gnome.Software org.gnome.Software.Editor org.gnome.software org.kde.discover plasmadiscover snap-store software software-center software-properties-mint software-store softwarecenter swcentre theshop ubuntu-kylin-software-center yast-software yast-sw_single yumex yumex-dnf zeroinstall
+  left alone (also an action/status/place/mime/category/preferences icon): yast-sw_source[preferences,preferences@2x]
+
+browser  (browser, teal tile)  replaces MacTahoe art: safari.svg, web-browser.svg
+  names (49): 7596_iexplore.0 81F5_winebrowser.0 ECB7_iexplore.0 FB4C_iexplore.0 MultiBrowser agent angelfish arora browser com.vicr123.theweb cqcb.plasma.webslice deepin-browser dillo epiphany epiphany-browser epiphany-gecko epiphany-icon epiphany-webkit flock-browser galeon gnome-internet gnome-web gnome-web-browser internet internet-web-browser it.mijorus.webappmanager network-manager org.deepin.browser org.gnome.Eolie org.gnome.Epiphany org.gnome.Epiphany.Devel org.gnome.Web org.gnome.epiphany org.gnome.web org.kde.angelfish org.kde.mobile.angelfish org.kde.plasma.webbrowser org.xfce.webbrowser redhat-web-browser rekonq safari theweb uosbrowser-cn web-browser web-browser-app webbrowser-app www-browser xdg-browser-launcher yast-inetd
+  left alone (also an action/status/place/mime/category/preferences icon): applications-development-web[categories,categories@2x,preferences,preferences@2x] applications-internet[categories,categories@2x,preferences,preferences@2x] applications-webbrowsers[categories,categories@2x,preferences,preferences@2x] preferences-web-browser-identification[preferences,preferences@2x] preferences-web-browser-shortcuts[preferences,preferences@2x]
+
+settings  (settings, graphite tile)  replaces MacTahoe art: preferences-system.svg
+  names (27): applications-system-orange configuration_section control-center2 cosmic-settings garuda-settings-manager gnome-control-center gnome-settings gnome-system gnome-system-config io.elementary.switchboard kcontrol org.buddiesofbudgie.Settings org.cubocore.CoreGarage org.gnome.Settings paprefs preferences-system-directory preferences_system redhat-server_settings redhat-tools startupmanager system-settings systemsettings ubuntu-first-steps unity-control-center unity-tweak-tool xfce4-mcs-manager yast-powertweak
+  left alone (also an action/status/place/mime/category/preferences icon): cs-cat-prefs[preferences,preferences@2x] cs-general[preferences,preferences@2x] org.xfce.settings.editor[preferences,preferences@2x] org.xfce.settings.manager[actions,actions@2x,preferences,preferences@2x] preferences-desktop[preferences,preferences@2x] preferences-system[actions,actions@2x,preferences,preferences@2x] xfce-system-settings[actions,actions@2x] xfce4-settings[actions,actions@2x]
+
+calculator  (calc, graphite tile)  replaces MacTahoe art: calc.svg
+  names (41): accessories-calculator brun calc calculator chrome-calculator chrome-joodangkbfjnajiiifokapkpmhfnpleo chrome-joodangkbfjnajiiifokapkpmhfnpleo-Default com.deepin.Calculator com.expidusos.calculator cutefish-calculator deepin-calculator galculator gcalculator gcbalculator gnome-calc gnome-calculator google-calculator io.elementary.calculator io.github.Qalculate io.github.Qalculate.qalculate-qt io.github.qalculate.Qalculate io.liri.Calculator io.playnux.calculator kalk kcalc org.deepin.flatdeb.deepin-calculator org.gnome.Calculator org.kde.kalk org.kde.kcalc org.kde.plasma.calculator org.kde.plasma.qalculate org.speedcrunch.SpeedCrunch qalculate qalculate-applet qalculate-gtk qalculate-kde qalculate-qt qalculator speedcrunch xcalc xfce4-calculator-plugin
+
+terminal  (terminal, navy tile)  replaces MacTahoe art: org.gnome.Ptyxis.svg, terminal.svg, xterm.svg
+  names (88): Etermutilities-terminal Mt Terminal Terminal-tango angular-console aterm bash chrome-kogcfmeennoidocadkgjhnbancebmlbf-Default com.fyralabs.Accelerator com.fyralabs.Fermion com.gitlab.miridyan.Mt com.koldbyte.kde.termoid com.raggesilver.BlackBox com.vicr123.theterminal deepin-terminal filled-xterm_32x32 filled-xterm_48x48 foot funterm gksu-debian gnome-console gnome-eterm gnome-term gnome-terminal gnome-xterm gtkterm hotwire hterm io.elementary.terminal io.github.gnome_terminator.terminator kconsole konsole konsole-linux32 konsole_tux kterm lxterminal maui-station mini.xterm mini.xterm_32x32 mini.xterm_48x48 multilingual-terminal net.tenshu.Terminator2 nxterm openterm org.codeberg.dnkl.foot org.gnome.Console org.gnome.Prompt org.gnome.Ptyxis org.gnome.Terminal org.gnome.zbrown.KingsCross org.gnome_terminator.Terminator2 org.kde.konsole org.kde.plasma.konsoleprofiles org.kde.qmlkonsole org.kde.station org.xfce.terminal org.xfce.terminal-settings org.xfce.terminalemulator qterminal roxterm roxterm-gtk3 station terminal terminal-tango terminator terminator-128 terminology terra theterminal tild tilda urxvt urxvt_48x48 utilities-x-terminal utilities_terminal uxterm vala-terminal x-terminal-emulator xconsole xfce-terminal xfce4-terminal xterm xterm-color xterm-color_32x32 xterm-color_48x48 xterm_32x32 xterm_48x48 xterminator
+  left alone (also an action/status/place/mime/category/preferences icon): utilities-terminal[actions,actions@2x]
+
+chip  (chip, graphite tile)  replaces MacTahoe art: jockey.svg
+  names (28): ddm deepin-devicemanager deepin-repair deepin-repair-tools driver-manager garuda-system-maintenance glxinfo gnome-device-manager gtk-lshw harddrake jockey jockey-gtk jockey-kde kali-macchanger kcmpci lshw macchanger mintdrivers nxclient-wizard org.freedesktop.GlxInfo org.gnome.Sysprof org.gnome.Sysprof2 org.gnome.Sysprof3 org.kde.plasma.audiodeviceswitcher samsung-driver sysprof sysprof-icon system76-driver
+  left alone (also an action/status/place/mime/category/preferences icon): applications-development[categories,categories@2x,preferences,preferences@2x] cs-cat-hardware[preferences,preferences@2x] device-notifier[devices,devices@2x,preferences,preferences@2x]
+
+diskusage  (diskusage, emerald tile)  replaces MacTahoe art: baobab.svg
+  names (9): baobab filelight k4dirstat kdirstat org.gnome.Baobab org.gnome.baobab org.kde.filelight partitions qdirstat
+  left alone (also an action/status/place/mime/category/preferences icon): mate-disk-usage-analyzer[preferences,preferences@2x] yast-disk[preferences,preferences@2x]
+
+drive  (drive, graphite tile)  replaces MacTahoe art: gnome-disks.svg
+  names (26): blivet-gui deepin-diskmanager disk-usage-analyzer gdiskdump gdmap gdmap_icon gnome-disk-utility gnome-disks gparted kdf kdiskfree kwikdisk matepalimpsest media-removable ntfs-config org.gnome.DiskUtility org.gnome.gparted org.kde.kdf org.kde.partitionmanager org.kde.plasma.systemmonitor.diskactivity org.kde.plasma.systemmonitor.diskusage palimpsest partitionmanager preferences-smart-status xfce-mount xfce4-fsguard-plugin
+
+photo  (photo, plum tile)  replaces MacTahoe art: org.gnome.Loupe.svg
+  names (1): org.gnome.Loupe
+
+photos  (photos, plum tile)  replaces MacTahoe art: shotwell.svg
+  names (34): Gnome-Photos appimagekit_irix com.fyralabs.Modi deepin-album deepin-camera ephoto gallery gnome-photos gpicview gtkam-camera gwenview io.elementary.photos io.elementary.photos-viewer io.github.mihnea_radulescu.imagefanreloaded irix kphoto kphotoalbum kuiviewer luminance-hdr multimedia-photo-manager multimedia-photo-viewer net.sourceforge.qtpfsgui.LuminanceHDR org.gnome.Photos org.gnome.Shotwell org.gnome.photos org.kde.Gwenview org.kde.gwenview org.kde.kphotoalbum org.kde.plasma.mediaframe org.photoqt.PhotoQt org.postmarketos.Megapixels photoqt shotwell viewnior
+  left alone (also an action/status/place/mime/category/preferences icon): photo[actions,actions@2x]
+
+logs  (logs, graphite tile)  replaces MacTahoe art: logview.svg
+  names (15): deepin-log-viewer gnome-logs gnome-system-log it.cuteworks.pacmanlogviewer korg-journal litesystemreport logview logviewer mate-system-log org.gnome.Logs org.kde.ksystemlog plv qjournalctl system-utilities-logviewer utilities-log-viewer
+  left alone (also an action/status/place/mime/category/preferences icon): yast-journal[preferences,preferences@2x]
+
+clock  (clock, navy tile)  replaces MacTahoe art: preferences-system-time.svg
+  names (47): accessories-clock alarm-clock alarm-timer blueclock blueclock32 cairo-clock clocks com.fyralabs.Nixie com.github.sgpthomas.hourglass com.vicr123.the24 config-date cuckoo d-tracker era gnome-clocks gnome-panel-clock gnome-set-time gtubeclock gworldclock hourglass io.github.dgsasha.Remembrance kalarm kclock klock korgac ktimer ktimetracker mx-clocky mx-timeset-gui-icon orage orage_globaltime org.gnome.Clocks org.gnome.clocks org.kde.kalarm org.kde.kclock org.kde.ktimer org.kde.ktimetracker osmo rclock stock_alarm the24 time time-admin timekpr timeset-gui-icon unity-datetime-panel xclock
+  left alone (also an action/status/place/mime/category/preferences icon): cinnamon-preferences-system-time[preferences,preferences@2x] clock[actions,actions@2x] cs-date-time[preferences,preferences@2x] csd-datetime[preferences,preferences@2x] document-open-recent[actions,actions@2x,places,places@2x] mate-panel-clock[preferences,preferences@2x] preferences-system-cron[preferences,preferences@2x] preferences-system-time[preferences,preferences@2x] xfce-schedule[preferences,preferences@2x] xfce4-clock[preferences,preferences@2x] xfce4-timer[preferences,preferences@2x] xfce4-timer-plugin[preferences,preferences@2x] yast-timezone[preferences,preferences@2x]
+
+fonts  (fonts, indigo tile)  replaces MacTahoe art: fonts.svg
+  names (12): deepin-font-installer deepin-font-manager font-manager font-viewer fonts gnome-settings-font kfontview org.gnome.FontManager org.gnome.FontViewer org.gnome.Fonts org.gnome.font-viewer yast-x11
+  left alone (also an action/status/place/mime/category/preferences icon): applications-fonts[categories,categories@2x,preferences,preferences@2x] cs-fonts[preferences,preferences@2x] preferences-desktop-font[preferences,preferences@2x] preferences-desktop-font-installer[preferences,preferences@2x] yast-fonts[preferences,preferences@2x]
+
+text  (text, azure tile)  replaces MacTahoe art: accessories-text-editor.svg, text-editor.svg
+  names (69): 1E64_notepad.0 2EF4_wordpad.0 Sci48M SciTE accessories_text_editor blogilo bottles_notepad brave-mmfbcljfglbokpmkimbfghdkjmjhdgbg-Default chrome-mmfbcljfglbokpmkimbfghdkjmjhdgbg-Default code com.github.qarmin.szyszka deepin-editor edile evolution-memos featherpad gEcrit gecrit gedit gedit-icon gedit-logo gedit1 gedit2 gnome-text-editor gnome-word gprename io.elementary.code io.github.nokse22.minitext io.liri.Text journal juffed kblogger kedit kedit-icon korg-todo krename ktexteditorautobrace kwrite l3afpad leafpad leftpad logjam medit mousepad notecase notepad notepad-48 org.gnome.TextEditor org.gnome.gedit org.kde.blogilo org.kde.kate org.kde.krename org.kde.kwrite org.kde.plasma.katesessions org.scintilla.SciTE org.xfce.mousepad oxygen scratch-text-editor szyszka text-editor textadept theslate utilities-text-editor wine-notepad wine_notepad wp xed xedit xfce-edit xfw
+  left alone (also an action/status/place/mime/category/preferences icon): accessories-text-editor[actions,actions@2x] package_editors[mimes,mimes@2x] preferences-composer[actions,actions@2x,preferences,preferences@2x] stock_mail-compose[actions,actions@2x]
+
+chat  (chat, teal tile)  replaces MacTahoe art: polari.svg
+  names (6): brave-lainlkmlgipednloilifbppmhdocjbda-Default chrome-lainlkmlgipednloilifbppmhdocjbda-Default internet-chat kde-telepathy org.gnome.Polari polari
+
+extensions  (puzzle, indigo tile)  replaces MacTahoe art: applications-system.svg
+  names (9): com.mattjakeman.ExtensionManager computersettings default-application drakconf gpk-service-pack system-config-boot system-config-services utilities-tweak-tool yast-system
+  left alone (also an action/status/place/mime/category/preferences icon): applications-system[categories,categories@2x,preferences,preferences@2x] gtk-preferences[actions,actions@2x,preferences,preferences@2x] gtk-properties[actions,actions@2x] package_settings[actions,actions@2x] preferences-desktop-applications[preferences,preferences@2x] preferences-desktop-apps[preferences,preferences@2x] preferences-other[actions,actions@2x,preferences,preferences@2x] preferences-plugin[preferences,preferences@2x] system-run[actions,actions@2x] yast-addon[preferences,preferences@2x] yast-addon-extension[preferences,preferences@2x] yast-alternatives[preferences,preferences@2x] yast-misc-group[preferences,preferences@2x] yast-sysconfig[preferences,preferences@2x] yast-system-group[preferences,preferences@2x]
+
+tweaks  (tweaks, teal tile)  replaces MacTahoe art: gnome-tweak-tool.svg
+  names (7): csd-xsettings gnome-tweak-tool gnome-tweaks org.gnome.Tweaks org.gnome.tweak org.gnome.tweaks tweaks-app
+  left alone (also an action/status/place/mime/category/preferences icon): org.xfce.xfwm4-tweaks[preferences,preferences@2x] preferences-desktop-tweaks[preferences,preferences@2x]
+
+player  (player, plum tile)  replaces MacTahoe art: mpv.svg
+  names (17): com.stremio.Service com.stremio.Stremio gnome-mpv io.github.Celluloid io.github.GnomeMpv io.github.celluloid-player.Celluloid io.github.celluloid_player.Celluloid io.mpv.Mpv kplayer mpv mpv-icon-8bit-64x64 org.gnome.Mpv qv4l2 qvidcap smartcode-stremio stremio xt7-player-mpv
+
+volume  (volume, rose tile)  replaces MacTahoe art: multimedia-volume-control.svg
+  names (48): alsamixergui arts artsbuilder artscontrol cin-multimedia-volume-control csd-sound echomixer epulse esd ffado gnome-alsamixer gnome-alsamixer-icon gnome-audio gnome-mixer gnome-settings-sound gnome-sound-properties gnome-volume-control gstreamer-properties hi64-apps-ffado icaconfigmgr icaconncenter icamanager icaselfservice jack_mixer kcmsound kcnmsound kmix knotify litesoundsglob multimedia multimedia-volume-control mx-system-sounds org.kde.kmix org.pulseaudio.pavucontrol package_multimedia package_multimedia_audiomixer package_multimedia_audioplayer package_multimedia_jukebox pasystray pavucontrol phonon-gstreamer pnmixer unity-sound-panel volume-knob wxlame xfce-sound xfce4-mixer xfce4-sound
+  left alone (also an action/status/place/mime/category/preferences icon): applications-multimedia[categories,categories@2x,preferences,preferences@2x] cs-sound[preferences,preferences@2x] mediacontrol[preferences,preferences@2x] preferences-desktop-multimedia[preferences,preferences@2x] preferences-desktop-sound[preferences,preferences@2x] preferences-desktop-text-to-speech[preferences,preferences@2x] preferences-sound[preferences,preferences@2x] preferences-system-sound[preferences,preferences@2x] xfce4-pulseaudio-plugin[preferences,preferences@2x] yast-checkmedia[preferences,preferences@2x] yast-sound[preferences,preferences@2x]
+
+updates  (update, indigo tile)  replaces MacTahoe art: system-software-update.svg
+  names (25): aptdaemon-update-cache aptdaemon-upgrade gpk-prefs liteupdates mandrivaupdate mintUpdate mintupdate mintupdate-release-upgrade mx-update nx-software-updater org.gnome.PackageUpdater org.kde.discovernotifier pamac-updater pup q4os-updatemgr realtimesync software-update-available software-update-urgent system-software-update update update-manager update-notifier yast-online_update yast-upgrade zen-icon
+  left alone (also an action/status/place/mime/category/preferences icon): system-upgrade[actions,actions@2x]
+
+sysmon  (sysmon, emerald tile)  replaces MacTahoe art: utilities-system-monitor.svg
+  names (33): com.github.stsdc.monitor com.github.zren.sysmonitordash ddrescue-gui deepin-system-monitor dev.shaduri.GSmartControl diskmonitor gkrellm gnethogs gnome-monitor gnome-system-monitor gnome-usage gsmartcontrol io.elementary.monitor ksysguard ksysguardd lxtask org.cubocore.CoreStats org.gnome.GSmartControl org.gnome.SystemMonitor org.gnome.Usage org.kde.ksysguard org.kde.plasma.awesomewidget org.kde.plasma.disks org.kde.plasma.systemloadviewer org.kde.resourcesMonitor org.xfce.genmon org.xfce.panel.cpugraph org.xfce.taskmanager package_utilities qps system-monitor utilities-system-monitor xfce4-cpugraph-plugin
+  left alone (also an action/status/place/mime/category/preferences icon): applications-utilities[categories,categories@2x,preferences,preferences@2x] preferences-system-performance[preferences,preferences@2x]
+
+calendar  (calendar, rose tile)  replaces MacTahoe art: calendar.svg
+  names (34): calendar-red-31 california calindori com.deepin.Calendar coypu date dates dayfolder dde-calendar deepin-calendar evolution-calendar gnome-calendar io.elementary.calendar konsolekalendar office-calendar office-date org.deepin.flatdeb.deepin-calendar org.gnome.Calendar org.gnome.calendar org.kde.calindori org.kde.contrib.dayofmonth org.kde.contrib.dayofweek org.kde.korganizer org.kde.mobile.calindori org.kde.phone.calindori org.kde.plasma.calendar org.kde.plasma.date org.kde.plasma.eventcalendar org.xfce.panel.clock solstice-microsoft-outlook-calendar starcal2 system-config-date xfcalendar ximian-evolution-calendar
+  left alone (also an action/status/place/mime/category/preferences icon): appointment[actions,actions@2x] calendar[mimes,mimes@2x] gnome-mime-text-x-vcalendar[mimes,mimes@2x] preferences-calendar-and-tasks[preferences,preferences@2x] stock_calendar[mimes,mimes@2x] vcalendar[mimes,mimes@2x] x-office-calendar[mimes,mimes@2x]
+
+contacts  (contacts, azure tile)  replaces MacTahoe art: addressbook.svg
+  names (17): addressbook contact-editor contacts deepin-contacts gnome-contacts kaddressbook kontact ktp-contacts office-address-book office-addressbook org.deepin.contacts org.gnome.Contacts org.kde.kaddressbook org.kde.kontact org.kde.ktpcontactlist org.kde.merkuro.contact package_office_addressbook
+  left alone (also an action/status/place/mime/category/preferences icon): contact[mimes,mimes@2x] preferences-contact-list[preferences,preferences@2x] preferences-system-network-ldap[preferences,preferences@2x] stock_addressbook[mimes,mimes@2x] x-office-address-book[mimes,mimes@2x] yast-ldap-kerberos[preferences,preferences@2x]
+
+maps  (maps, teal tile)  replaces MacTahoe art: gnome-maps.svg
+  names (19): QMapShack atlas chrome-lneaknkopdijkpnocmklfnjbeapigfbh-Default com.fyralabs.Aqui com.github.ryonakano.atlas com.github.vikdevelop.googlemaps de.openstreetmap.josm emerillon gnome-maps gpxsee josm josm-latest maps org.gnome.Maps org.gnome.maps org.openstreetmap.josm qlandkartegt qmapshack solstice-google-maps
+  left alone (also an action/status/place/mime/category/preferences icon): map-globe[actions,actions@2x]
+
+weather  (weather, azure tile)  replaces MacTahoe art: indicator-weather.svg
+  names (33): com.fyralabs.Kairos com.github.bitseater.weather com.github.danrabbit.nimbus com.gitlab.bitseater.meteo com.librehat.yahooweather cumulus gis-weather gnome-weather indicator-china-weather indicator-weather io.elementary.meteo io.github.amit9838.mousam io.github.amit9838.weather io.github.danirabbit.nimbus kweather meteo-qt nimbus org.gnome.Weather org.gnome.Weather.Application org.gnome.weather org.gnome.weather.application org.kde.kweather org.kde.plasma.weather org.kde.weatherWidget org.xfce.panel.weather solstice-bbc-bbc-weather solstice-metoffice-weather solstice-nhk-nhk-weather solstice-weathernews-japan typhoon weather weather-widget xfce4-weather
+
+music  (music, rose tile)  replaces MacTahoe art: gnome-music.svg
+  names (22): beatbox com.deepin.Music com.oppzippy.OpenSCQ30 deepin-music deepin-music-player dev.schlaubi.Tonbrett gmusicbrowser gnome-music io.elementary.music lxmusic multimedia-audio-player music-app music_icon-24 musicpod noise openscq30_gui org.deepin.flatdeb.deepin-music org.feichtmeier.Musicpod org.gmusicbrowser.gmusicbrowser org.gnome.Music org.gnome.music org.pantheon.noise
+
+mail  (mail, azure tile)  replaces MacTahoe art: internet-mail.svg
+  names (78): GMail-mail.google.com Gmail-mail.google.com Sylpheed WMail appimagekit-gmail-desktop brave-fmgjjmmmlfnkbppncabfkddbjimcfncm-Default brave-pjkljhegncpnkpknbcohdijeoejaedia-Default checkgmail chrome-fmgjjmmmlfnkbppncabfkddbjimcfncm-Default chrome-pjkljhegncpnkpknbcohdijeoejaedia-Default claws-mail claws-mail-128x128 claws-mail-32x32 claws-mail-64x64 clawsker com.github.matzipan.envoyer deepin-mail e-mail email email-client evolution evolution-mail geary gmail gmail-desktop gmail-notify-icon gmail-plasmoid gmailwatcher gnome-balsa gnome-balsa2 gnome-gmail imap instantbird internet-mail internet_mail io.elementary.mail io.github.openWMail.openWMail kmail kmail2 kmailcvt kube-mail mail-client mail-generic mail-notification mail_generic mailer mailnag nylas nylas-mail openwmail org.claws_mail.Claws-Mail org.clawsmail.Claws org.gnome.Evolution org.gnome.Geary org.kde.kmail org.kde.kmail2 org.kde.merkuro.mail org.kde.plasma.gmailfeed org.kde.raven org.kde.trojita org.xfce.mailreader org.yorba.geary package_internet_email pop3 raven redhat-email solstice-google-gmail sylpheed trojita unity-mail unity-webapps-gmail web-google-gmail wmail x-office-mail x-office_mail xfce-mail xfmail ximian-evolution-email
+  left alone (also an action/status/place/mime/category/preferences icon): preferences-mail[preferences,preferences@2x] xfce-newmail[status,status@2x] yast-mail[preferences,preferences@2x]
+
+notes  (notes, teal tile)  replaces MacTahoe art: tomboy.svg
+  names (7): gnote org.gnome.Gnote org.gnome.Notes org.gnome.Tomboy org.kde.kjots tomboy tomboy-note
+
+camera  (camera, graphite tile)  replaces MacTahoe art: accessories-camera.svg, cheese.svg
+  names (21): BTM Cheese Gnome-Camara booth camera-app camorama cheese gtkam guvcview io.elementary.camera kamerka kamoso net.flyingpimonster.Camera org.gnome.Camara org.gnome.Cheese org.gnome.Snapshot org.gnome.World.Snapshot org.gnome.cheese org.kde.kamoso org.kde.plasma.camera org.maui.booth
+  left alone (also an action/status/place/mime/category/preferences icon): accessories-camera[devices,devices@2x] camera[devices,devices@2x] camera-web[devices,devices@2x]
+
+video  (video, plum tile)  replaces MacTahoe art: org.gnome.Totem.svg, smplayer.svg
+  names (51): MvGather appimagekit-smplayer application-vidiot audience audoban.applet.playbar avidemux avidemux_icon com.deepin.Movies com.github.artemanufrij.playmyvideos com.github.rafostar.Clapper com.vicr123.thereel cutefish-videoplayer deepin-media-player deepin-movie dragonplayer exmplayer gnome-mplayer-dbg gnome-player gxine info.smplayer.SMPlayer io.elementary.videos kaffeine kino kmplayer media-player-48 multimedia-video-player org.avidemux.Avidemux org.gnome.Pitivi org.gnome.Totem org.gnome.totem org.kde.dragon org.kde.dragonplayer org.kde.plasma.mediacontroller org.kde.plasma.mediacontrollercompact org.kde.plasma.multimediacontrols org.pitivi.Pitivi org.xfce.Parole org.xfce.parole org.xfce.xfmp parole rosamp smplayer thereel totem video-player videoplayer vidiot whaawmp xine xmms xplayer
+  left alone (also an action/status/place/mime/category/preferences icon): multimedia-player[devices,devices@2x]
+
+screenshot  (screenshot, teal tile)  replaces MacTahoe art: accessories-screenshot.svg
+  names (32): accessories-screenshot appimagekit-ksnip applets-screenshooter chrome-hfhhnacclhffhdffklopdkcgdhifgngh-Default com.deepin.ScreenShot com.deepin.Screenshot cutefish-screenshot deepin-screenshot f-spot gnome-panel-screenshoot gnome-panel-screenshot gnome-screenshot gscreenshot imaginario io.elementary.screenshot io.elementary.screenshot-tool io.github.igorlogius.scr2ppm kscreengenie kscreenshot ksnapshot ksnip org.deepin.flatdeb.deepin-screenshot org.gnome.Screenshot org.kde.spectacle org.ksnip.ksnip package_graphics_photography photolayoutseditor screengrab screenie screenie-qt spectacle unity-lens-photos
+  left alone (also an action/status/place/mime/category/preferences icon): org.xfce.screenshooter[status,status@2x]
+
+documents  (docview, indigo tile)  replaces MacTahoe art: accessories-document-viewer.svg
+  names (30): accessories-document-viewer atril com.github.unrud.djpdf deepin-reader epdfview evince gnome-pdf graphics-viewer-document gscan2pdf io.github.Lunarequest.NightPDF io.github.lunarequest.NightPDF maui-shelf mupdf new-mupdf-icon nightpdf org.cubocore.CorePDF org.gnome.Evince org.gnome.Evince-previewer org.gnome.Papers org.maui.shelf pdf-presenter-console pdftag postscript-viewer qpdfview scans2pdf shelf x-pdf xpdf xpdf9 xreader
+  left alone (also an action/status/place/mime/category/preferences icon): application-pdf[mimes,mimes@2x]
+
+keyboard  (keyboard, graphite tile)  replaces MacTahoe art: preferences-desktop-keyboard.svg, preferences-desktop-keyboard.svg
+  names (19): applet_lockkeys eekboard eu.blumenstingl.martin.keystateplasmoid fcitx-setting fcitx_ubuntukylin gnome-settings-keybinding im-chooser input-keyboard kimtoy ktouch mintlocale-im org.kde.kcharselect org.kde.kimtoy org.kde.ktouch org.kde.plasma.keyboardindicator org.kde.plasma.manage-inputmethod preferences-desktop-keyboard shortcuts tecla
+  left alone (also an action/status/place/mime/category/preferences icon): cinnamon-virtual-keyboard[preferences,preferences@2x] cs-input-method[preferences,preferences@2x] cs-keyboard[preferences,preferences@2x] csd-keyboard[preferences,preferences@2x] csd-media-keys[preferences,preferences@2x] gnome-settings-keybindings[devices,devices@2x] ibus-keyboard[status,status@2x] key_bindings[devices,devices@2x] keyboard[devices,devices@2x] org.fcitx.Fcitx5[status,status@2x] org.xfce.settings.keyboard[preferences,preferences@2x] preferences-desktop-keyboard-rtl[preferences,preferences@2x] preferences-desktop-keyboard-shortcut[preferences,preferences@2x] preferences-desktop-keyboard-shortcuts[devices,devices@2x,preferences,preferences@2x] system-config-keyboard[devices,devices@2x] yast-keyboard[preferences,preferences@2x]
+
+network  (network, teal tile)  replaces MacTahoe art: network-workgroup.svg, preferences-system-network.svg
+  names (23): LinSSID com.github.emmanueltouzery.hotwire folder-remote-properties gnome-network-properties kali-p0f kali-wireless-attacks-trans linssid mate-netspeed-applet mate-network-properties modem-manager-gui networkmanager org.kde.knetattach org.xnec2c.Xnec2c package_utilities_web preferences-system-network proxy q4_netcon tdenetworkmanager wicd wicd-gtk wifi-radar wpa_gui xnec2c
+  left alone (also an action/status/place/mime/category/preferences icon): cs-network[preferences,preferences@2x] knetattach[places,places@2x] network-wired[devices,devices@2x,status,status@2x] network-workgroup[devices,devices@2x,places,places@2x] nm-device-wireless[devices,devices@2x] preferences-system-network-proxy[preferences,preferences@2x] yast-device-tree[preferences,preferences@2x] yast-fcoe[preferences,preferences@2x] yast-lan[preferences,preferences@2x] yast-network-group[preferences,preferences@2x]
+
+backup  (backup, emerald tile)  replaces MacTahoe art: deja-dup.svg
+  names (16): btrbkgui chakra-backup deepin-clone deja-dup grsync-restore kbackup luckyBackup luckybackup mintBackup mintbackup mintbackup-icon org.gnome.DejaDup org.kde.kbackup selene systemback timevault
+  left alone (also an action/status/place/mime/category/preferences icon): yast-snapper[preferences,preferences@2x]
+
+iconthemes  (tweaks, azure tile)  replaces MacTahoe art: preferences-desktop-icons.svg
+  names (5): com.github.santileortiz.iconoscope icons iconthemes org.kde.plasma.kickerdash preferences-desktop-icons
+
+appgrid  (grid, navy tile)  replaces MacTahoe art: view-app-grid.svg
+  names (1): view-app-grid
+
+LOGO FILES
+  places/scalable: start-here start-here-kde start-here-kde-plasma xfce4-whiskermenu vitre-logo
+  places/symbolic: start-here-symbolic start-here-kde-symbolic start-here-kde-plasma-symbolic vitre-logo-symbolic
+
+TOTAL names overridden: 1071

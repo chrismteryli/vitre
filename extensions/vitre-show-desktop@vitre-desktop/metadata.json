@@ -1,0 +1,11 @@
+{
+  "uuid": "vitre-show-desktop@vitre-desktop",
+  "name": "Show Desktop",
+  "description": "Reversible desktop reveal coordinated with Vitre Stage, fullscreen Spaces and the dock.",
+  "shell-version": [
+    "51"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-show-desktop",
+  "version": 2,
+  "url": "https://github.com/chrismteryli/vitre"
+}
