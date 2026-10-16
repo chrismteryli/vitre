@@ -5,6 +5,32 @@ A glass desktop for GNOME. Free and open source.
 Vitre is a set of GNOME Shell extensions, a theme, icons, a cursor and wallpapers that work together. Most of the work went
 into how things move: menus, windows, swipes and dialogs.
 
+![Vitre: Files in front, the Stage strip on the left, the glass Dock below](docs/screenshots/hero-stage.jpg)
+
+## See it move
+
+[Watch the 27 second demo](docs/media/vitre-demo.mp4) (open the file on GitHub to play it).
+
+The glass stretches out of whatever you click and stays attached until it lands. These are real recordings of the shell at normal speed.
+
+| Menus | Control Center | Notification Center |
+|---|---|---|
+| ![The logo menu stretching out of the top bar](docs/media/menu-logo.gif) | ![Control Center stretching out of its icon](docs/media/controls.gif) | ![Notification Center](docs/media/notices.gif) |
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Logo menu](docs/screenshots/logo-menu.jpg)<br>**The logo menu** | ![Control Center](docs/screenshots/controls.jpg)<br>**Control Center** |
+| ![Notification Center](docs/screenshots/notices.jpg)<br>**Notification Center** | ![Search](docs/screenshots/search.jpg)<br>**Search** (Super+Space) |
+| ![Switcher](docs/screenshots/switcher.jpg)<br>**The switcher** (Super+Tab) | ![Dock preview](docs/screenshots/dock-preview.jpg)<br>**Dock window previews** |
+
+![Windows spread over the blurred desktop](docs/screenshots/overview.jpg)
+
+Three fingers up spreads your windows over the blurred desktop.
+
+![Windows on the desktop](docs/screenshots/desktop-windows.jpg)
+
 ## What you get
 
 - **Glass that stretches.** Top bar menus, Control Center, Notification Center, the volume and brightness bar, app menus,
@@ -29,8 +55,8 @@ Everything respects GNOME's animation setting. With animations off or reduced mo
 - GNOME Shell 51 on Wayland. Built and tested on Ubuntu 26.10 (arm64). x86_64 runs the same JavaScript and CSS but has not
   been tested yet.
 - The Inter and JetBrains Mono fonts (the installer prints the package names if they are missing).
-- An internet connection during install. The icon theme is fetched from its own project at a fixed version.
-  To install offline, point `VITRE_ICONS_SRC` at a local copy of MacTahoe-icon-theme.
+- An internet connection during install. The base icon theme (MacTahoe's glyphs and folders, without its app icons) is fetched from
+  its own project at a fixed version. To install offline, point `VITRE_ICONS_SRC` at a checkout of MacTahoe-icon-theme.
 
 ## Install
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- The base icon theme no longer brings MacTahoe's app icons. The installer fetches MacTahoe's glyphs, folders and file types as its own
+  copy named VitreBase and removes the app icons from it. An app that Vitre-Icons has no original art for keeps its own icon.
+- Screenshots, motion clips and a 27 second demo video in `docs/`.
+- `vitre-info.sh` prints what a bug report needs. A contributing guide, an issue template and a security note.
+
 ## 0.1.0 (first release)
 
 Everything. The first public version.

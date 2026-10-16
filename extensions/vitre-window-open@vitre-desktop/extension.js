@@ -32,7 +32,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 // Rig only: VITRE_MOTION_SLOW=8 plays every motion 8 times slower, for filmstrips. Unset in a session.
-const SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
+const ENV_SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
+const slowNow = () => Math.max(1, Number(globalThis.__vitreMotionSlow) || ENV_SLOW);     // the rig can change it between filmed moments
 
 // Progress curves are cubic-bezier(x1, y1, x2, y2), as in CSS. A y above 1 overshoots and comes back.
 const rev = ([x1, y1, x2, y2]) => [1 - x2, 1 - y2, 1 - x1, 1 - y1];    // the same curve played backwards
@@ -64,7 +65,7 @@ const ORIGIN_TTL_US = 1500 * 1000;  // a Dock click names the button for this lo
 
 // Shape a transition: absolute duration and a cubic-bezier progress curve.
 function shape(transition, ms, [x1, y1, x2, y2]) {
-    transition.set_duration(Math.max(1, Math.round(ms * SLOW)));
+    transition.set_duration(Math.max(1, Math.round(ms * slowNow())));
     transition.set_cubic_bezier_progress(new Graphene.Point({x: x1, y: y1}), new Graphene.Point({x: x2, y: y2}));
 }
 
@@ -259,7 +260,7 @@ export default class WindowMotion extends Extension {
                     return;
                 if (!alive(a))
                     return next();
-                a.ease({...props, duration: Math.max(1, ms * SLOW), mode, onComplete: () => {
+                a.ease({...props, duration: Math.max(1, ms * slowNow()), mode, onComplete: () => {
                     if (gen === mine)
                         then();
                 }});
@@ -541,7 +542,7 @@ export default class WindowMotion extends Extension {
             });
         }
         this._note(actor, 'unminimize', origin ? 'dock' : 'in-place');
-        if (SLOW > 1 || GLib.getenv('VITRE_MOTION_DEBUG')) {
+        if (slowNow() > 1 || GLib.getenv('VITRE_MOTION_DEBUG')) {
             const desc = p => {
                 const t = actor.get_transition(p);
                 if (!t)

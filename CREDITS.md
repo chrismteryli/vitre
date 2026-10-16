@@ -24,8 +24,10 @@ are in `src/ui/effects/WindowEffects.js` and are marked "Vitre".
   vendor art. See `themes/Vitre-Glass/NOTICE.txt` and `themes/Vitre-Glass/COPYING`.
 - **GTK 4 window look** (`gtk/gtk-4.0`): the MacTahoe libadwaita stylesheet (MIT) with the Vitre window layer on top
   (`a18-chrome.css`).
-- **Vitre-Icons** is original Vitre art drawn over the MacTahoe icon theme by Vince Liuice (GPL-3.0),
-  https://github.com/vinceliuice/MacTahoe-icon-theme . The installer fetches that theme from its own project.
+- **Vitre-Icons** is original Vitre art for the common apps. Everything it does not draw comes from a base copy of the MacTahoe icon
+  theme by Vince Liuice (GPL-3.0), https://github.com/vinceliuice/MacTahoe-icon-theme . The installer fetches that theme from its own
+  project at a fixed version and installs it under the name VitreBase, without MacTahoe's app icons, so every app that Vitre-Icons has
+  no art for keeps its own icon.
 - **Vitre-Cursor** is the WhiteSur cursor theme by Vince Liuice (GPL-3.0), https://github.com/vinceliuice/WhiteSur-cursors ,
   with a Vitre busy spinner.
 - Fonts (installed from your distribution): Inter by Rasmus Andersson (OFL-1.1), JetBrains Mono (OFL-1.1).

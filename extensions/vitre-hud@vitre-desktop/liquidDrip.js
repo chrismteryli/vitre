@@ -40,7 +40,8 @@ export {DRIP};
 const FIELD_BUCKETS = [12, 16, 24];   // shader sizes (shapes): Control Center has 15 modules + pill, thread and blob = 18 -> 24; Notification Center usually 12
 const FIELD_PAD = 16;            // room around the union of the pill and the pieces for dilation and the overshoot
 // Rig only: VITRE_MOTION_SLOW=8 plays every drip 8 times slower, for filmstrips. Unset in a session.
-const DRIP_SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
+const ENV_SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
+const dripSlow = () => Math.max(1, Number(globalThis.__vitreMotionSlow) || ENV_SLOW);     // the rig can change it between filmed moments
 // the glass while the drip moves (see _boost): light frosted, bright rim
 const DRIP_LIT = {tint: 0.22, color: [0.93, 0.95, 1.0], rimSide: 0.45, rimTop: 1.0, rimBottom: 0.85, rimWidth: 2.6};
 const GEOMETRY_TIMEOUT_MS = 500;       // a drip whose geometry stays invalid this long hands the surface back un-animated
@@ -402,7 +403,7 @@ export class DripController {
     // frame): a Timeline's own elapsed time counts from the frame clock's last timestamp, which is stale when the
     // timeline starts out of an idle period (real input after a pause), and made the first frame skip ahead by the idle gap.
     _wallMs() {
-        return GLib.get_monotonic_time() / 1000 / DRIP_SLOW;
+        return GLib.get_monotonic_time() / 1000 / dripSlow();
     }
 
     _nowMs() {

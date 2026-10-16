@@ -14,8 +14,8 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$DATA/vitre-backup/$STAMP"
 CHECK_ONLY=0
 FORCE=0
-# Vitre-Icons draws its own art on top of the MacTahoe icon theme (GPL-3.0, vinceliuice); it is fetched from its own
-# project at this exact version instead of being copied into Vitre. VITRE_ICONS_SRC=<dir with MacTahoe-dark> uses a local copy.
+# The base icon theme (MacTahoe-icon-theme, GPL-3.0, vinceliuice) is fetched from its own project at this exact version
+# instead of being copied into Vitre.
 MACTAHOE_ICONS_REF="839848b9a8a38a92a6936e30c4abe35cc6f2546d"   # tag 2026-09-10
 MACTAHOE_ICONS_URL="https://github.com/vinceliuice/MacTahoe-icon-theme/archive/$MACTAHOE_ICONS_REF.tar.gz"
 
@@ -88,21 +88,30 @@ for v in gtk-4.0 gtk-3.0; do
   for f in "$HERE/gtk/$v"/*; do place "$f" "$CONF/$v/$(basename "$f")"; done
 done
 
-if [ ! -d "$ICONS/MacTahoe-dark" ]; then
+# The base of Vitre-Icons: the glyphs, folders and file types of the MacTahoe icon theme, installed as its own copy named VitreBase
+# WITHOUT MacTahoe's app icons (some of them are drawn after other companies' apps). An app without original Vitre art then keeps its own
+# icon. It is fetched from its own project at a fixed version. VITRE_ICONS_SRC=<a checkout of MacTahoe-icon-theme> uses a local copy.
+if [ ! -d "$ICONS/VitreBase-dark" ]; then
+  T="$(mktemp -d)"
+  trap 'rm -rf "$T"' EXIT
   if [ -n "${VITRE_ICONS_SRC:-}" ]; then
-    for n in MacTahoe MacTahoe-dark MacTahoe-light; do
-      [ -d "$VITRE_ICONS_SRC/$n" ] && place "$VITRE_ICONS_SRC/$n" "$ICONS/$n"
-    done
+    [ -x "$VITRE_ICONS_SRC/install.sh" ] || fail "VITRE_ICONS_SRC must be a checkout of MacTahoe-icon-theme (a folder with install.sh)"
+    SRC="$VITRE_ICONS_SRC"
   else
-    say "fetching the MacTahoe icon theme (base of Vitre-Icons) from github.com/vinceliuice/MacTahoe-icon-theme"
+    say "fetching the base icon theme from github.com/vinceliuice/MacTahoe-icon-theme"
     command -v curl >/dev/null || fail "curl is needed to fetch the icon theme"
-    T="$(mktemp -d)"
-    trap 'rm -rf "$T"' EXIT
     curl -fsSL "$MACTAHOE_ICONS_URL" | tar -xz -C "$T"
-    (cd "$T"/MacTahoe-icon-theme-* && ./install.sh -d "$ICONS" -t default >/dev/null)
-    rm -rf "$T"
-    for n in MacTahoe MacTahoe-dark MacTahoe-light; do [ -d "$ICONS/$n" ] && echo "$ICONS/$n" >> "$BACKUP/installed.txt"; done
+    SRC="$(echo "$T"/MacTahoe-icon-theme-*)"
   fi
+  mkdir -p "$T/out"
+  (cd "$SRC" && ./install.sh -d "$T/out" -n VitreBase -t default >/dev/null)
+  for n in VitreBase VitreBase-dark VitreBase-light; do
+    [ -d "$T/out/$n" ] || fail "the base icon theme did not install ($n is missing)"
+    rm -rf "$T/out/$n/apps" "$T/out/$n/apps@2x"
+    find "$T/out/$n" -xtype l -delete
+    command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -f -t -q "$T/out/$n" 2>/dev/null || true
+    place "$T/out/$n" "$ICONS/$n"
+  done
 fi
 command -v gtk-update-icon-cache >/dev/null && for n in Vitre-Icons Vitre-Cursor; do gtk-update-icon-cache -f -t -q "$ICONS/$n" 2>/dev/null || true; done
 

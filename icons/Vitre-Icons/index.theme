@@ -1,7 +1,7 @@
 [Icon Theme]
 Name=Vitre-Icons
-Comment=Vitre app icons. Original glass artwork that replaces the vendor-look icons and the vendor logo files of MacTahoe-dark. Everything it does not define comes from MacTahoe-dark.
-Inherits=MacTahoe-dark
+Comment=Vitre app icons. Original glass artwork that replaces the vendor-look icons and the vendor logo files of MacTahoe-dark. Everything it does not define comes from VitreBase-dark, or from the app itself.
+Inherits=VitreBase-dark
 Example=vitre-files
 Directories=apps/scalable,places/scalable,places/symbolic
 
