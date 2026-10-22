@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-workspaces@vitre-desktop",
+  "name": "Vitre Workspaces",
+  "description": "Workspace switches as a glass depth slide: the workspace you leave steps back and dims while the next one slides in and settles on the Vitre spring, with a soft lit edge between the two. Keys, the three- or four-finger swipe and the Dock all use it; the fingers move it one to one, it reverses under them, and on lift-off it carries on at their speed. The top bar and the Dock stay put. Reduced motion gives a short cross-fade. Setting style = stock gives GNOME's own slide back.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 1,
+  "session-modes": [
+    "user"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-workspaces",
+  "url": "https://github.com/chrismteryli/vitre"
+}

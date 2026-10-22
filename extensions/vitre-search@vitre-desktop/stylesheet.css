@@ -1,4 +1,5 @@
-/* VitreSearch (A11). White text on clear glass; the glass itself is drawn by glassField.js. */
+/* VitreSearch (A11). White text on clear glass; the glass itself is drawn by legibleField.js, which keeps it dark
+ * enough under bright windows that the secondary text below stays at 4.5:1 or more (2026-10-16). */
 #vitresearch-root {
   background-color: transparent;
 }
@@ -41,7 +42,7 @@
 }
 
 .sp-entry StLabel.hint-text {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.66);
 }
 
 .sp-button {
@@ -73,7 +74,7 @@
 }
 
 .sp-section {
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.68);
   font-size: 12px;
   font-weight: 600;
   height: 20px;
@@ -81,7 +82,7 @@
 }
 
 .sp-empty {
-  color: rgba(255, 255, 255, 0.60);
+  color: rgba(255, 255, 255, 0.70);
   font-size: 15px;
   height: 34px;
   padding: 14px 12px 0 12px;
@@ -118,13 +119,19 @@
 }
 
 .sp-row-sub {
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.68);
   font-size: 12px;
 }
 
 .sp-row-kind {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.66);
   font-size: 12px;
+}
+
+/* on the lighter plate of the selected row the small text goes full white */
+.sp-row:selected .sp-row-sub,
+.sp-row:selected .sp-row-kind {
+  color: #ffffff;
 }
 
 /* ---- Apps view (A19) ---- */
@@ -155,7 +162,7 @@
 }
 
 .sp-chip:checked {
-  background-color: rgba(255, 255, 255, 0.30);
+  background-color: rgba(255, 255, 255, 0.22);
   color: #ffffff;
 }
 
@@ -178,7 +185,7 @@
 }
 
 .sp-app:selected {
-  background-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(255, 255, 255, 0.22);
 }
 
 .sp-app-box {

@@ -1,13 +1,13 @@
 {
   "uuid": "vitre-window-open@vitre-desktop",
   "name": "Vitre Windows",
-  "description": "Window motion for Vitre. A minimized window slides into its Dock icon and restoring flies it back out, new windows grow in, closing windows shrink away, and the Dock icon hops while an app launches. Reduced motion and animations off leave GNOME's own behaviour in control.",
+  "description": "Window motion for Vitre. A minimized window slides into its Dock icon and restoring flies it back out, new windows grow in, closing windows shrink away, a window that is tiled, maximized, restored or pulled out of its tile flows to its new place on a spring, and the Dock icon hops while an app launches. With reduced motion a window that changes size fades in place and the other motions are GNOME's own; with animations off every change is a single cut.",
   "shell-version": [
     "51"
   ],
   "session-modes": [
     "user"
   ],
-  "version": 3,
+  "version": 4,
   "url": "https://github.com/chrismteryli/vitre"
 }

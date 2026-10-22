@@ -9,6 +9,8 @@
 //                last moment, 400 ms
 //   open         a new window grows 0.9 -> 1 about its centre while it fades in, 300 ms (no travel, no extra layers)
 //   close        it shrinks to 0.92 and fades, 200 ms
+//   snap         tiled, maximized, restored, dragged out of a tile, sent to another monitor: the window flows from its old
+//                frame to the new one on the Vitre stretch spring, as the fullscreen motion does (snapMotion.js)
 //   dialogs, transient windows, Stage's own swaps and parks, show-desktop: untouched (GNOME, or their owner)
 //
 // The Dock button is the one that was clicked (Dhruva tells us through global.__vitreWindowMotion.noteOrigin), else
@@ -30,6 +32,8 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+import {SnapMotion} from './snapMotion.js';
 
 // Rig only: VITRE_MOTION_SLOW=8 plays every motion 8 times slower, for filmstrips. Unset in a session.
 const ENV_SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
@@ -111,6 +115,40 @@ function rectOf(actor) {
     return [x, y, w, h].every(Number.isFinite) && w > 1 && h > 1 ? {x, y, w, h} : null;
 }
 
+// Actors the shell may destroy while this extension still holds them (the Dock rebuilds its buttons and icons whenever an
+// app changes state). A destroyed actor is never touched again: probing a disposed wrapper is what logs 'already disposed'.
+class Mortal {
+    constructor() {
+        this._gone = new WeakSet();
+        this._ids = new Map();          // actor -> its destroy handler, while it lives
+    }
+
+    watch(a) {
+        if (a && !this._gone.has(a) && !this._ids.has(a)) {
+            try {
+                this._ids.set(a, a.connect('destroy', () => {
+                    this._gone.add(a);
+                    this._ids.delete(a);
+                }));
+            } catch (_e) {
+                this._gone.add(a);      // not an actor: never used
+            }
+        }
+        return a;
+    }
+
+    // it still exists and is on the stage (only an actor that still exists is asked)
+    alive(a) {
+        return Boolean(a) && !this._gone.has(a) && a.get_stage() !== null;
+    }
+
+    clear() {
+        for (const [a, id] of this._ids)
+            a.disconnect(id);
+        this._ids.clear();
+    }
+}
+
 // The Dock (Dhruva) containers, found once and re-found when gone.
 function findDocks() {
     const found = [];
@@ -140,6 +178,8 @@ export default class WindowMotion extends Extension {
         this._log = [];
         this._noted = new Map();        // window -> {btn, at}
         this._docks = [];
+        this._boxes = new Mortal();     // the Dock boxes found
+        this._buttons = new Mortal();   // Dock buttons named as a window's origin
         const wm = global.window_manager;
         // 'after' handlers run once GNOME's own handler (and Dhruva's) have set up the effect
         this._ids = [
@@ -153,12 +193,23 @@ export default class WindowMotion extends Extension {
             launchHop: (actor, appId) => this._launchHop(actor, appId),
             noteOrigin: (win, btn) => {
                 if (this._noted)
-                    this._noted.set(win, {btn, at: GLib.get_monotonic_time()});
+                    this._noted.set(win, {btn: this._buttons.watch(btn), at: GLib.get_monotonic_time()});
             },
         };
+        // snapping is its own part: if it cannot start, the rest of the window motion still runs
+        try {
+            this._snap = new SnapMotion(this);
+            this._snap.enable();
+        } catch (e) {
+            console.warn(`Vitre window motion: snapping left to GNOME (${e.message})`);
+            this._snap?.disable();
+            this._snap = null;
+        }
     }
 
     disable() {
+        this._snap?.disable();
+        this._snap = null;
         for (const id of this._ids ?? [])
             global.window_manager.disconnect(id);
         this._ids = null;
@@ -169,16 +220,30 @@ export default class WindowMotion extends Extension {
         this._hops = null;
         this._noted = null;
         this._docks = null;
+        this._boxes?.clear();
+        this._buttons?.clear();
+        this._boxes = this._buttons = null;
         this._log = null;
+    }
+
+    // The Dock containers, found again when a box has gone (the Dock rebuilds them itself). After disable (a hop finishing its
+    // cycle) a fresh walk, held on to by nobody.
+    _dockList() {
+        if (!this._boxes)
+            return findDocks();
+        if (!this._docks?.length || this._docks.some(d => !this._boxes.alive(d.boxActor))) {
+            this._docks = findDocks();
+            for (const d of this._docks)
+                this._boxes.watch(d.boxActor);
+        }
+        return this._docks;
     }
 
     // The icon (an St.Bin inside the app's Dock button) as it is now: the Dock rebuilds its icons whenever an app changes state
     // (right after a launch click), so the hop looks it up again at every hop and whenever the one it was moving has gone.
     _iconOf(appId) {
-        if (!this._docks?.length || this._docks.some(d => !d.boxActor?.get_stage?.()))
-            this._docks = findDocks();
         const bin = a => a instanceof St.Bin ? a : [...(a.get_children?.() ?? [])].map(bin).find(Boolean);
-        for (const dock of this._docks) {
+        for (const dock of this._dockList()) {
             for (const btn of dock.boxActor?.get_children?.() ?? []) {
                 if (btn._delegate?.app?.get_id?.() === appId) {
                     const b = bin(btn);
@@ -198,7 +263,10 @@ export default class WindowMotion extends Extension {
         let cur = first;
         let lostAt = 0;
         let gen = 0;                     // a step of an older run (its icon replaced meanwhile) must not carry on
-        const alive = a => a?.get_stage?.() && !a.is_destroyed?.();
+        // the icons this hop moves: one the Dock has destroyed is never touched again
+        const icons = new Mortal();
+        icons.watch(first);
+        const alive = a => icons.alive(a);
         const rest = a => {
             if (alive(a)) {
                 a.remove_all_transitions();
@@ -207,7 +275,10 @@ export default class WindowMotion extends Extension {
                 a.set_pivot_point(0.5, 0.5);
             }
         };
-        const trace = (what, extra = '') => this._note({meta_window: null}, `hop:${what}`, `${appId} alive=${Boolean(alive(cur))} ty=${cur?.translation_y?.toFixed?.(1)} ${extra}`);
+        const trace = (what, extra = '') => {
+            const live = alive(cur);
+            this._note({meta_window: null}, `hop:${what}`, `${appId} alive=${live} ty=${live ? cur.translation_y.toFixed(1) : '-'} ${extra}`);
+        };
         const finish = () => {
             trace('finish');
             gen++;
@@ -219,9 +290,10 @@ export default class WindowMotion extends Extension {
             // rebuild can come just after the end
             const settle = () => {
                 rest(cur);
-                rest(this._iconOf(appId));
+                rest(this._iconOf(appId));      // found just now: it exists
             };
             settle();
+            icons.clear();
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
                 if (this._hops)
                     rest(this._iconOf(appId));
@@ -237,7 +309,7 @@ export default class WindowMotion extends Extension {
                 return finish();
             if (!alive(cur)) {
                 trace('icon-lost');
-                cur = this._iconOf(appId);
+                cur = icons.watch(this._iconOf(appId));
                 trace('icon-found', String(Boolean(cur)));
                 if (!cur) {
                     lostAt = lostAt || GLib.get_monotonic_time();
@@ -348,18 +420,17 @@ export default class WindowMotion extends Extension {
         if (noted && GLib.get_monotonic_time() - noted.at < ORIGIN_TTL_US) {
             if (noted.btn === null)
                 return null;
-            const r = rectOf(noted.btn);
+            // a button the Dock has rebuilt since the click is not asked (it is gone): its app's button is used below
+            const r = this._buttons?.alive(noted.btn) ? rectOf(noted.btn) : null;
             if (r)
                 return this._clampToMonitor(r, win);
         }
         const app = Shell.WindowTracker.get_default().get_window_app(win);
         if (!app)
             return null;
-        if (!this._docks?.length || this._docks.some(d => !d.boxActor?.get_stage?.()))
-            this._docks = findDocks();
         const monitor = win.get_monitor();
         const rects = [];
-        for (const dock of this._docks) {
+        for (const dock of this._dockList()) {
             for (const btn of dock.boxActor?.get_children?.() ?? []) {
                 const a = btn._delegate?.app;
                 if (a && typeof a.get_id === 'function' && a.get_id() === app.get_id()) {

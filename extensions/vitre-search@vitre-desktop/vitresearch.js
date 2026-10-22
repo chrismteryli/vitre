@@ -3,7 +3,7 @@
  * Actor tree (all in "group" coordinates: origin = top-left of the wide bar):
  *   root (monitor sized, reactive: catches clicks outside)
  *     group (opacity + blur for the materialize / dematerialize)
- *       field   GlassField: bar + panel + 4 buttons as one smooth-union shape
+ *       field   LegibleField: bar + panel + 4 buttons as one smooth-union shape, legible over any backdrop
  *       barBox  search glyph + entry, clipped to the bar's current width
  *       buttons Apps / Files / Actions / Clipboard
  *       panelClip -> list   result rows, clipped to the panel's current height
@@ -19,7 +19,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {GlassField, MARGIN} from './glassField.js';
+import {LegibleField, MARGIN} from './legibleField.js';
 import {SearchBackend, GROUPS, GROUP_TITLES} from './searchBackend.js';
 import {AppsGrid} from './appsView.js';
 import {
@@ -93,7 +93,7 @@ export class VitreSearch {
         // group: the content, origin = top-left of the wide bar.
         this._fx = new Clutter.Actor({name: 'vitresearch-fx'});
         this._root.add_child(this._fx);
-        this._field = new GlassField();
+        this._field = new LegibleField();
         this._fx.add_child(this._field.actor);
         this._group = new Clutter.Actor({name: 'vitresearch-group'});
         this._group.set_position(FX, FYT);

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-corner" path="/org/gnome/shell/extensions/vitre-corner/">
+    <key name="enabled" type="b">
+      <default>true</default>
+      <summary>Show the corner capsule</summary>
+      <description>When off, the corner does nothing and the extension stays loaded.</description>
+    </key>
+    <key name="dwell-ms" type="u">
+      <range min="0" max="1000"/>
+      <default>150</default>
+      <summary>Corner dwell in milliseconds</summary>
+      <description>How long the pointer rests in the corner before the capsule shows. A push into the corner shows it at once.</description>
+    </key>
+  </schema>
+</schemalist>

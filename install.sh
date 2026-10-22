@@ -79,6 +79,13 @@ say "installing (backup in $BACKUP)"
 for e in "$HERE"/extensions/*/; do
   e="${e%/}"; place "$e" "$EXT_DIR/$(basename "$e")"
 done
+# Compile each extension's settings schemas here, with this system's own GLib, instead of trusting the compiled files in the package.
+for e in "$HERE"/extensions/*/; do
+  d="$EXT_DIR/$(basename "${e%/}")/schemas"
+  if ls "$d"/*.gschema.xml >/dev/null 2>&1; then
+    glib-compile-schemas "$d" || echo "note: could not compile the settings schemas in $d (the packaged ones stay)"
+  fi
+done
 place "$HERE/themes/Vitre-Glass" "$HOME/.themes/Vitre-Glass"
 place "$HERE/icons/Vitre-Icons" "$ICONS/Vitre-Icons"
 place "$HERE/icons/Vitre-Cursor" "$ICONS/Vitre-Cursor"
@@ -116,6 +123,25 @@ fi
 command -v gtk-update-icon-cache >/dev/null && for n in Vitre-Icons Vitre-Cursor; do gtk-update-icon-cache -f -t -q "$ICONS/$n" 2>/dev/null || true; done
 
 # ---- 4. settings -----------------------------------------------------------------------------------------------------
+# Vitre Dock is a fork of Dhruva with its own settings path. If you already use Dhruva, its settings are copied there first (only keys
+# that Vitre Dock's schema has; your Dhruva settings stay where they are). Vitre's own settings are loaded after that, so where Vitre sets a
+# key its value wins and every other key stays as you had it. The backup above holds the old state of both paths.
+OLD_DOCK=/org/gnome/shell/extensions/dhruva/
+NEW_DOCK=/org/gnome/shell/extensions/vitre-dock/
+DOCK_SCHEMAS="$EXT_DIR/vitre-dock@vitre-desktop/schemas"
+OLD_KEYS="$(dconf list "$OLD_DOCK" 2>/dev/null || true)"
+if [ -n "$OLD_KEYS" ] && [ -d "$DOCK_SCHEMAS" ]; then
+  NEW_KEYS="$(gsettings --schemadir "$DOCK_SCHEMAS" list-keys org.gnome.shell.extensions.vitre-dock 2>/dev/null || true)"
+  copied=0
+  while IFS= read -r k; do
+    case "$k" in ''|*/) continue ;; esac
+    grep -qxF -- "$k" <<< "$NEW_KEYS" || continue
+    v="$(dconf read "$OLD_DOCK$k" 2>/dev/null || true)"
+    [ -n "$v" ] || continue
+    dconf write "$NEW_DOCK$k" "$v" && copied=$((copied + 1))
+  done <<< "$OLD_KEYS"
+  echo "Dhruva settings found: $copied copied to Vitre Dock"
+fi
 sed "s|@HOME@|$HOME|g" "$HERE/settings/vitre.ini" | dconf load /org/gnome/
 
 enabled="$(gsettings get org.gnome.shell enabled-extensions)"

@@ -1,0 +1,924 @@
+/*
+* Dhruva GNOME Extension
+* Copyright (C) 2026 NarkAgni
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+
+import St from 'gi://St';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
+import Clutter from 'gi://Clutter';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+import { getIndicatorProps } from './DockRenderer.js';
+import FolderMenu from '../folder-menu/FolderMenu.js';
+import ScrollManager from '../../core/ScrollManager.js';
+import { Settings } from '../../core/SettingsManager.js';
+import WorkspaceFilter from '../../core/WorkspaceFilter.js';
+import AppContextMenu from '../context-menu/AppContextMenu.js';
+import { animateIconClick } from '../effects/IconClickEffect.js';
+import { setupDragAndDrop, applyIconFilter } from '../DragDrop.js';
+import { setMagnifierPauseState } from '../magnifier/MagnifierState.js';
+import { hexToRgba, isActorAlive, setBoxVertical } from '../../core/Utils.js';
+import { animateMinimize, animateRestore, vitreStageOn } from '../effects/WindowEffects.js';
+import {
+    createBaseButtonContainer, createIndicatorBox, attachHoverBackground, stripIndicatorSize, syncDynamicIndicator,
+} from './DockButtonBase.js';
+
+
+const DRAG_CANCEL_DELTA_PX = 15;
+const LAUNCH_PAUSE_TIMEOUT_MS = 150;
+
+function _getExtensionDir() {
+    return Gio.File.new_for_uri(import.meta.url)
+        .get_parent()
+        .get_parent()
+        .get_parent()
+        .get_parent();
+}
+
+function _getBundledIcon(fileName) {
+    const svgFile = _getExtensionDir().get_child('icons').get_child(fileName);
+    return svgFile.query_exists(null) ? new Gio.FileIcon({ file: svgFile }) : null;
+}
+
+function setupCommonEvents(btn, dockUI) {
+    btn.connectObject('button-press-event', (_actor, event) => {
+        const [px, py] = event.get_coords();
+        btn._pressX = px;
+        btn._pressY = py;
+
+        if (event.get_button() === 2) {
+            return Clutter.EVENT_STOP;
+        }
+        return Clutter.EVENT_PROPAGATE;
+    }, btn);
+
+    btn.connectObject('button-release-event', (_actor, event) => {
+        const button = event.get_button();
+        const state = event.get_state();
+
+        if (dockUI._activeContextMenu) {
+            dockUI._activeContextMenu.hide();
+            return Clutter.EVENT_STOP;
+        }
+
+        if (Settings.lockIcons) {
+            const [rx, ry] = event.get_coords();
+            const dx = Math.abs(rx - (btn._pressX || rx));
+            const dy = Math.abs(ry - (btn._pressY || ry));
+            if (dx > DRAG_CANCEL_DELTA_PX || dy > DRAG_CANCEL_DELTA_PX) return Clutter.EVENT_STOP;
+        }
+
+        if (button === 1 || button === 2) {
+            if (btn._wasDragged) {
+                btn._wasDragged = false;
+                return Clutter.EVENT_STOP;
+            }
+            if (button === 1) dockUI.actor._lastIconClickTime = Date.now();
+            btn._activateCallback(button, state);
+            return Clutter.EVENT_STOP;
+        }
+
+        if (button === 3) {
+            btn._activateCallback(3, state);
+            return Clutter.EVENT_STOP;
+        }
+
+        return Clutter.EVENT_PROPAGATE;
+    }, btn);
+}
+
+export function createSeparator(dockUI, iconSize, isVerticalDock, type = 'module', sepId = 'dhruva-sep-default') {
+    const sep = new St.Widget({ style_class: 'dock-separator' });
+    sep._sepId = sepId;
+    sep._isStatic = true;
+    sep.opacity = 255;
+
+    const prefix = type === 'module' ? 'separator' : 'running-separator';
+    const width = dockUI.settings.get_int(`${prefix}-width`);
+    const heightPercent = dockUI.settings.get_int(`${prefix}-height`);
+    const colorHex = dockUI.settings.get_string(`${prefix}-color`);
+    const opacity = dockUI.settings.get_int(`${prefix}-opacity`) / 100.0;
+    const rgba = hexToRgba(colorHex, opacity);
+    const lengthPx = Math.max(1, Math.floor(iconSize * (heightPercent / 100.0)));
+
+    if (isVerticalDock) {
+        sep.set_style(`height: ${width}px; background-color: ${rgba}; border-radius: ${width}px; margin: 4px 0;`);
+        const fill = heightPercent >= 100;
+        sep.set_x_align(fill ? Clutter.ActorAlign.FILL : Clutter.ActorAlign.CENTER);
+        sep.set_x_expand(fill);
+        if (!fill) sep.set_width(lengthPx);
+    } else {
+        sep.set_style(`width: ${width}px; background-color: ${rgba}; border-radius: ${width}px; margin: 0 4px;`);
+        const fill = heightPercent >= 100;
+        sep.set_y_align(fill ? Clutter.ActorAlign.FILL : Clutter.ActorAlign.CENTER);
+        sep.set_y_expand(fill);
+        if (!fill) sep.set_height(lengthPx);
+    }
+    return sep;
+}
+
+export function buildAppButton(dockUI, app, isRunning, finalActiveWindows, isFocused) {
+    const indProps = getIndicatorProps(dockUI, app);
+    const iconSize = Settings.iconSize;
+    const showIndicators = Settings.showRunningIndicators;
+    const hoverZoom = Settings.hoverZoom;
+    const zoomFactor = Settings.hoverZoomFactor;
+    const isVerticalDock = dockUI.dockPosition === 'LEFT' || dockUI.dockPosition === 'RIGHT';
+
+    const appBox = new St.Widget({
+        layout_manager: new Clutter.BinLayout(),
+        clip_to_allocation: false,
+        x_expand: true,
+        y_expand: true
+    });
+    appBox.set_pivot_point(0.5, 0.5);
+
+    const actualMaxZoom = hoverZoom ? (1.0 + (zoomFactor - 1.0) * 2.0) : 1.0;
+    const renderSize = Math.ceil(iconSize * actualMaxZoom);
+    const icon = app.create_icon_texture(renderSize);
+    icon.set_size(iconSize, iconSize);
+
+    const iconBin = new St.Bin({
+        child: icon,
+        width: iconSize,
+        height: iconSize,
+        x_align: Clutter.ActorAlign.CENTER,
+        y_align: Clutter.ActorAlign.CENTER,
+        x_expand: true,
+        y_expand: true
+    });
+    iconBin.set_pivot_point(0.5, 0.5);
+
+    const iconWrapper = new St.Widget({
+        layout_manager: new Clutter.BinLayout(),
+        width: iconSize,
+        height: iconSize,
+        x_align: Clutter.ActorAlign.CENTER,
+        y_align: Clutter.ActorAlign.CENTER,
+        clip_to_allocation: false,
+        x_expand: true,
+        y_expand: true
+    });
+
+    iconWrapper.translation_x = indProps.iconTx;
+    iconWrapper.translation_y = indProps.iconTy;
+    iconWrapper._baseTx = indProps.iconTx;
+    iconWrapper._baseTy = indProps.iconTy;
+    iconWrapper.add_child(iconBin);
+
+    if (Settings.showNotificationBadges) {
+        const count = dockUI.notificationManager.getUnreadCount(app);
+        if (count > 0) {
+            const badge = dockUI.notificationManager.createBadgeActor(count, iconSize);
+            if (badge) iconWrapper.add_child(badge);
+        }
+    }
+
+    const dockHeightPad = Settings.dockHeight || 6;
+    const pad = Math.max(dockHeightPad, 4);
+    const expandedDim = iconSize + pad * 2;
+    const collapsedDim = iconSize + 2;
+    const isIndicatorActive = isRunning && showIndicators;
+
+    appBox.add_child(iconWrapper);
+
+    let dotBox = null;
+    if (isIndicatorActive) {
+        const indStyle = Settings.indicatorStyle || 'dot';
+        const count = (indStyle === 'line' || indStyle === 'windows') ? 1 : finalActiveWindows.length;
+        dotBox = createIndicatorBox(dockUI.dockPosition, isVerticalDock, indProps, count, expandedDim, isFocused);
+        appBox.add_child(dotBox);
+    }
+
+    const btn = createBaseButtonContainer(appBox);
+    btn.opacity = 255;
+    btn.set_scale(1.0, 1.0);
+    btn._appBox = appBox;
+    btn._iconWrapper = iconWrapper;
+    btn._indicatorActor = dotBox;
+    btn._hasRunningIndicator = isIndicatorActive;
+
+    const dims = { iconSize, pad, expandedDim, collapsedDim, isVerticalDock };
+    btn._dims = dims;
+
+    attachHoverBackground(dockUI, btn, appBox, isIndicatorActive, indProps, dims);
+
+    btn._updateRunningState = (running, activeWindows = [], focused = false) => {
+        attachHoverBackground.updateState(btn, running, activeWindows, getIndicatorProps(dockUI, app), dockUI, focused);
+    };
+    btn._delegate = {
+        app,
+        get_parent: () => (btn.get_parent ? btn.get_parent() : null),
+        updateRunningState: btn._updateRunningState,
+    };
+
+    setupDragAndDrop(btn, app, dockUI);
+    if (hoverZoom) applyIconFilter(btn);
+
+    setupCommonEvents(btn, dockUI);
+    ScrollManager.setupAppScroll(btn, () => app.get_windows());
+
+    btn._activateCallback = (buttonNum, state = 0) => {
+        const isCtrl = (state & Clutter.ModifierType.CONTROL_MASK) !== 0;
+        const newWindowAction = Settings.newWindowAction || 'ctrl-click';
+
+        const triggerNewWindow =
+            (newWindowAction === 'ctrl-click' && buttonNum === 1 && isCtrl) ||
+            (newWindowAction === 'middle-click' && buttonNum === 2) ||
+            (newWindowAction === 'both' && ((buttonNum === 1 && isCtrl) || buttonNum === 2));
+
+        const shouldPauseMagnifier = (buttonNum === 1) || (buttonNum === 2 && (newWindowAction === 'middle-click' || newWindowAction === 'both'));
+
+        if (shouldPauseMagnifier) {
+            setMagnifierPauseState(dockUI.actor, 'app-launch', true);
+
+            if (dockUI.actor._launchTimeoutId) {
+                dockUI.registry.remove(dockUI.actor._launchTimeoutId);
+                dockUI.actor._launchTimeoutId = 0;
+            }
+
+            dockUI.actor._launchTimeoutId = dockUI.registry.addTimeout(GLib.PRIORITY_DEFAULT, LAUNCH_PAUSE_TIMEOUT_MS, () => {
+                dockUI.actor._launchTimeoutId = 0;
+                if (!isActorAlive(dockUI.actor)) return GLib.SOURCE_REMOVE;
+
+                const owner = dockUI._launchUnpause;
+                global.stage.disconnectObject(owner);
+                global.stage.connectObject('captured-event', (_stage, event) => {
+                    if (event.type() === Clutter.EventType.MOTION) {
+                        global.stage.disconnectObject(owner);
+                        setMagnifierPauseState(dockUI.actor, 'app-launch', false);
+                    }
+                    return Clutter.EVENT_PROPAGATE;
+                }, owner);
+
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        if (triggerNewWindow) {
+            Main.overview.hide();
+            const appState = app.get_state();
+            if (appState === Shell.AppState.RUNNING && app.can_open_new_window && app.can_open_new_window()) {
+                app.open_new_window(-1);
+            } else {
+                app.activate();
+            }
+
+            dockUI._scheduleCursorResetBurst();
+            animateIconClick(iconBin, Settings.clickEffect);
+            return;
+        }
+
+        if (buttonNum === 1) {
+            Main.overview.hide();
+            let windows = app.get_windows();
+            windows = WorkspaceFilter.filterWindows(windows);
+
+            if (Settings.isolateMonitors) {
+                const currentMonitorIndex = dockUI.monitorManager.getCurrentMonitor().index;
+                windows = windows.filter(w => w.get_monitor() === currentMonitorIndex);
+            }
+
+            animateIconClick(iconBin, Settings.clickEffect);
+
+            const focusWin = global.display.get_focus_window();
+            const activeWin = windows.find(w => w === focusWin);
+            const firstUnminimized = windows.find(w => !w.minimized);
+
+            if (activeWin && !activeWin.minimized) {
+                // Vitre: with Stage on, the app on the stage stays there (its icon brings its windows to the front); minimizing
+                // it here sent the window toward this icon while Stage parked it in the strip
+                if (vitreStageOn()) {
+                    for (const w of windows.filter(x => x !== activeWin && !x.minimized).reverse())
+                        w.raise();
+                    Main.activateWindow(activeWin);
+                    return;
+                }
+                animateMinimize(activeWin, btn, dockUI.dockPosition);
+            } else if (firstUnminimized) {
+                animateRestore(firstUnminimized, btn, dockUI.dockPosition);
+            } else if (windows[0]) {
+                animateRestore(windows[0], btn, dockUI.dockPosition);
+            } else {
+                if (app.get_state() === Shell.AppState.RUNNING && app.can_open_new_window && app.can_open_new_window()) {
+                    app.open_new_window(-1);
+                } else {
+                    app.activate();
+                }
+
+                dockUI._scheduleCursorResetBurst();
+
+                if (!dockUI._pendingLaunches) dockUI._pendingLaunches = [];
+                dockUI._pendingLaunches.push({
+                    appId: app.get_id(),
+                    btn,
+                    iconRect: dockUI._captureActorRect(btn),
+                    createdAt: Date.now(),
+                });
+                // Vitre (B25): the icon hops until the app's window appears (launch feedback)
+                try {
+                    global.__vitreWindowMotion?.launchHop?.(iconBin, app.get_id());
+                } catch (_e) {
+                    // no feedback is better than no launch
+                }
+            }
+        } else if (buttonNum === 3) {
+            new AppContextMenu(dockUI, app, btn, isCtrl, dockUI.openPrefsCallback).show(dockUI.dockPosition);
+        }
+    };
+
+    return btn;
+}
+
+export function buildFolderButton(dockUI, folder) {
+    let iconName = folder.icon || 'folder';
+    if (iconName === 'folder-symbolic') {
+        iconName = 'folder';
+    }
+
+    const iconSize = Settings.iconSize;
+    const showIndicators = Settings.showRunningIndicators;
+    const hoverZoom = Settings.hoverZoom;
+    const zoomFactor = Settings.hoverZoomFactor;
+    const isVerticalDock = dockUI.dockPosition === 'LEFT' || dockUI.dockPosition === 'RIGHT';
+
+    const appBox = new St.Widget({
+        layout_manager: new Clutter.BinLayout(),
+        clip_to_allocation: false,
+        x_expand: true,
+        y_expand: true
+    });
+    appBox.set_pivot_point(0.5, 0.5);
+
+    const actualMaxZoom = hoverZoom ? (1.0 + (zoomFactor - 1.0) * 2.0) : 1.0;
+    const renderSize = Math.ceil(iconSize * actualMaxZoom);
+    const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
+
+    const isEmojiText = iconName.startsWith('emoji:');
+    const isCustomFile = iconName.startsWith('/') || iconName.startsWith('file://');
+    const isLetterFolder = iconName === 'system-folder';
+    const hasCustomIcon = isEmojiText || isCustomFile || isLetterFolder;
+
+    let folderIcon;
+
+    if (isCustomFile) {
+        const cleanPath = iconName.replace('file://', '');
+        const iconFile = Gio.File.new_for_path(cleanPath);
+        const textureCache = St.TextureCache.get_default();
+        const crispImgSize = Math.max(96, Math.round(renderSize * scaleFactor * 2.0));
+
+        let fileIconActor = null;
+        if (iconFile.query_exists(null)) {
+            const gicon = new Gio.FileIcon({ file: iconFile });
+            fileIconActor = textureCache.load_gicon(null, gicon, crispImgSize, scaleFactor, 1.0);
+
+            if (!fileIconActor) {
+                fileIconActor = new St.Icon({
+                    gicon: gicon,
+                    icon_size: iconSize
+                });
+            }
+        }
+
+        if (!fileIconActor) {
+            fileIconActor = new St.Icon({
+                icon_name: 'folder',
+                icon_size: iconSize
+            });
+        }
+
+        fileIconActor.set_size(iconSize, iconSize);
+        fileIconActor.set_pivot_point(0.5, 0.5);
+        fileIconActor.reactive = false;
+
+        if (fileIconActor.set_content_scaling_filters) {
+            fileIconActor.set_content_scaling_filters(
+                Clutter.ScalingFilter.TRILINEAR,
+                Clutter.ScalingFilter.LINEAR
+            );
+        }
+
+        folderIcon = new St.Bin({
+            child: fileIconActor,
+            width: iconSize,
+            height: iconSize,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            clip_to_allocation: false,
+            reactive: false
+        });
+    } else if (isEmojiText) {
+        const actualEmoji = iconName.replace('emoji:', '');
+        const emojiFontSize = Math.max(18, Math.floor(iconSize * 0.76));
+        const emojiLabel = new St.Label({
+            text: actualEmoji,
+            style: `font-size: ${emojiFontSize}px; padding: 0; margin: 0; text-align: center;`,
+            y_align: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.CENTER,
+            reactive: false
+        });
+
+        if (emojiLabel.clutter_text) {
+            emojiLabel.clutter_text.set_font_name(`Noto Color Emoji ${emojiFontSize}`);
+            emojiLabel.clutter_text.ellipsize = 0;
+            emojiLabel.clutter_text.line_wrap = false;
+            emojiLabel.clutter_text.selectable = false;
+            emojiLabel.clutter_text.reactive = false;
+            emojiLabel.clutter_text.cursor_visible = false;
+        }
+
+        folderIcon = new St.Bin({
+            child: emojiLabel,
+            width: iconSize,
+            height: iconSize,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            clip_to_allocation: true,
+            reactive: false
+        });
+    } else if (isLetterFolder) {
+        const folderStack = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            width: iconSize,
+            height: iconSize,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            clip_to_allocation: false,
+            reactive: false
+        });
+
+        const folderTintColor = folder.folderTintColor || folder.plateColor || '#3584e4';
+        const renderPlateSize = Math.ceil(iconSize * scaleFactor * 2.0);
+
+        let folderGIcon = _getBundledIcon('folder-symbolic.svg');
+
+        if (!folderGIcon) {
+            folderGIcon = Gio.ThemedIcon.new_with_default_fallbacks('folder-symbolic');
+        }
+
+        const baseFolderIcon = new St.Icon({
+            gicon: folderGIcon,
+            icon_size: renderPlateSize,
+            style: `color: ${folderTintColor};`
+        });
+
+        baseFolderIcon.set_size(iconSize, iconSize);
+        baseFolderIcon.set_pivot_point(0.5, 0.5);
+        baseFolderIcon.reactive = false;
+
+        if (baseFolderIcon.set_content_scaling_filters) {
+            baseFolderIcon.set_content_scaling_filters(
+                Clutter.ScalingFilter.TRILINEAR,
+                Clutter.ScalingFilter.LINEAR
+            );
+        }
+
+        folderStack.add_child(baseFolderIcon);
+
+        const folderDisplayName = folder.name || 'Folder';
+        const firstLetter = folderDisplayName.trim().charAt(0).toUpperCase() || 'F';
+
+        const rawScale = folder.letterScale !== undefined ? folder.letterScale : 0.44;
+        const activeLetterScale = Math.max(0.28, Math.min(0.54, rawScale));
+        const activeLetterColor = folder.letterColor || '#ffffff';
+
+        const baseFontSize = Math.max(14, Math.round(iconSize * activeLetterScale));
+        const renderFontSize = baseFontSize * 2;
+
+        const letterLabel = new St.Label({
+            text: firstLetter,
+            style: `
+                font-size: ${renderFontSize}px;
+                font-weight: 900;
+                color: ${activeLetterColor};
+                text-align: center;
+            `,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            reactive: false
+        });
+
+        letterLabel.set_scale(0.5, 0.5);
+        letterLabel.set_pivot_point(0.5, 0.5);
+
+        if (letterLabel.clutter_text) {
+            letterLabel.clutter_text.ellipsize = 0;
+            letterLabel.clutter_text.line_wrap = false;
+            letterLabel.clutter_text.selectable = false;
+            letterLabel.clutter_text.reactive = false;
+            letterLabel.clutter_text.cursor_visible = false;
+        }
+
+        letterLabel.translation_y = Math.round(iconSize * 0.02);
+        folderStack.add_child(letterLabel);
+
+        folderIcon = folderStack;
+    } else {
+        const renderPlateSize = Math.ceil(iconSize * actualMaxZoom * scaleFactor);
+
+        const folderStack = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            width: iconSize,
+            height: iconSize,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            clip_to_allocation: false,
+            reactive: false
+        });
+
+        let gicon = _getBundledIcon('folder-plate-symbolic.svg');
+
+        if (!gicon) {
+            gicon = Gio.ThemedIcon.new_with_default_fallbacks('folder-symbolic');
+        }
+
+        const activePlateColor = folder.plateColor || 'rgba(255, 255, 255, 0.65)';
+
+        const bgPlateIcon = new St.Icon({
+            gicon: gicon,
+            icon_size: renderPlateSize,
+            style: `color: ${activePlateColor};`
+        });
+
+        bgPlateIcon.set_size(iconSize, iconSize);
+        bgPlateIcon.set_pivot_point(0.5, 0.5);
+        bgPlateIcon.x_align = Clutter.ActorAlign.CENTER;
+        bgPlateIcon.y_align = Clutter.ActorAlign.CENTER;
+        bgPlateIcon.reactive = false;
+
+        const activeOpacity = folder.plateOpacity !== undefined ? folder.plateOpacity : 130;
+        bgPlateIcon.opacity = activeOpacity;
+
+        if (bgPlateIcon.set_content_scaling_filters) {
+            bgPlateIcon.set_content_scaling_filters(
+                Clutter.ScalingFilter.TRILINEAR,
+                Clutter.ScalingFilter.LINEAR
+            );
+        }
+
+        folderStack.add_child(bgPlateIcon);
+
+        const validApps = (folder.apps || []).filter(appId => Boolean(dockUI.appManager.appSystem.lookup_app(appId)));
+        const appCount = validApps.length;
+
+        const createCrispIcon = (app, size) => {
+            const textureCache = St.TextureCache.get_default();
+            const crispTextureSize = Math.max(48, Math.round(size * scaleFactor * 2.0));
+
+            let tex = null;
+            tex = textureCache.load_gicon(null, app.get_icon(), crispTextureSize, scaleFactor, 1.0);
+
+            if (!tex) {
+                tex = app.create_icon_texture(crispTextureSize);
+            }
+            if (!tex) {
+                tex = new St.Icon({
+                    gicon: app.get_icon(),
+                    icon_size: size
+                });
+            }
+
+            tex.set_size(size, size);
+            tex.set_pivot_point(0.5, 0.5);
+
+            if (tex.set_content_scaling_filters) {
+                tex.set_content_scaling_filters(
+                    Clutter.ScalingFilter.TRILINEAR,
+                    Clutter.ScalingFilter.LINEAR
+                );
+            }
+            tex.reactive = false;
+            return tex;
+        };
+
+        if (appCount <= 1) {
+            const appId = validApps[0];
+            if (appId) {
+                const app = dockUI.appManager.appSystem.lookup_app(appId);
+                if (app) {
+                    const singleSize = Math.round(iconSize * 0.56);
+                    const ic = createCrispIcon(app, singleSize);
+                    folderStack.add_child(ic);
+                }
+            }
+        } else if (appCount === 2) {
+            const itemSize = Math.round(iconSize * 0.36);
+            const spacing = Math.max(3, Math.round(iconSize * 0.08));
+
+            const hBox = new St.BoxLayout({
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                style: `spacing: ${spacing}px;`
+            });
+            setBoxVertical(hBox, false);
+
+            validApps.slice(0, 2).forEach(appId => {
+                const app = dockUI.appManager.appSystem.lookup_app(appId);
+                if (app) {
+                    const ic = createCrispIcon(app, itemSize);
+                    hBox.add_child(ic);
+                }
+            });
+
+            folderStack.add_child(hBox);
+        } else if (appCount === 3) {
+            const subSize = Math.round(iconSize * 0.32);
+            const spacing = Math.max(2, Math.round(iconSize * 0.06));
+
+            const pyramidStack = new St.BoxLayout({
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                style: `spacing: ${spacing}px;`
+            });
+            setBoxVertical(pyramidStack, true);
+
+            const topRow = new St.BoxLayout({
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                style: `spacing: ${spacing}px;`
+            });
+            setBoxVertical(topRow, false);
+
+            [validApps[0], validApps[1]].forEach(appId => {
+                const app = dockUI.appManager.appSystem.lookup_app(appId);
+                if (app) {
+                    topRow.add_child(createCrispIcon(app, subSize));
+                }
+            });
+
+            const bottomRow = new St.BoxLayout({
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            setBoxVertical(bottomRow, false);
+
+            const thirdApp = dockUI.appManager.appSystem.lookup_app(validApps[2]);
+            if (thirdApp) {
+                bottomRow.add_child(createCrispIcon(thirdApp, subSize));
+            }
+
+            pyramidStack.add_child(topRow);
+            pyramidStack.add_child(bottomRow);
+            folderStack.add_child(pyramidStack);
+        } else {
+            const subSize = Math.round(iconSize * 0.32);
+            const spacing = Math.max(2, Math.round(iconSize * 0.06));
+
+            const gridBox = new St.BoxLayout({
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                style: `spacing: ${spacing}px;`
+            });
+            setBoxVertical(gridBox, true);
+
+            const previewApps = validApps.slice(0, 4);
+
+            for (let rowIdx = 0; rowIdx < 2; rowIdx++) {
+                const row = new St.BoxLayout({
+                    x_align: Clutter.ActorAlign.CENTER,
+                    y_align: Clutter.ActorAlign.CENTER,
+                    style: `spacing: ${spacing}px;`
+                });
+                setBoxVertical(row, false);
+
+                for (let colIdx = 0; colIdx < 2; colIdx++) {
+                    const appIdx = rowIdx * 2 + colIdx;
+                    const appId = previewApps[appIdx];
+
+                    const cellBin = new St.Bin({
+                        width: subSize,
+                        height: subSize,
+                        x_align: Clutter.ActorAlign.CENTER,
+                        y_align: Clutter.ActorAlign.CENTER
+                    });
+
+                    if (appId) {
+                        const app = dockUI.appManager.appSystem.lookup_app(appId);
+                        if (app) {
+                            const ic = createCrispIcon(app, subSize);
+                            cellBin.set_child(ic);
+                        }
+                    }
+                    row.add_child(cellBin);
+                }
+                gridBox.add_child(row);
+            }
+
+            folderStack.add_child(gridBox);
+        }
+
+        folderIcon = folderStack;
+    }
+
+    const iconBin = new St.Bin({
+        child: folderIcon,
+        width: iconSize,
+        height: iconSize,
+        x_align: Clutter.ActorAlign.CENTER,
+        y_align: Clutter.ActorAlign.CENTER,
+        x_expand: true,
+        y_expand: true,
+        reactive: false
+    });
+    iconBin.set_pivot_point(0.5, 0.5);
+
+    let runningAppsCount = 0;
+    let firstRunningApp = null;
+    let focusedAppInFolder = null;
+    let isAnyFolderAppFocused = false;
+    const folderRunningApps = [];
+    const focusWin = global.display.get_focus_window();
+
+    folder.apps.forEach(appId => {
+        const app = dockUI.appManager.appSystem.lookup_app(appId);
+        if (app && (app.get_state() === Shell.AppState.RUNNING || app.get_windows().length > 0)) {
+            let isValid = true;
+            const windows = app.get_windows();
+
+            if (windows.length > 0) {
+                let filtered = WorkspaceFilter.filterWindows(windows);
+                if (Settings.isolateMonitors) {
+                    const currentMonitorIndex = dockUI.monitorManager.getCurrentMonitor().index;
+                    filtered = filtered.filter(w => w.get_monitor() === currentMonitorIndex);
+                }
+                if ((Settings.isolateWorkspaces || Settings.isolateMonitors) && filtered.length === 0) {
+                    isValid = false;
+                }
+                if (filtered.some(w => w === focusWin)) {
+                    isAnyFolderAppFocused = true;
+                    focusedAppInFolder = app;
+                }
+            }
+
+            if (isValid) {
+                runningAppsCount++;
+                folderRunningApps.push(app);
+                if (!firstRunningApp) firstRunningApp = app;
+            }
+        }
+    });
+
+    const activeColorSource = isAnyFolderAppFocused
+        ? (focusedAppInFolder || firstRunningApp || iconName)
+        : (firstRunningApp || iconName);
+    const indProps = getIndicatorProps(dockUI, activeColorSource);
+
+    const iconWrapper = new St.Widget({
+        layout_manager: new Clutter.BinLayout(),
+        width: iconSize,
+        height: iconSize,
+        x_align: Clutter.ActorAlign.CENTER,
+        y_align: Clutter.ActorAlign.CENTER,
+        clip_to_allocation: false,
+        x_expand: true,
+        y_expand: true,
+        reactive: false
+    });
+
+    iconWrapper.translation_x = indProps.iconTx;
+    iconWrapper.translation_y = indProps.iconTy;
+    iconWrapper._baseTx = indProps.iconTx;
+    iconWrapper._baseTy = indProps.iconTy;
+    iconWrapper.add_child(iconBin);
+
+    const dockHeightPad = Settings.dockHeight || 6;
+    const pad = Math.max(dockHeightPad, 4);
+    const expandedDim = iconSize + pad * 2;
+    const collapsedDim = iconSize + 2;
+    const isIndicatorActive = runningAppsCount > 0 && showIndicators;
+
+    appBox.add_child(iconWrapper);
+
+    let dotBox = null;
+    const indStyle = Settings.indicatorStyle || 'dot';
+
+    if (isIndicatorActive) {
+        const count = (indStyle === 'line' || indStyle === 'windows') ? 1 : Math.min(runningAppsCount, 3);
+        dotBox = createIndicatorBox(dockUI.dockPosition, isVerticalDock, indProps, count, expandedDim, isAnyFolderAppFocused);
+
+        if (!isAnyFolderAppFocused && indStyle !== 'line' && indStyle !== 'windows' && folderRunningApps.length > 1) {
+            const dots = dotBox.get_children();
+            dots.forEach((dot, idx) => {
+                const appForDot = folderRunningApps[idx] || folderRunningApps[0];
+                const dotProps = getIndicatorProps(dockUI, appForDot);
+                dot.set_style(stripIndicatorSize(dotProps.style));
+            });
+        }
+
+        appBox.add_child(dotBox);
+    }
+
+    const btn = createBaseButtonContainer(appBox);
+    btn.opacity = 255;
+    btn.set_scale(1.0, 1.0);
+    btn._appBox = appBox;
+    btn._iconWrapper = iconWrapper;
+    btn._indicatorActor = dotBox;
+    btn._isFolder = true;
+    btn._folderData = folder;
+
+    const dims = { iconSize, pad, expandedDim, collapsedDim, isVerticalDock };
+    btn._dims = dims;
+
+    if (hasCustomIcon) {
+        attachHoverBackground(dockUI, btn, appBox, isIndicatorActive, indProps, dims);
+    } else {
+        btn._hasRunningIndicator = isIndicatorActive;
+        btn._indProps = indProps;
+        btn._baseBg = 'transparent';
+        btn._hoverBg = null;
+    }
+
+    btn._delegate = {
+        app: null,
+        isFolder: true,
+        folderData: folder,
+        button: btn,
+        get_parent: () => (btn.get_parent ? btn.get_parent() : null),
+        updateRunningState: () => {
+            const currentFocusWin = global.display.get_focus_window();
+            const appsList = [];
+            let focusedApp = null;
+
+            folder.apps.forEach(appId => {
+                const a = dockUI.appManager.appSystem.lookup_app(appId);
+                if (!a) return;
+                const wins = WorkspaceFilter.filterWindows(a.get_windows());
+                if (wins.length === 0) return;
+                appsList.push(a);
+                if (!focusedApp && wins.some(w => w === currentFocusWin)) focusedApp = a;
+            });
+
+            const isRunningNow = appsList.length > 0;
+            const isFocused = focusedApp !== null;
+            const activeApp = focusedApp || appsList[0];
+            const currentProps = getIndicatorProps(dockUI, activeApp || iconName);
+
+            if (hasCustomIcon) {
+                attachHoverBackground.updateState(btn, isRunningNow, appsList, currentProps, dockUI, isFocused);
+            }
+
+            if (!isRunningNow || !btn._indicatorActor || !isActorAlive(btn._indicatorActor)) return;
+
+            const curStyle = Settings.indicatorStyle || 'dot';
+            if (curStyle === 'windows') {
+                if (!hasCustomIcon) syncDynamicIndicator(btn._indicatorActor, currentProps, isVerticalDock, isFocused);
+                return;
+            }
+
+            const perAppColour = !isFocused && curStyle !== 'line' && appsList.length > 1;
+            btn._indicatorActor.get_children().forEach((dot, idx) => {
+                const props = perAppColour ? getIndicatorProps(dockUI, appsList[idx] || appsList[0]) : currentProps;
+                dot.set_style(stripIndicatorSize(props.style));
+            });
+        }
+    };
+    btn._updateRunningState = btn._delegate.updateRunningState;
+
+    setupDragAndDrop(btn, null, dockUI);
+
+    if (hoverZoom && hasCustomIcon) {
+        applyIconFilter(btn);
+    }
+
+    btn._activateCallback = (buttonNum) => {
+        if (buttonNum === 3) {
+            if (dockUI._activeContextMenu && dockUI._activeContextMenu.buttonActor === btn) {
+                dockUI._activeContextMenu.hide();
+            } else {
+                if (dockUI._activeContextMenu) dockUI._activeContextMenu.hide();
+                if (dockUI._activeFolderMenu) dockUI._activeFolderMenu.hide();
+                dockUI._activeContextMenu = new AppContextMenu(dockUI, null, btn);
+                dockUI._activeContextMenu.show(dockUI.dockPosition);
+            }
+        } else if (buttonNum === 1) {
+            if (dockUI._activeFolderMenu && dockUI._activeFolderMenu.folderData && dockUI._activeFolderMenu.folderData.id === folder.id) {
+                dockUI._activeFolderMenu.hide();
+            } else {
+                if (dockUI._activeFolderMenu) dockUI._activeFolderMenu.hide();
+                if (dockUI._activeContextMenu) dockUI._activeContextMenu.hide();
+                dockUI._activeFolderMenu = new FolderMenu(dockUI, folder, btn);
+                dockUI._activeFolderMenu.show(dockUI.dockPosition);
+            }
+        }
+    };
+
+    setupCommonEvents(btn, dockUI);
+    return btn;
+}

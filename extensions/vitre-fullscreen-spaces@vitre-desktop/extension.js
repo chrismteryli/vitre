@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Fullscreen Spaces: a reversible workspace transaction, using native motion.
+// Fullscreen Spaces: a reversible workspace transaction. A window that goes fullscreen gets a workspace of its own and
+// returns to its desktop when it leaves fullscreen.
+//
+// Motion (setting `motion`): 'vitre' (default, fullscreenMotion.js) grows the window to the screen in one gesture while the
+// desktop steps back and the chrome slides away; the workspace move happens under that motion, so the workspace switch
+// itself does not slide. 'native' is the earlier behaviour: GNOME's size-change effect and the workspace slide.
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 import {getOperations} from './windowOperations.js';
+import {FullscreenMotion} from './fullscreenMotion.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 export default class FullscreenSpaces extends Extension {
@@ -16,6 +22,10 @@ export default class FullscreenSpaces extends Extension {
         this._retained = new Map();
         this._pending = new Map();
         this._checkingWorkspaces = 0;
+        this._deferred = new Set();         // windows whose workspace move waits for the motion to land
+        this._quietSwitch = 0;              // > 0: a switch made under the motion's layer (no slide of its own)
+        this._switching = 0;                // > 0: this extension is switching workspaces
+        this._motion = null;
         this._operations = getOperations();
         this._hooks = new InjectionManager();
         this._names = new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
@@ -76,6 +86,113 @@ export default class FullscreenSpaces extends Extension {
             this.disable();
             throw error;
         }
+        // the motion is its own part: if it cannot start, the workspace transaction still runs with native motion
+        try {
+            this._settings = this.getSettings();
+            this._connect(this._settings, 'changed::motion', () => this._syncMotion());
+        } catch (error) {
+            this._settings = null;
+            console.warn(`Full Screen Spaces: no settings, native motion (${error.message})`);
+        }
+        this._syncMotion();
+    }
+
+    _syncMotion() {
+        const want = this._enabled && (this._settings?.get_string('motion') ?? 'vitre') === 'vitre';
+        if (want && !this._motion) {
+            try {
+                this._motion = new FullscreenMotion(this);
+                this._motion.enable();
+                this._switchHooks = new InjectionManager();
+                const owner = this;
+                // a switch under the motion's layer completes at once: the layer is the motion
+                this._switchHooks.overrideMethod(Main.wm._workspaceAnimation, 'animateSwitch', original => function (from, to, direction, onComplete) {
+                    if (owner._quietSwitch > 0) {
+                        onComplete();
+                        return;
+                    }
+                    original.call(this, from, to, direction, onComplete);
+                });
+            } catch (error) {
+                console.warn(`Full Screen Spaces: native motion (${error.message})`);
+                this._stopMotion();
+            }
+        } else if (!want && this._motion) {
+            this._stopMotion();
+        }
+    }
+
+    _stopMotion() {
+        // a move still waiting for the motion runs now (with GNOME's slide)
+        const waiting = [...this._deferred];
+        this._switchHooks?.clear();
+        this._switchHooks = null;
+        const motion = this._motion;
+        this._motion = null;
+        motion?.disable();
+        for (const win of waiting)
+            this._enterDeferred(win);
+    }
+
+    // ---- what the motion asks and tells (fullscreenMotion.js) ----------------------------------------------------------
+
+    motionOwnsSwitch() {
+        return this._switching > 0;
+    }
+
+    // the desktop a returning window lands on
+    motionDesktopFor(win) {
+        const record = this._records.get(win);
+        return record && this._alive(record.origin) ? record.origin : null;
+    }
+
+    motionPending(win) {
+        return this._deferred.has(win);
+    }
+
+    motionStageStrip() {
+        return Main.extensionManager.lookup('vitre-stage@vitre-desktop')?.stateObj?._manager?._strip ?? null;
+    }
+
+    motionStageIdle() {
+        const manager = Main.extensionManager.lookup('vitre-stage@vitre-desktop')?.stateObj?._manager;
+        return !manager || ((manager._flights?.size ?? 0) === 0 && !manager._busy);
+    }
+
+    // the enter motion has landed (the window covers the screen): its workspace move happens now, under the layer
+    motionLanded(win) {
+        this._enterDeferred(win);
+    }
+
+    // the motion ended (landed, or cut short): a move still waiting runs now
+    motionEnded(win) {
+        this._enterDeferred(win);
+    }
+
+    _enterDeferred(win) {
+        if (!this._deferred.delete(win) || !this._enabled || !this._windows.has(win))
+            return;
+        try {
+            if (win.is_fullscreen())
+                this._withQuietSwitch(win, () => this._enter(win));
+        } catch (error) {
+            console.error(`Full Screen Spaces could not enter: ${error.message}`);
+        }
+    }
+
+    // Switches made while the motion covers the window's monitor need no slide of their own: they finish at once under the
+    // layer. Only when that monitor is the only one that switches (one monitor, or workspaces on the primary only).
+    _withQuietSwitch(win, fn) {
+        const covered = Boolean(this._motion?.covers(win)) && (Main.layoutManager.monitors.length === 1 ||
+            (Meta.prefs_get_workspaces_only_on_primary() && win.get_monitor() === Main.layoutManager.primaryIndex));
+        if (covered)
+            this._quietSwitch++;
+        try {
+            return fn();
+        } finally {
+            if (covered)
+                this._quietSwitch--;
+        }
     }
 
     _connect(object, name, callback, list = this._signals) {
@@ -130,6 +247,7 @@ export default class FullscreenSpaces extends Extension {
             }, state.signals);
         }
         this._connect(win, 'unmanaged', () => {
+            this._deferred?.delete(win);
             const record = this._records.get(win);
             if (record)
                 this._finish(record, false, true);
@@ -157,10 +275,18 @@ export default class FullscreenSpaces extends Extension {
         if (state.fullscreen === fullscreen)
             return;
         state.fullscreen = fullscreen;
-        if (fullscreen)
-            this._enter(win);
-        else if (this._records.has(win))
-            this._finish(this._records.get(win), true);
+        if (fullscreen) {
+            if (this._motion?.holdsEnter(win)) {
+                // the motion moves the window to its workspace when it has landed (motionLanded)
+                this._deferred.add(win);
+                return;
+            }
+            this._withQuietSwitch(win, () => this._enter(win));
+        } else {
+            this._deferred.delete(win);
+            if (this._records.has(win))
+                this._withQuietSwitch(win, () => this._finish(this._records.get(win), true));
+        }
     }
 
     _eligible(win) {
@@ -217,8 +343,11 @@ export default class FullscreenSpaces extends Extension {
             }
             // Like native actionMoveWindow, follow the captured focused window.
             // Moving it can itself cause Mutter to select a different focus.
-            if (shouldFollow && manager.get_active_workspace() === origin)
-                record.space.activate_with_focus(win, global.get_current_time());
+            if (shouldFollow && manager.get_active_workspace() === origin) {
+                this._switching++;
+                try { record.space.activate_with_focus(win, global.get_current_time()); }
+                finally { this._switching--; }
+            }
         } catch (error) {
             if (record?.space && this._records.get(win) === record) {
                 this._finish(record, true, false, 'entry-failed');
@@ -265,8 +394,11 @@ export default class FullscreenSpaces extends Extension {
             if (restore && record.win.get_workspace() === record.space) {
                 const destination = this._destination(record);
                 record.win.change_workspace(destination);
-                if (follow && manager.get_active_workspace() === record.space)
-                    destination.activate_with_focus(record.win, global.get_current_time());
+                if (follow && manager.get_active_workspace() === record.space) {
+                    this._switching++;
+                    try { destination.activate_with_focus(record.win, global.get_current_time()); }
+                    finally { this._switching--; }
+                }
             }
         } catch (error) {
             // Never remove a nonempty workspace after a refused/failed move.
@@ -321,7 +453,9 @@ export default class FullscreenSpaces extends Extension {
             // authorize a focus/workspace switch; leave that empty desktop alone.
             if (!record.closed || Main.sessionMode.isLocked)
                 return complete();
-            this._destination(record).activate(global.get_current_time());
+            this._switching++;
+            try { this._destination(record).activate(global.get_current_time()); }
+            finally { this._switching--; }
         }
         // Returning after a close can itself start a new native switch.
         if (tracker._pauseWorkspaceCheck)
@@ -334,6 +468,13 @@ export default class FullscreenSpaces extends Extension {
 
     disable() {
         this._enabled = false;
+        // waiting moves are dropped (the window stays fullscreen where it is), then the motion lets go of its layer
+        this._deferred?.clear();
+        this._switchHooks?.clear();
+        this._switchHooks = null;
+        this._motion?.disable();
+        this._motion = null;
+        this._settings = null;
         this._disconnect(this._signals ?? []);
         for (const state of this._windows?.values() ?? []) {
             if (state.source)

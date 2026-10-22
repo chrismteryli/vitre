@@ -5,7 +5,7 @@ just-perfection-desktop@just-perfection
 rounded-window-corners@fxgn
 liquid-glass@thinkingcoding1231.gmail.com
 blur-my-shell@aunetx
-dhruva@narkagni
+vitre-dock@vitre-desktop
 vitre-window-open@vitre-desktop
 logomenu@aryan_k
 vitre-gesture-history@vitre-desktop
@@ -20,3 +20,5 @@ vitre-menus@vitre-desktop
 vitre-session@vitre-desktop
 vitre-swipe@vitre-desktop
 vitre-switcher@vitre-desktop
+vitre-corner@vitre-desktop
+vitre-workspaces@vitre-desktop

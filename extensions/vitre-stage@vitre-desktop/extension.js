@@ -388,6 +388,10 @@ function flyActor(win, snap, look, vanishY, {real = false} = {}) {
         fly._shadowRail = layer(previewStyle(look), frame.width / rail.w);
     fly._shadowFull = layer(WINDOW_SHADOW);
     fly._geo = {w: frame.width, h: frame.height, vy: vanishY, s0: rail.w / frame.width, real, strength: 1};
+    // a flight can outlive its picture (the fly layer goes with the shell): nothing may read or destroy it after this
+    fly.connect('destroy', () => {
+        fly._stageGone = true;
+    });
     const sync = () => syncFlyTilt(fly);
     for (const prop of ['x', 'y', 'translation-x', 'translation-y', 'scale-x', 'scale-y', 'scale-z'])
         fly.connect(`notify::${prop}`, sync);
@@ -698,6 +702,10 @@ class CastItem extends St.Button {
         this._delegate = this;
         this.connect('destroy', () => {
             this.destroyed = true;
+            // Its group can outlive it (a pile that left in a strip ghost, or rode a workspace card that is gone):
+            // the group must not keep pointing at a destroyed pile.
+            if (this.group?.item === this)
+                this.group.item = null;
             // Native DND observes drag actor destruction and releases its grab.
             this._dragPreview?.destroy();
         });
@@ -796,7 +804,7 @@ class CastItem extends St.Button {
     // Turn every thumbnail about its near edge toward the work area's vertical centre.
     syncTilt() {
         const look = this._look;
-        if (!look || !this._previews)
+        if (!look || !this._previews || this.destroyed)
             return;
         for (const preview of this._previews.values()) {
             const {actor, w, h} = preview;
@@ -842,6 +850,8 @@ class CastItem extends St.Button {
     }
 
     setFlightHidden(win, hidden) {
+        if (this.destroyed)
+            return;
         const preview = this._previews.get(win);
         if (preview) {
             preview.hidden = hidden;
@@ -872,7 +882,7 @@ class CastItem extends St.Button {
     // taking input) for the duration.
     setOverviewMode(on) {
         if (on && globalThis.__stagePileHook?.keepRail) return;                       // [swipe-depth hook 1/5] the rail stays painted
-        if (Boolean(this._railHidden) === on)
+        if (this.destroyed || Boolean(this._railHidden) === on)
             return;
         this._railHidden = on;
         this._syncReactive();
@@ -899,7 +909,8 @@ class CastItem extends St.Button {
 
     setBadgeOpacity(opacity) {
         this._badgeOpacity = opacity;
-        this._syncIcons();
+        if (!this.destroyed)
+            this._syncIcons();
     }
 
     slotOpacity(win) {
@@ -908,6 +919,8 @@ class CastItem extends St.Button {
 
     // Keep what the windows looked like (they are about to be destroyed).
     freeze(fresh = new Map()) {
+        if (this.destroyed)
+            return;
         for (const [win, preview] of this._previews)
             freezePreview(preview.actor, fresh.get(win) ?? preview.snap);
     }
@@ -1072,6 +1085,10 @@ class StageManager {
         // Order: windows < strip < flying snapshots < panel.
         const ui = Main.layoutManager.uiGroup;
         this._flyLayer = new Clutter.Actor({name: 'stageManagerFly'});
+        this._flyLayerGone = false;
+        this._flyLayer.connect('destroy', () => {
+            this._flyLayerGone = true;
+        });
         ui.insert_child_above(this._flyLayer, global.window_group);
         ui.set_child_below_sibling(this._strip, Main.layoutManager.panelBox);
         ui.set_child_below_sibling(this._zone, this._strip);
@@ -1209,8 +1226,10 @@ class StageManager {
                 focus.activate(global.get_current_time());
         }
 
-        Main.layoutManager.untrackChrome(this._flyLayer);
-        this._flyLayer.destroy();
+        if (!this._flyLayerGone) {
+            Main.layoutManager.untrackChrome(this._flyLayer);
+            this._flyLayer.destroy();
+        }
         if (this._reserve) {
             Main.layoutManager.removeChrome(this._reserve);
             this._reserve.destroy();
@@ -1219,7 +1238,8 @@ class StageManager {
         }
         this._edge.destroy();
         this._zone.destroy();
-        this._strip.destroy();
+        if (!this._stripGone)
+            this._strip.destroy();
         this._ours.clear();
         this._userParked.clear();
         this._restoreClaims.clear();
@@ -1399,6 +1419,12 @@ class StageManager {
 
     // -- bookkeeping --
 
+    // The shell is shutting down: it has destroyed the strip and the fly layer with the rest of the UI, and it still
+    // emits window and workspace signals while it unmanages everything. None of that may reach an actor any more.
+    _tornDown() {
+        return this._stripGone || this._flyLayerGone;
+    }
+
     _skipEffect(actor) {
         // A marker already supplied by another owner is not ours to remove.
         if (!Main.wm._skippedActors?.has(actor))
@@ -1421,6 +1447,14 @@ class StageManager {
         const token = this._flights.get(win);
         if (!token)
             return null;
+        if (token.fly._stageGone) {
+            // its picture was destroyed under it (the shell is shutting down): no pose to continue from
+            this._flights.delete(win);
+            this._outgoing.delete(win);
+            if (this._inFlight.get(token.actor) === token)
+                this._inFlight.delete(token.actor);
+            return {snap: token.snap, pose: null, speeds: {}, direction: token.direction, kind: token.kind};
+        }
         const elapsed = Math.max(0, token.timeline?.get_elapsed_time() ??
             (GLib.get_monotonic_time() - token.started) / 1000);
         const speeds = {};
@@ -1468,10 +1502,13 @@ class StageManager {
         const legacy = actor && this._inFlight.get(actor);
         if (legacy) {
             this._inFlight.delete(actor);
-            legacy.fly?.destroy();
+            if (legacy.fly && !legacy.fly._stageGone)
+                legacy.fly.destroy();
             actor.opacity = 255;
         }
-        this._outgoing.get(win)?.destroy();
+        const outgoing = this._outgoing.get(win);
+        if (outgoing && !outgoing._stageGone)
+            outgoing.destroy();
         this._outgoing.delete(win);
     }
 
@@ -1532,6 +1569,8 @@ class StageManager {
     }
 
     _onFullscreenChanged(win) {
+        if (this._tornDown())
+            return;
         if (this._operations.isReserved(win))
             return;
         if (win.fullscreen) {
@@ -1672,6 +1711,8 @@ class StageManager {
     // -- events --
 
     _onWindowCreated(win) {
+        if (this._tornDown())
+            return;
         win._vitreCreatedAt = GLib.get_monotonic_time() / 1000;
         this._track(win);
         // Windows that open without focus (focus-stealing prevention,
@@ -1693,6 +1734,8 @@ class StageManager {
     }
 
     _onFocusChanged() {
+        if (this._tornDown())
+            return;
         if (this._busy) {
             this._deferredFocus = true;
             return;
@@ -1714,6 +1757,8 @@ class StageManager {
     }
 
     _onMinimizedChanged(win) {
+        if (this._tornDown())
+            return;
         if (this._operations.isReserved(win))
             return;
         if (!win.minimized && this._ours.has(win)) {
@@ -1745,6 +1790,8 @@ class StageManager {
     }
 
     _onMoved(win) {
+        if (this._tornDown())
+            return;
         if (this._hasRailDragFor(win) && !this._onPrimary(win))
             this._invalidateRailDrags();
         if (this._operations.isReserved(win))
@@ -1762,7 +1809,8 @@ class StageManager {
             const target = rectOf(win.get_frame_rect());
             if (['x', 'y', 'width', 'height'].some(key => Math.abs(target[key] - token.target[key]) > 0.01)) {
                 const previous = this._takeFlight(win);
-                this._startFlight(win, previous.snap, previous.pose, target, 'in', previous.speeds);
+                if (previous.pose)
+                    this._startFlight(win, previous.snap, previous.pose, target, 'in', previous.speeds);
             }
         }
         this._queueOverlap();
@@ -1812,6 +1860,8 @@ class StageManager {
     }
 
     _onUnmanaged(win) {
+        if (this._tornDown())
+            return;
         if (this._hasRailDragFor(win))
             this._invalidateRailDrags();
         this._tracked.delete(win);
@@ -1843,6 +1893,8 @@ class StageManager {
     }
 
     _onWorkspaceChanged(win) {
+        if (this._tornDown())
+            return;
         if (this._hasRailDragFor(win))
             this._invalidateRailDrags();
         if (this._operations.isReserved(win))
@@ -1867,6 +1919,8 @@ class StageManager {
     }
 
     _onActiveWorkspaceChanged() {
+        if (this._tornDown())
+            return;
         // A3: the strip travels with its workspace. The old strip's items leave in a ghost layer that slides
         // out with the old workspace; the new strip slides in with the new one (GNOME's own 250 ms
         // ease-out-cubic, so it stays in step with the windows). A three-finger swipe has already moved the
@@ -1907,6 +1961,13 @@ class StageManager {
         if (!items.length)
             return null;
         const ghost = new Clutter.Actor({name: 'stageManagerStripGhost', reactive: false});
+        // Destroyed by whichever comes first: its own slide ending (_dropGhost), the next workspace change
+        // (_stopStripTravel, whose remove_all_transitions() already runs the slide's onStopped) or the shell.
+        ghost.connect('destroy', () => {
+            ghost._stageGone = true;
+            if (this._stripGhost === ghost)
+                this._stripGhost = null;
+        });
         this._strip.get_parent().insert_child_above(ghost, this._strip);
         ghost.set_position(this._strip.x + this._strip.translation_x, this._strip.y);
         ghost.set_size(this._strip.width, this._strip.height);
@@ -1959,7 +2020,8 @@ class StageManager {
     _dropGhost(ghost) {
         if (this._stripGhost === ghost)
             this._stripGhost = null;
-        ghost.destroy();
+        if (!ghost._stageGone)
+            ghost.destroy();
     }
 
     _stopStripTravel() {
@@ -1969,8 +2031,10 @@ class StageManager {
         if (this._stripGhost) {
             const g = this._stripGhost;
             this._stripGhost = null;
+            // stopping its slide runs the slide's onStopped (_dropGhost), which destroys the ghost already
             g.remove_all_transitions();
-            g.destroy();
+            if (!g._stageGone)
+                g.destroy();
         }
         if (!this._stripGone) {
             this._strip.set_child_transform(null);
@@ -2355,6 +2419,8 @@ class StageManager {
     }
 
     _startFlight(win, snap, from, target, kind, speeds = {}, {count = 1, p0 = SWAP.p0, factor = 1, onLanded = null} = {}) {
+        if (this._flyLayerGone)
+            return;
         this._cancelClick(win.get_compositor_private());
         const direction = kind === 'in' ? 'in' : 'out';
         const actor = win.get_compositor_private();
@@ -2428,6 +2494,10 @@ class StageManager {
         const complete = () => {
             if (this._flights.get(win) !== token)
                 return;
+            if (fly._stageGone) {
+                this._takeFlight(win);
+                return;
+            }
             // Publish the destination first. Both images coexist for this
             // synchronous handoff, so there is never an empty rendered frame.
             if (direction === 'out') {
@@ -2689,6 +2759,9 @@ class StageManager {
         fly.set_position(thumb.x, thumb.y);
         this._flyLayer.add_child(fly);
         const grow = new Clutter.Actor({width: 1, height: 1, opacity: 0, x: SWAP.p0});
+        grow.connect('destroy', () => {
+            grow._stageGone = true;
+        });
         this._flyLayer.add_child(grow);
         const frame = snap.frame;
         // in the overview the picture grows to about the size its preview will have in the grid, not to the window's own size
@@ -2754,10 +2827,8 @@ class StageManager {
 
     _endRailDrag(d) {
         d.ended = true;
-        d.grow.remove_all_transitions();
-        d.grow.destroy();
-        d.fly.remove_all_transitions();
-        d.fly.destroy();
+        this._dropActor(d.grow);
+        this._dropActor(d.fly);
         if (this._railDrag === d)
             this._railDrag = null;
         this._dragGroup = null;
@@ -2771,12 +2842,10 @@ class StageManager {
         d.ended = true;
         this._railDrag = null;
         this._dragGroup = null;
-        d.grow.remove_all_transitions();
-        d.grow.destroy();
+        this._dropActor(d.grow);
         const {group, win, snap, fly} = d;
-        if (immediate || !this._tracked.has(win) || !this._state().groups.includes(group)) {
-            fly.remove_all_transitions();
-            fly.destroy();
+        if (immediate || fly._stageGone || !this._tracked.has(win) || !this._state().groups.includes(group)) {
+            this._dropActor(fly);
             if (!this._disabled)
                 this._rebuildCast(!immediate);
             return;
@@ -2796,8 +2865,7 @@ class StageManager {
                 GLib.source_remove(timeoutId);
                 this._timeouts.delete(timeoutId);
             }
-            fly.remove_all_transitions();
-            fly.destroy();
+            this._dropActor(fly);
             if (item && !item.destroyed) {
                 for (const w of group.windows)
                     item.setFlightHidden(w, false);
@@ -2824,8 +2892,17 @@ class StageManager {
             timeoutId = this._later(900, done);
     }
 
+    // a fly-layer actor (a rail drag's picture or clock) is done: stop and destroy it unless it is gone already
+    _dropActor(actor) {
+        if (!actor || actor._stageGone)
+            return;
+        actor.remove_all_transitions();
+        actor.destroy();
+    }
+
     _invalidateRailDrags() {
-        this._dropZone?.hide();
+        if (!this._tornDown())
+            this._dropZone?.hide();
         this._draggedWindow = null;
         this._cancelRailDrag({immediate: true});
         for (const cancellation of [...this._railDragCancellations])
@@ -3046,7 +3123,8 @@ class StageManager {
             const target = item.slotRect(win, token.snap.frame, true);
             if (['x', 'y', 'width', 'height'].some(key => Math.abs(target[key] - token.target[key]) > 0.01)) {
                 const previous = this._takeFlight(win);
-                this._startFlight(win, previous.snap, previous.pose, target, 'park', previous.speeds);
+                if (previous.pose)
+                    this._startFlight(win, previous.snap, previous.pose, target, 'park', previous.speeds);
             }
         }
         this._queueOverlap();
@@ -3104,7 +3182,7 @@ class StageManager {
     // Any visible window on the primary display that reaches into the strip
     // column makes the strip step aside (stage windows, dialogs, PiP).
     _updateOverlap() {
-        if (this._flights.size)
+        if (this._flights.size || this._stripGone)
             return;
         if (Main.overview.visible) {
             // With continuity the strip holds still while the overview is up;

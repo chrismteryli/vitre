@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="vitre-workspaces@vitre-desktop">
+  <schema id="org.gnome.shell.extensions.vitre-workspaces" path="/org/gnome/shell/extensions/vitre-workspaces/">
+    <key name="style" type="s">
+      <choices>
+        <choice value="vitre"/>
+        <choice value="stock"/>
+      </choices>
+      <default>"vitre"</default>
+      <summary>Workspace switch style</summary>
+      <description>vitre: workspace switches use the glass depth slide (the workspace you leave steps back and dims, the next one settles on the Vitre spring). stock: GNOME's own slide, exactly as without this extension. Takes effect at once.</description>
+    </key>
+  </schema>
+</schemalist>

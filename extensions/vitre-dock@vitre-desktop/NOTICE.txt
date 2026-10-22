@@ -1,0 +1,14 @@
+Vitre Dock is a fork of Dhruva.
+
+  Dhruva GNOME Extension
+  Copyright (C) 2026 NarkAgni
+  https://github.com/narkagni/dhruva
+
+Dhruva is free software under the GNU General Public License, version 3 or (at your option) any later version. The licence text is in
+LICENSE. Vitre Dock is released under the same licence.
+
+Vitre's changes are small and marked "Vitre" in the code. VITRE-PATCHES.txt lists them. The extension has its own identity
+(vitre-dock@vitre-desktop, settings schema org.gnome.shell.extensions.vitre-dock) so that it is kept apart from Dhruva itself and GNOME's automatic extension updates
+do not replace it.
+
+Please report problems with Vitre Dock to the Vitre project (https://github.com/chrismteryli/vitre), not to the Dhruva project.

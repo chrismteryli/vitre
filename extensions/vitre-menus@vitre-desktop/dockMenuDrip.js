@@ -18,7 +18,7 @@ import {DripController, highlightRect, op255, motionAllowed} from './liquidDrip.
 import {DRIP} from './dripMotion.js';
 import {GLASS_FINISH} from './glass.js';
 
-const DHRUVA = 'dhruva@narkagni';
+const DOCK_UUIDS = ['vitre-dock@vitre-desktop', 'dhruva@narkagni'];   // Vitre Dock first, a Dock kept under the upstream name second
 const MODULES = ['src/ui/context-menu/AppContextMenu.js', 'src/ui/folder-menu/FolderMenu.js'];
 const ARROW = 12;           // Dhruva's ARROW_HEIGHT
 const RADIUS = 18;          // Dhruva's CORNER_RADIUS
@@ -106,12 +106,14 @@ export class DockMenuDrips {
         this._adapter = new DockMenuAdapter();
         this._controller = new DripController('dockmenu', this._adapter, {prewarm: 1, prewarmIf: () => this._style.liquid});
         this._injections = new InjectionManager();
+        this._attached = new Map();
+        this._pending = null;
         this._dead = false;
         this._load();
     }
 
     async _load() {
-        const path = Extension.lookupByUUID(DHRUVA)?.path;
+        const path = DOCK_UUIDS.map(u => Extension.lookupByUUID(u)).find(Boolean)?.path;
         if (!path)
             return;
         for (const rel of MODULES) {
@@ -142,6 +144,17 @@ export class DockMenuDrips {
         this._dead = true;
         this._injections.clear();
         this._controller.destroy();
+        this._finishPending(false);
+        for (const [c, {actor, ease, wrapper}] of this._attached) {
+            if (c._vitreGone)
+                continue;
+            if (c.ease === wrapper)
+                c.ease = ease;
+            delete c._vitreEase;
+            c.disconnectObject(this);
+            actor?.disconnectObject(this);
+        }
+        this._attached.clear();
         const m = this._adapter.menu;
         if (m?.menuContainer && !m.menuContainer._vitreGone)
             m.menuContainer.opacity = 255;
@@ -150,7 +163,7 @@ export class DockMenuDrips {
 
     _wanted(menu) {
         const pos = menu._dockPos;
-        return this._style.liquid && motionAllowed() && (pos === 'BOTTOM' || pos === 'TOP');
+        return !this._dead && this._style.liquid && motionAllowed() && (pos === 'BOTTOM' || pos === 'TOP');
     }
 
     _attach(menu) {
@@ -159,6 +172,12 @@ export class DockMenuDrips {
             return;
         c.connectObject('destroy', () => {
             c._vitreGone = true;
+            this._attached.delete(c);
+            if (this._adapter.menu === menu) {
+                this._controller.reset();
+                this._adapter.menu = null;
+                this._finishPending(false);
+            }
         }, this);
         // Escape closes the menu (Dhruva gives it the key focus but has no key handler)
         menu.actor?.connectObject('key-press-event', (_a, event) => {
@@ -179,53 +198,93 @@ export class DockMenuDrips {
                     delete rest.scale_x;
                     delete rest.scale_y;
                     const onComplete = rest.onComplete;
+                    const onStopped = rest.onStopped;
                     delete rest.onComplete;
+                    delete rest.onStopped;
                     if (props.opacity >= 255) {
-                        self._open(menu);
                         if (Object.keys(rest).some(k => k !== 'duration' && k !== 'mode' && k !== 'delay'))
                             ease.call(this, rest);
-                        onComplete?.();
+                        self._open(menu, onComplete, onStopped);
                         return;
                     }
-                    if (props.opacity === 0 && self._close(menu, onComplete))
+                    if (props.opacity === 0 && self._close(menu, onComplete, onStopped))
                         return;
                 }
+                // A native fade can take over after motion/style changes. Stop the
+                // old drip first so it cannot later make the surface visible again.
+                if (props && 'opacity' in props && self._adapter.menu === menu) {
+                    self._controller.reset();
+                    self._finishPending(false);
+                    self._adapter.menu = null;
+                }
             } catch (e) {
+                // The native ease below now owns these callbacks. Cancel the
+                // failed drip without also reporting them as interrupted.
+                if (self._pending?.menu === menu) {
+                    self._pending = null;
+                    self._controller.callbacks.onOpened = null;
+                    self._controller.callbacks.onClosed = null;
+                    self._controller.reset();
+                    if (self._adapter.menu === menu)
+                        self._adapter.menu = null;
+                }
                 console.warn(`Liquid Menus: a Dock menu kept its fade (${e.message})`);
             }
             return ease.call(this, props);
         };
+        this._attached.set(c, {actor: menu.actor, ease, wrapper: c.ease});
     }
 
-    _open(menu) {
+    // St.ease calls onComplete only on success, and onStopped for both success
+    // and interruption. Dhruva relies on onStopped to remove its input overlay.
+    _finishPending(finished, pending = this._pending) {
+        if (!pending || this._pending !== pending)
+            return;
+        this._pending = null;
+        this._controller.callbacks.onOpened = null;
+        this._controller.callbacks.onClosed = null;
+        if (pending.closing && this._adapter.menu === pending.menu)
+            this._adapter.menu = null;
+        // Clear ownership before callbacks: disposal can destroy the actor or
+        // synchronously open another menu.
+        for (const [callback, args] of [
+            [pending.onStopped, [finished]],
+            [finished ? pending.onComplete : null, []],
+        ]) {
+            try {
+                callback?.(...args);
+            } catch (e) {
+                console.warn(`Liquid Menus: a Dock menu completion failed (${e.message})`);
+            }
+        }
+    }
+
+    _open(menu, onComplete, onStopped) {
         if (this._adapter.menu && this._adapter.menu !== menu)
             this._controller.reset();
+        this._finishPending(false);
         this._adapter.menu = menu;
         this._adapter.rest = null;
-        this._controller.callbacks.onClosed = null;
+        const pending = {menu, closing: false, onComplete, onStopped};
+        this._pending = pending;
+        this._controller.callbacks.onOpened = () => this._finishPending(true, pending);
+        if (this._controller.phase === 'open') {
+            this._finishPending(true);
+            return;
+        }
         this._controller.open();
     }
 
     // the retract plays, then Dhruva's own completion (remove the overlay, destroy the menu); false = let Dhruva fade it
-    _close(menu, onComplete) {
+    _close(menu, onComplete, onStopped) {
         if (this._adapter.menu !== menu || this._controller.phase === 'closed')
             return false;
-        let done = false;
-        const finish = () => {
-            if (done)
-                return;
-            done = true;
-            this._controller.callbacks.onClosed = null;
-            try {
-                onComplete?.();
-            } finally {
-                if (this._adapter.menu === menu)
-                    this._adapter.menu = null;
-            }
-        };
-        this._controller.callbacks.onClosed = finish;
+        this._finishPending(false);
+        const pending = {menu, closing: true, onComplete, onStopped};
+        this._pending = pending;
+        this._controller.callbacks.onClosed = () => this._finishPending(true, pending);
         if (!this._controller.close())
-            finish();
+            this._finishPending(true);
         return true;
     }
 }

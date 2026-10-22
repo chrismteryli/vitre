@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-fullscreen-spaces" path="/org/gnome/shell/extensions/vitre-fullscreen-spaces/">
+    <key name="motion" type="s">
+      <choices>
+        <choice value="vitre"/>
+        <choice value="native"/>
+      </choices>
+      <default>'vitre'</default>
+      <summary>Fullscreen motion</summary>
+      <description>vitre: the window grows to fill the screen while the desktop steps back and the top bar, Dock and Stage strip slide away. Leaving fullscreen is the same motion in reverse. native: GNOME's size change effect and the workspace slide, as before.</description>
+    </key>
+  </schema>
+</schemalist>

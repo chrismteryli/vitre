@@ -1,0 +1,17 @@
+Vitre Dock is Dhruva 4.7 (https://github.com/narkagni/dhruva, GPL-3.0, by NarkAgni) with changes for Vitre.
+
+Why it is a fork: GNOME Shell checks per-user extensions against extensions.gnome.org once a day and replaces them with the published
+version. A patched copy under the name dhruva@narkagni was replaced by the stock Dhruva within a day. Vitre Dock has its own uuid
+(vitre-dock@vitre-desktop) and settings schema (org.gnome.shell.extensions.vitre-dock), so the updater does not know it.
+
+Changes (search the code for "Vitre"):
+- src/ui/effects/WindowEffects.js: when Vitre's window motion (vitre-window-open) is loaded, the Dock runs no minimize, restore or
+  launch effect and claims nothing from GNOME. A Dock click only tells Vitre which button a window belongs to. Without Vitre's window
+  motion, Dhruva's own effects run as before. vitreStageOn() is true while Vitre Stage is on.
+- src/ui/dock/DockItemBuilder.js: with Stage on, a click on the Dock icon of the app on the stage brings its windows to the front
+  instead of minimizing it. The icon hop while an app launches calls into Vitre's window motion.
+- src/ui/dock/DockRenderer.js: a re-render of the Dock while the pointer is on a window preview keeps the preview open.
+
+Identity changes: metadata.json, schemas/ (schema id and path), locale/ (gettext domain), src/core/DataPaths.js and
+src/ui/blur/BlurPanel.js (the extension's folder name). Internal actor and style class names such as DhruvaContainer are unchanged,
+because Vitre's window motion finds the Dock by that name.

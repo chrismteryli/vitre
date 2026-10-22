@@ -1,0 +1,50 @@
+# The website (docs/) and the apt repository (/apt) on GitHub Pages.
+# The apt files are not kept in git: each release carries them as vitre-apt-<version>.tar, and this job unpacks the latest one into /apt.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/pages.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Site and apt repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _site/apt
+          cp -a docs/. _site/
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern 'vitre-apt-*.tar' --dir /tmp/apt
+          tar -xf /tmp/apt/vitre-apt-*.tar -C _site/apt
+          test -s _site/apt/InRelease
+          ls -la _site/apt
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

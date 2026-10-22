@@ -1,10 +1,11 @@
 {
   "uuid": "vitre-fullscreen-spaces@vitre-desktop",
   "name": "Full Screen Spaces",
-  "description": "Give newly full-screen app windows their own workspace, then return them when full screen ends. Existing full-screen windows and manual workspace moves are preserved. Disable to return windows still owned by this feature.",
+  "description": "Give newly full-screen app windows their own workspace, then return them when full screen ends. The window grows to fill the screen while the desktop steps back and the top bar, Dock and Stage strip slide away; leaving is the same motion in reverse. Existing full-screen windows and manual workspace moves are preserved. Disable to return windows still owned by this feature.",
   "shell-version": [
     "51"
   ],
-  "version": 1,
-  "url": "https://github.com/chrismteryli/vitre"
+  "version": 2,
+  "url": "https://github.com/chrismteryli/vitre",
+  "settings-schema": "org.gnome.shell.extensions.vitre-fullscreen-spaces"
 }

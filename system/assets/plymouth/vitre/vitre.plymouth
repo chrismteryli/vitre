@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Vitre
+Description=Vitre boot splash: the glass bead lets go of the bar, lands, and the wordmark arrives
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/vitre
+ScriptFile=/usr/share/plymouth/themes/vitre/vitre.script

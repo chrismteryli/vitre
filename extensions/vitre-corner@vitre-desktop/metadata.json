@@ -1,0 +1,14 @@
+{
+  "uuid": "vitre-corner@vitre-desktop",
+  "name": "Vitre Corner",
+  "description": "In full screen the top bar is hidden. Move the pointer into the top-right corner and a small glass capsule stretches out of it with the time, the battery and a round button that opens the Control Center over the full-screen app. It goes back when the pointer leaves, on Esc or on a click elsewhere. Outside full screen nothing changes, unless the top bar is hidden by a setting.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 1,
+  "session-modes": [
+    "user"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-corner",
+  "url": "https://github.com/chrismteryli/vitre"
+}

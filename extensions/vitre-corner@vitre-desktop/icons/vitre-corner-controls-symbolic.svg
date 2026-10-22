@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
+  <!-- Two sliders: the Control Center glyph of the corner capsule. Filled shapes only (symbolic recolouring
+       fills them), every edge on the 2/3 unit grid so it lands on whole device pixels at 1.5x. -->
+  <rect x="1" y="3.333" width="12" height="1.333" rx="0.667"/>
+  <circle cx="9.333" cy="4" r="2"/>
+  <rect x="1" y="9.333" width="12" height="1.333" rx="0.667"/>
+  <circle cx="4.667" cy="10" r="2"/>
+</svg>

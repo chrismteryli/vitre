@@ -76,38 +76,50 @@ windowtitle:not(#a18) .subtitle { margin-top: -1px; }
 
 toolbarview:not(#a18) > .bottom-bar:not(#a18) headerbar:not(#a18) { min-height: 47px; }
 
-/* ---- traffic lights: 14 pt = 16 px discs, centres at x = 30 / 56 / 83, y = 30. The disc is a 16x16 SVG centred in the button, so it
-        stays a circle even where an app makes the window-control button taller (Ptyxis' header) ---- */
-headerbar:not(#a18) windowcontrols:not(.empty).start { margin-left: 14px; margin-right: 6px; padding: 0; border-spacing: 10px; }
-headerbar:not(#a18) windowcontrols:not(.empty).end { margin-left: 6px; margin-right: 14px; padding: 0; border-spacing: 10px; }
-headerbar:not(#a18) windowcontrols > button.close:not(#a18),
-headerbar:not(#a18) windowcontrols > button.minimize:not(#a18),
-headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) {
-  min-width: 16px; min-height: 16px; padding: 0; margin: 13px 0 12px 0;
+/* ---- Vitre window buttons, variant B "glass capsule" (proposal 2026-10-16, replaces the traffic-light block) ----
+   One glass capsule, 72 x 20, from today's left edge (x = 22): close, minimize, maximize as segments that touch.
+   Glyphs always shown; the segment under the pointer fills coral (close) or Vitre blue. A window that lacks a button
+   closes the capsule on the last one it has (:last-child), so a lone close is a small rounded pill. ---- */
+headerbar:not(#a18) windowcontrols:not(.empty).start { margin-left: 14px; margin-right: 6px; padding: 0; border-spacing: 0; }
+headerbar:not(#a18) windowcontrols:not(.empty).end { margin-left: 6px; margin-right: 14px; padding: 0; border-spacing: 0; }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18), headerbar:not(#a18) windowcontrols > button.minimize:not(#a18), headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) {
+  min-width: 24px; min-height: 20px; padding: 0; margin: 11px 0 10px 0;
   border-radius: 0; border: none; border-width: 0; outline: none; box-shadow: none; filter: none;
-  background-color: transparent; background-repeat: no-repeat; background-position: center; background-size: 16px 16px;
+  background-color: transparent; background-repeat: no-repeat; background-position: center; background-size: 24px 20px;
   color: transparent;
 }
-headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { margin-left: 1px; }
 headerbar:not(#a18) windowcontrols > button:not(#a18) > image { background: none; background-color: transparent; color: transparent; padding: 0; margin: 0; min-width: 0; min-height: 0; opacity: 0; box-shadow: none; -gtk-icon-size: 1px; }
-/* active: solid discs with a ring a shade darker, one device pixel wide at 1.5x; the SVGs are declared at 3x (48 px) so GTK
-   rasterizes them sharp in their 16 px slot (B20, 2026-10-15) */
-headerbar:not(#a18) windowcontrols > button.close:not(#a18) { background-image: url("a18-assets/tl-close.svg"); }
-headerbar:not(#a18) windowcontrols > button.minimize:not(#a18) { background-image: url("a18-assets/tl-minimize.svg"); }
-headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { background-image: url("a18-assets/tl-maximize.svg"); }
-/* hover over the group shows all three glyphs (GTK4 sets :hover on the parent too) */
-headerbar:not(#a18) windowcontrols:hover > button.close:not(#a18):not(:backdrop) { background-image: url("a18-assets/tl-close-hover.svg"); }
-headerbar:not(#a18) windowcontrols:hover > button.minimize:not(#a18):not(:backdrop) { background-image: url("a18-assets/tl-minimize-hover.svg"); }
-headerbar:not(#a18) windowcontrols:hover > button.maximize:not(#a18):not(:backdrop) { background-image: url("a18-assets/tl-maximize-hover.svg"); }
-headerbar:not(#a18) windowcontrols > button:active:not(#a18) { filter: brightness(0.85); }
-/* inactive window: pale grey discs (light: measured; dark: DERIVED) */
-headerbar:not(#a18) windowcontrols > button.close:backdrop:not(#a18) { background-image: url("a18-assets/tl-close-off-light.svg"); filter: none; opacity: 1; }
-headerbar:not(#a18) windowcontrols > button.minimize:backdrop:not(#a18) { background-image: url("a18-assets/tl-minimize-off-light.svg"); filter: none; opacity: 1; }
-headerbar:not(#a18) windowcontrols > button.maximize:backdrop:not(#a18) { background-image: url("a18-assets/tl-maximize-off-light.svg"); filter: none; opacity: 1; }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18) { background-image: url("a18-assets/vc-close-left-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):last-child { background-image: url("a18-assets/vc-close-single-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18) { background-image: url("a18-assets/vc-minimize-mid-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):last-child { background-image: url("a18-assets/vc-minimize-right-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { background-image: url("a18-assets/vc-maximize-right-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):hover:not(:backdrop) { background-image: url("a18-assets/vc-close-left-hover.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):last-child:hover:not(:backdrop) { background-image: url("a18-assets/vc-close-single-hover.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):hover:not(:backdrop) { background-image: url("a18-assets/vc-minimize-mid-hover.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):last-child:hover:not(:backdrop) { background-image: url("a18-assets/vc-minimize-right-hover.svg"); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):hover:not(:backdrop) { background-image: url("a18-assets/vc-maximize-right-hover.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):active { background-image: url("a18-assets/vc-close-left-pressed.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):last-child:active { background-image: url("a18-assets/vc-close-single-pressed.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):active { background-image: url("a18-assets/vc-minimize-mid-pressed.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):last-child:active { background-image: url("a18-assets/vc-minimize-right-pressed.svg"); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):active { background-image: url("a18-assets/vc-maximize-right-pressed.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):backdrop { background-image: url("a18-assets/vc-close-left-off-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.close:not(#a18):last-child:backdrop { background-image: url("a18-assets/vc-close-single-off-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):backdrop { background-image: url("a18-assets/vc-minimize-mid-off-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):last-child:backdrop { background-image: url("a18-assets/vc-minimize-right-off-light.svg"); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):backdrop { background-image: url("a18-assets/vc-maximize-right-off-light.svg"); }
 @media (prefers-color-scheme: dark) {
-  headerbar:not(#a18) windowcontrols > button.close:backdrop:not(#a18) { background-image: url("a18-assets/tl-close-off-dark.svg"); }
-  headerbar:not(#a18) windowcontrols > button.minimize:backdrop:not(#a18) { background-image: url("a18-assets/tl-minimize-off-dark.svg"); }
-  headerbar:not(#a18) windowcontrols > button.maximize:backdrop:not(#a18) { background-image: url("a18-assets/tl-maximize-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.close:not(#a18) { background-image: url("a18-assets/vc-close-left-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.close:not(#a18):last-child { background-image: url("a18-assets/vc-close-single-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.minimize:not(#a18) { background-image: url("a18-assets/vc-minimize-mid-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):last-child { background-image: url("a18-assets/vc-minimize-right-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { background-image: url("a18-assets/vc-maximize-right-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.close:not(#a18):backdrop { background-image: url("a18-assets/vc-close-left-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.close:not(#a18):last-child:backdrop { background-image: url("a18-assets/vc-close-single-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):backdrop { background-image: url("a18-assets/vc-minimize-mid-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):last-child:backdrop { background-image: url("a18-assets/vc-minimize-right-off-dark.svg"); }
+  headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):backdrop { background-image: url("a18-assets/vc-maximize-right-off-dark.svg"); }
 }
 
 /* ---- title + subtitle: 13 pt semibold / 11 pt regular ---- */

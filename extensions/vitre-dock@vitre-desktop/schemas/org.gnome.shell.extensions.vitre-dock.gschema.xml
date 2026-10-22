@@ -1,0 +1,733 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-dock" path="/org/gnome/shell/extensions/vitre-dock/">
+
+    <key name="dock-position" type="s">
+      <default>'BOTTOM'</default>
+      <summary>Dock Position</summary>
+    </key>
+
+    <key name="preferred-monitor" type="i">
+      <default>-1</default>
+      <summary>Preferred Monitor</summary>
+    </key>
+
+    <key name="show-on-all-monitors" type="b">
+      <default>false</default>
+      <summary>Show dock on all monitors</summary>
+    </key>
+
+    <key name="isolate-monitors" type="b">
+      <default>false</default>
+      <summary>Isolate Monitors</summary>
+    </key>
+
+    <key name="independent-dock" type="b">
+      <default>false</default>
+      <summary>Independent Dock Mode</summary>
+      <description>Use Dhruva's own pinned apps and custom app grid instead of GNOME's native dash.</description>
+    </key>
+
+    <key name="show-independent-in-overview" type="b">
+      <default>false</default>
+      <summary>Show Independent Dock in Overview</summary>
+      <description>Display the custom dock when the GNOME overview is active.</description>
+    </key>
+
+    <key name="full-width" type="b">
+      <default>false</default>
+      <summary>Full Width Dock</summary>
+    </key>
+
+    <key name="icon-alignment" type="s">
+      <default>'CENTER'</default>
+      <summary>Icon Alignment</summary>
+    </key>
+
+    <key name="dock-margin" type="i">
+      <default>0</default>
+      <summary>Distance from screen edge in pixels</summary>
+    </key>
+
+    <key name="icon-size" type="i">
+      <default>32</default>
+      <summary>Icon Size</summary>
+    </key>
+
+    <key name="icon-spacing" type="i">
+      <default>6</default>
+      <summary>Icon Spacing</summary>
+    </key>
+
+    <key name="dock-padding" type="i">
+      <default>0</default>
+      <summary>Dock Side Padding</summary>
+    </key>
+
+    <key name="dock-height" type="i">
+      <default>8</default>
+      <summary>Dock Height / Thickness padding</summary>
+    </key>
+
+    <key name="dock-theme" type="s">
+      <default>'default'</default>
+      <summary>Dock Theme Preset</summary>
+    </key>
+
+    <key name="background-color" type="s">
+      <default>'#241F31'</default>
+      <summary>Background Color</summary>
+    </key>
+
+    <key name="use-gradient" type="b">
+      <default>false</default>
+      <summary>Use Gradient for Custom Theme</summary>
+    </key>
+
+    <key name="background-gradient-color" type="s">
+      <default>'#333333'</default>
+      <summary>Secondary Gradient Color</summary>
+    </key>
+
+    <key name="gradient-direction" type="s">
+      <default>'vertical'</default>
+      <summary>Gradient Direction</summary>
+    </key>
+
+    <key name="background-opacity" type="i">
+      <default>75</default>
+      <summary>Background Opacity</summary>
+    </key>
+
+    <key name="desktop-btn-width" type="i">
+      <default>12</default>
+      <summary>Desktop button width</summary>
+    </key>
+    
+    <key name="desktop-btn-opacity" type="i">
+      <default>15</default>
+      <summary>Desktop button opacity</summary>
+    </key>
+
+    <key name="desktop-btn-color" type="s">
+      <default>'#ffffff'</default>
+      <summary>Desktop button color</summary>
+    </key>
+
+    <key name="tooltip-opacity" type="i">
+      <default>20</default>
+      <summary>Hover Box Opacity</summary>
+    </key>
+    
+    <key name="border-radius" type="i">
+      <default>18</default>
+      <summary>Border Radius</summary>
+    </key>
+
+    <key name="stroke-width" type="i">
+      <default>1</default>
+      <summary>Stroke Width</summary>
+    </key>
+
+    <key name="stroke-color" type="s">
+      <default>'#ffffff'</default>
+      <summary>Stroke Color</summary>
+    </key>
+
+    <key name="stroke-opacity" type="i">
+      <default>10</default>
+      <summary>Stroke Opacity</summary>
+    </key>
+
+    <key name="show-running-indicators" type="b">
+      <default>true</default>
+      <summary>Show dot indicator under running apps</summary>
+    </key>
+
+    <key name="indicator-style" type="s">
+      <choices>
+        <choice value='dot'/>
+        <choice value='dash'/>
+        <choice value='line'/>
+        <choice value='square'/>
+        <choice value='windows'/>
+      </choices>
+      <default>'dot'</default>
+      <summary>Running Indicator Style</summary>
+    </key>
+
+    <key name="indicator-color-mode" type="s">
+      <choices>
+        <choice value='custom'/>
+        <choice value='dominant'/>
+      </choices>
+      <default>'custom'</default>
+      <summary>Running App Indicator Color Source</summary>
+      <description>Use custom static color or match with icon dominant color.</description>
+    </key>
+
+    <key name="indicator-color" type="s">
+      <default>'#ffffff'</default>
+      <summary>Running App Indicator Color</summary>
+    </key>
+
+    <key name="indicator-size" type="i">
+      <default>4</default>
+      <summary>Indicator Size</summary>
+    </key>
+
+    <key name="indicator-glow" type="b">
+      <default>false</default>
+      <summary>Indicator Glow</summary>
+    </key>
+
+    <key name="quick-launch-accel-1" type="as">
+      <default><![CDATA[['<Super>1']]]></default>
+      <summary>Dhruva quick launch slot 1</summary>
+    </key>
+
+    <key name="quick-launch-accel-2" type="as">
+      <default><![CDATA[['<Super>2']]]></default>
+      <summary>Quick launch slot 2</summary>
+    </key>
+
+    <key name="quick-launch-accel-3" type="as">
+      <default><![CDATA[['<Super>3']]]></default>
+      <summary>Quick launch slot 3</summary>
+    </key>
+
+    <key name="quick-launch-accel-4" type="as">
+      <default><![CDATA[['<Super>4']]]></default>
+      <summary>Quick launch slot 4</summary>
+    </key>
+
+    <key name="quick-launch-accel-5" type="as">
+      <default><![CDATA[['<Super>5']]]></default>
+      <summary>Quick launch slot 5</summary>
+    </key>
+
+    <key name="quick-launch-accel-6" type="as">
+      <default><![CDATA[['<Super>6']]]></default>
+      <summary>Quick launch slot 6</summary>
+    </key>
+
+    <key name="quick-launch-accel-7" type="as">
+      <default><![CDATA[['<Super>7']]]></default>
+      <summary>Quick launch slot 7</summary>
+    </key>
+
+    <key name="quick-launch-accel-8" type="as">
+      <default><![CDATA[['<Super>8']]]></default>
+      <summary>Quick launch slot 8</summary>
+    </key>
+    
+    <key name="quick-launch-accel-9" type="as">
+      <default><![CDATA[['<Super>9']]]></default>
+      <summary>Quick launch slot 9</summary>
+    </key>
+
+    <key name="click-effect" type="s">
+      <default>'none'</default>
+      <summary>Icon Click Effect</summary>
+    </key>
+
+    <key name="minimize-effect" type="s">
+      <choices>
+        <choice value='none'/>
+        <choice value='magic-lamp'/>
+        <choice value='snake'/>
+        <choice value='vortex'/>
+        <choice value='crt'/>
+        <choice value='origami'/>
+        <choice value='jelly'/>
+      </choices>
+      <default>'none'</default>
+      <summary>Minimize Effect</summary>
+    </key>
+
+    <key name="hover-zoom" type="b">
+      <default>false</default>
+      <summary>Magnify icons on hover</summary>
+    </key>
+
+    <key name="hover-animation" type="b">
+      <default>false</default>
+      <summary>Animate icon hover background when hover zoom is off</summary>
+    </key>
+
+    <key name="hover-zoom-factor" type="d">
+      <default>2.0</default>
+      <summary>Icon zoom multiplier on hover</summary>
+    </key>
+
+    <key name="hover-zoom-style" type="s">
+      <choices>
+        <choice value='fluid'/>
+        <choice value='domino'/>
+        <choice value='cylinder'/>
+        <choice value='magnetic'/>
+        <choice value='jelly'/>
+        <choice value='coverflow'/>
+      </choices>
+      <default>'fluid'</default>
+      <summary>Hover Zoom Animation Style</summary>
+    </key>
+
+    <key name="hover-zoom-rise" type="i">
+      <default>16</default>
+      <summary>Icon Elevation / Rise distance in pixels</summary>
+    </key>
+
+    <key name="hover-zoom-width" type="b">
+      <default>true</default>
+      <summary>Dynamic Slot Width Expansion</summary>
+    </key>
+
+    <key name="hover-zoom-smoothness" type="d">
+      <default>0.26</default>
+      <summary>Hover Zoom Motion Smoothness Factor</summary>
+    </key>
+
+    <key name="hover-zoom-radius" type="d">
+      <default>3.5</default>
+      <summary>Hover Zoom Spread Radius Multiplier</summary>
+    </key>
+
+    <key name="hover-zoom-gap-factor" type="d">
+      <default>2.3</default>
+      <summary>Dynamic Slot Width Push Gap Factor</summary>
+    </key>
+
+    <key name="hover-zoom-domino-tilt" type="i">
+      <default>14</default>
+      <summary>Domino Effect Tilt Angle</summary>
+    </key>
+
+    <key name="hover-zoom-cylinder-angle" type="i">
+      <default>32</default>
+      <summary>Cylinder Drum Roll Angle</summary>
+    </key>
+
+    <key name="hover-zoom-magnetic-strength" type="i">
+      <default>12</default>
+      <summary>Magnetic Cursor Snap Strength (px)</summary>
+    </key>
+
+    <key name="hover-zoom-jelly-stretch" type="d">
+      <default>0.75</default>
+      <summary>Jelly Stretch Pull Intensity</summary>
+    </key>
+
+    <key name="hover-zoom-jelly-squish" type="d">
+      <default>0.50</default>
+      <summary>Jelly Shrink / Squish Compression Intensity</summary>
+    </key>
+
+    <key name="hover-zoom-coverflow-angle" type="i">
+      <default>38</default>
+      <summary>Cover Flow Yaw Tilt Angle</summary>
+    </key>
+
+    <key name="show-apps-preview" type="b">
+      <default>false</default>
+      <summary>Show App Previews</summary>
+    </key>
+
+    <key name="context-menu-size" type="i">
+      <default>240</default>
+      <summary>Context Menu Thumbnail Size</summary>
+    </key>
+
+    <key name="big-preview-size" type="i">
+      <default>95</default>
+      <summary>Big Hover Preview Size (%)</summary>
+    </key>
+
+    <key name="peek-effect" type="b">
+      <default>false</default>
+      <summary>Aero Peek effect on context menu hover</summary>
+    </key>
+
+    <key name="peek-animation-speed" type="i">
+      <default>500</default>
+      <summary>Peek animation speed in ms</summary>
+    </key>
+
+    <key name="lock-icons" type="b">
+      <default>false</default>
+      <summary>Lock Icons</summary>
+    </key>
+
+    <key name="isolate-workspaces" type="b">
+      <default>false</default>
+      <summary>Isolate Workspaces</summary>
+    </key>
+
+    <key name="scroll-action-dock" type="b">
+      <default>false</default>
+      <summary>Switch workspace on dock scroll</summary>
+    </key>
+
+    <key name="scroll-action-app" type="b">
+      <default>false</default>
+      <summary>Cycle windows on app icon scroll</summary>
+    </key>
+
+    <key name="show-mounts" type="b">
+      <default>false</default>
+      <summary>Show Mounted Drives</summary>
+      <description>Show connected USB drives, external HDDs, and mounted volumes on the dock.</description>
+    </key>
+
+    <key name="show-trash" type="b">
+      <default>false</default>
+      <summary>Show Recycle Bin</summary>
+    </key>
+
+    <key name="show-desktop-button" type="b">
+      <default>false</default>
+      <summary>Show Desktop Button</summary>
+    </key>
+
+    <key name="show-grid-button" type="b">
+      <default>true</default>
+      <summary>Show App Grid Button</summary>
+    </key>
+
+    <key name="grid-button-position" type="s">
+      <default>'START'</default>
+      <summary>Grid Button Position</summary>
+    </key>
+
+    <key name="show-home" type="b">
+      <default>false</default>
+      <summary>Show Home Folder</summary>
+    </key>
+
+    <key name="show-downloads" type="b">
+      <default>false</default>
+      <summary>Show Downloads</summary>
+    </key>
+
+    <key name="show-documents" type="b">
+      <default>false</default>
+      <summary>Show Documents</summary>
+    </key>
+
+    <key name="show-pictures" type="b">
+      <default>false</default>
+      <summary>Show Pictures</summary>
+    </key>
+
+    <key name="show-videos" type="b">
+      <default>false</default>
+      <summary>Show Videos</summary>
+    </key>
+
+    <key name="show-music" type="b">
+      <default>false</default>
+      <summary>Show Music</summary>
+    </key>
+
+    <key name="custom-folders" type="s">
+      <default>'[]'</default>
+      <summary>JSON array of custom folders</summary>
+    </key>
+
+    <key name="show-clock" type="b">
+      <default>false</default>
+      <summary>Show Clock</summary>
+    </key>
+
+    <key name="use-24h-clock" type="b">
+      <default>false</default>
+      <summary>Use 24-hour clock format</summary>
+    </key>
+
+    <key name="clock-font-size" type="i">
+      <default>16</default>
+      <summary>Clock Font Size</summary>
+    </key>
+    
+    <key name="clock-position" type="s">
+      <default>'END'</default>
+      <summary>Clock Position</summary>
+    </key>
+
+    <key name="show-notification-badges" type="b">
+      <default>false</default>
+      <summary>Show Notification Badges</summary>
+    </key>
+
+    <key name="show-module-separator" type="b">
+      <default>true</default>
+      <summary>Show Module Separator</summary>
+      <description>Show a divider for clock, grid, and system icons.</description>
+    </key>
+
+    <key name="separator-width" type="i">
+      <default>1</default>
+      <summary>Module Separator Width</summary>
+    </key>
+
+    <key name="separator-height" type="i">
+      <default>100</default>
+      <summary>Module Separator Height Percentage</summary>
+    </key>
+    
+    <key name="separator-color" type="s">
+      <default>'#ffffff'</default>
+      <summary>Module Separator Color</summary>
+    </key>
+
+    <key name="separator-opacity" type="i">
+      <default>20</default>
+      <summary>Module Separator Opacity</summary>
+    </key>
+
+    <key name="show-app-separator" type="b">
+      <default>false</default>
+      <summary>Show App Separator</summary>
+      <description>Show a divider between pinned and unpinned running apps.</description>
+    </key>
+
+    <key name="running-separator-width" type="i">
+      <default>2</default>
+      <summary>Pinned/Running Apps Separator Width</summary>
+    </key>
+
+    <key name="running-separator-height" type="i">
+      <default>100</default>
+      <summary>Pinned/Running Apps Separator Height Percentage</summary>
+    </key>
+
+    <key name="running-separator-color" type="s">
+      <default>'#ffffff'</default>
+      <summary>Pinned/Running Apps Separator Color</summary>
+    </key>
+
+    <key name="running-separator-opacity" type="i">
+      <default>20</default>
+      <summary>Pinned/Running Apps Separator Opacity</summary>
+    </key>
+
+    <key name="use-old-grid-icon" type="b">
+      <default>false</default>
+      <summary>Use old app grid icon</summary>
+    </key>
+
+    <key name="grid-icon-color" type="s">
+      <default>'#ffffff'</default>
+      <summary>App Grid Icon Color</summary>
+    </key>
+
+    <key name="custom-grid-icon" type="s">
+      <default>''</default>
+      <summary>Custom Grid Icon Path</summary>
+    </key>
+
+    <key name="custom-grid-icon-scale" type="i">
+      <default>90</default>
+      <summary>Custom Grid Icon Scale Percentage</summary>
+    </key>
+
+    <key name="app-folders" type="s">
+      <default>'[]'</default>
+      <summary>JSON array of app folders (stacking)</summary>
+      <description>Stores custom folders containing multiple app IDs.</description>
+    </key>
+
+    <key name="show-unpinned-apps" type="b">
+      <default>true</default>
+      <summary>Show Unpinned Apps</summary>
+      <description>Show running apps that are not pinned to the dock.</description>
+    </key>
+
+    <key name="new-window-action" type="s">
+      <default>'both'</default>
+      <summary>New Window Action</summary>
+      <description>Choose how to open a new window for a running app.</description>
+    </key>
+
+    <key name="hide-mode" type="s">
+      <choices>
+        <choice value='always'/>
+        <choice value='intelligent'/>
+        <choice value='dodge-all'/>
+        <choice value='maximized'/>
+        <choice value='none'/>
+      </choices>
+      <default>'none'</default>
+      <summary>Auto-hide mode</summary>
+    </key>
+
+    <key name="hide-delay" type="i">
+      <default>100</default>
+      <summary>Hide Delay in ms</summary>
+    </key>
+
+    <key name="unhide-delay" type="i">
+      <default>0</default>
+      <summary>Unhide Delay in ms</summary>
+    </key>
+
+    <key name="edge-dwell-delay" type="i">
+      <default>150</default>
+      <summary>Edge Reveal Delay (Pressure) in ms</summary>
+    </key>
+
+    <key name="show-music-pill" type="b">
+      <default>false</default>
+      <summary>Show Music Pill</summary>
+      <description>Display MPRIS media controller pill on the dock.</description>
+    </key>
+
+    <key name="music-pill-position" type="s">
+      <choices>
+        <choice value='START'/>
+        <choice value='END'/>
+      </choices>
+      <default>'START'</default>
+      <summary>Music Pill Position</summary>
+      <description>Placement of the music pill: Start or End.</description>
+    </key>
+
+    <key name="blur-enabled" type="b">
+      <default>false</default>
+      <summary>Enable Blur</summary>
+    </key>
+
+    <key name="blur-intensity" type="d">
+      <default>40.0</default>
+      <summary>Blur intensity</summary>
+    </key>
+
+    <key name="blur-vibrancy" type="d">
+      <default>2.00</default>
+      <summary>Saturation vibrancy behind blur</summary>
+    </key>
+
+    <key name="blur-brightness" type="d">
+      <default>0.25</default>
+      <summary>blur brightness tone</summary>
+    </key>
+
+    <key name="blur-border-glow" type="d">
+      <default>0.20</default>
+      <summary>Specular rim glow strength</summary>
+    </key>
+
+    <key name="blur-highlight-angle" type="d">
+      <default>303.0</default>
+      <summary>Highlight light angle in degrees</summary>
+    </key>
+
+    <key name="blur-tint-color" type="s">
+      <default>'#241F31'</default>
+      <summary>blur tint color</summary>
+    </key>
+    
+    <key name="blur-tint-opacity" type="d">
+      <default>0.25</default>
+      <summary>Tint color blend opacity</summary>
+    </key>
+
+    <key name="blur-mode" type="s">
+      <default>'dynamic'</default>
+      <summary>Blur Mode (dynamic or static)</summary>
+    </key>
+
+    <key name="blur-static-preset" type="s">
+      <default>'abstract-dark'</default>
+      <summary>Preset texture used for static blur blur</summary>
+    </key>
+
+    <key name="blur-custom-photo" type="s">
+      <default>''</default>
+      <summary>Custom image path for static blur background</summary>
+    </key>
+
+    <key name="blur-static-source" type="s">
+      <default>'preset'</default>
+      <summary>Source for static blur: preset or custom</summary>
+    </key>
+
+    <key name="toggle-independent-dock-shortcut" type="as">
+      <default>[]</default>
+      <summary>Shortcut to toggle independent dock mode</summary>
+      <description>Keybinding to toggle between independent and standard dock mode</description>
+    </key>
+
+    <key name="autohide-animation-speed" type="i">
+      <default>250</default>
+      <summary>Dock Auto hide Animation Speed</summary>
+      <description>Duration in milliseconds for dock hide and show animations.</description>
+    </key>
+
+    <key name="window-effect-speed" type="i">
+      <default>450</default>
+      <summary>Window Effect Animation Speed</summary>
+      <description>Duration in milliseconds for window minimize and restore effects.</description>
+    </key>
+
+    <key name="hybrid-panel-mode" type="b">
+      <default>false</default>
+      <summary>Hybrid Panel Mode</summary>
+      <description>Integrate GNOME top bar panel into Dhruva dock.</description>
+    </key>
+
+    <key name="dynamic-panel" type="b">
+      <default>false</default>
+      <summary>Dynamic Panel Mode</summary>
+      <description>Make the hybrid panel shrink and expand like a dock while keeping all panel features.</description>
+    </key>
+
+    <key name="dynamic-panel-length" type="i">
+      <default>0</default>
+      <summary>Dynamic Panel Length Percentage</summary>
+      <description>Minimum length percentage of the screen for the dynamic dock-panel (0 for automatic compact fit).</description>
+    </key>
+
+    <key name="dynamic-panel-position" type="s">
+      <choices>
+        <choice value='START'/>
+        <choice value='CENTER'/>
+        <choice value='END'/>
+      </choices>
+      <default>'CENTER'</default>
+      <summary>Dynamic Panel Screen Position</summary>
+      <description>Position of the dynamic dock-panel along the screen edge (START, CENTER, or END).</description>
+    </key>
+
+    <key name="tray-panel-indicators" type="as">
+      <default>[]</default>
+      <summary>Tray icons shown on the panel</summary>
+      <description>Small status icons the user chose to keep on the panel instead of inside the tray.</description>
+    </key>
+
+    <key name="tray-order" type="as">
+      <default>[]</default>
+      <summary>Tray icon order</summary>
+      <description>Order of the icons inside the tray popup.</description>
+    </key>
+
+    <key name="panel-applet-order" type="as">
+      <default>[]</default>
+      <summary>Order of extension applets on the panel, changed with Ctrl + drag</summary>
+    </key>
+
+    <key name="enable-context-menu" type="b">
+        <default>true</default>
+        <summary>Enable Context Menu on Dock Icons</summary>
+        <description>Show the right-click context menu when right-clicking icons on the dock.</description>
+    </key>
+
+    <key name="context-menu-opacity" type="i">
+        <default>92</default>
+        <range min="0" max="100"/>
+        <summary>Context Menu and Popup Opacity</summary>
+        <description>Background opacity of right-click context menus, folder popups, tray menu, and overflow menu when blur is off.</description>
+    </key>
+
+  </schema>
+</schemalist>

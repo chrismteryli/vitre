@@ -27,6 +27,8 @@ while IFS= read -r line; do
     *=*)   [ -n "$section" ] && dconf reset "/org/gnome/$section/${line%%=*}" ;;
   esac
 done < "$HERE/settings/vitre.ini"
+# Vitre Dock's settings path: also drops the keys that install.sh copied over from Dhruva (the backup below holds the old state)
+dconf reset -f /org/gnome/shell/extensions/vitre-dock/
 dconf reset /org/gnome/shell/enabled-extensions
 dconf reset /org/gnome/shell/disabled-extensions
 dconf reset /org/gnome/shell/disable-user-extensions

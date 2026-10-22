@@ -2,3 +2,4 @@ ubuntu-dock@ubuntu.com
 dash-to-dock@micxgx.gmail.com
 dash-to-panel@jderose9.github.com
 compiz-alike-magic-lamp-effect@hermes83.github.com
+dhruva@narkagni
