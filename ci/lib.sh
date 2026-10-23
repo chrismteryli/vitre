@@ -76,8 +76,53 @@ make_throwaway_env() {
   unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_DATA_DIRS XDG_CONFIG_DIRS DCONF_PROFILE GSETTINGS_BACKEND \
         GSETTINGS_SCHEMA_DIR DBUS_SESSION_BUS_ADDRESS DISPLAY WAYLAND_DISPLAY GNOME_SETUP_DISPLAY
   export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME NO_AT_BRIDGE=1 GTK_A11Y=none
-  # no system bus in a container; a path that does not exist makes lookups fail at once instead of hanging
+  # Nothing here may use the machine's own system bus. A path that does not exist is fine for scripts that only need dconf (the install
+  # test), but NOT for GNOME Shell: see start_private_system_bus.
   export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$VITRE_CI_WORK/no-system-bus"
+}
+
+# A system bus for GNOME Shell. The shell talks to logind, UPower, NetworkManager, polkit and more on the SYSTEM bus. Where those services
+# are missing (a container has no system bus at all) it copes with a plain "ServiceUnknown" answer, but not with a bus it cannot connect
+# to: Gio.DBus.system then throws, LoginManagerSystemd logs a CRITICAL and TimeLimitsManager dies with a JS ERROR while the shell builds
+# its UI, and gnome-shell aborts. So this starts a private dbus-daemon with NO activatable services on a socket in $XDG_RUNTIME_DIR and
+# points DBUS_SYSTEM_BUS_ADDRESS at it; every call to a missing service then gets ServiceUnknown, as on a desktop without that service.
+# Needs dbus-daemon (VITRE_CI_DBUS_DAEMON overrides the command). Call after make_throwaway_env; stop_private_system_bus ends it.
+SYSBUS_PID=""
+start_private_system_bus() {
+  local daemon="${VITRE_CI_DBUS_DAEMON:-dbus-daemon}" sock="$XDG_RUNTIME_DIR/system-bus" conf="$VITRE_CI_WORK/system-bus.conf" i
+  command -v "$daemon" >/dev/null || die "$daemon is missing (Ubuntu package: dbus-daemon)"
+  cat > "$conf" <<CONF
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:path=$sock</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+CONF
+  "$daemon" --config-file="$conf" --nofork > "$OUT/system-bus.log" 2>&1 &
+  SYSBUS_PID=$!
+  for i in $(seq 1 50); do
+    [ -S "$sock" ] && break
+    kill -0 "$SYSBUS_PID" 2>/dev/null || break
+    sleep 0.1
+  done
+  if [ ! -S "$sock" ]; then
+    sed 's/^/     /' "$OUT/system-bus.log"
+    die "the private system bus did not start ($daemon --config-file=$conf)"
+  fi
+  export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$sock"
+  echo "private system bus: pid $SYSBUS_PID, $DBUS_SYSTEM_BUS_ADDRESS"
+}
+stop_private_system_bus() {
+  if [ -n "$SYSBUS_PID" ]; then kill "$SYSBUS_PID" 2>/dev/null; wait "$SYSBUS_PID" 2>/dev/null; fi
+  SYSBUS_PID=""
+  return 0
 }
 
 # The ids in settings/extensions.txt (the extensions install.sh enables), one per line.

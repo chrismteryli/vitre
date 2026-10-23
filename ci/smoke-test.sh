@@ -25,13 +25,13 @@ if [ "${1:-}" != "--inner" ]; then
   command -v gnome-shell >/dev/null || die "gnome-shell is missing"
   [ "$(id -u)" -ne 0 ] || die "run as a normal user: install.sh refuses root"
   make_throwaway_env vitre-smoke
+  trap 'stop_private_system_bus; rm -rf "$VITRE_CI_WORK"' EXIT
+  start_private_system_bus     # the shell needs a system bus it can connect to (see lib.sh)
   # GNOME's Extensions D-Bus service (what `gnome-extensions` and vitre-info.sh talk to) is a GTK program that the bus starts on demand;
   # it needs a display to start, and the only one here is the shell's own Wayland socket. The bus passes this variable on to it.
   export WAYLAND_DISPLAY=vitre-ci-wayland
   dbus-run-session -- bash "$SELF" --inner
-  rc=$?
-  rm -rf "$VITRE_CI_WORK"
-  exit "$rc"
+  exit $?
 fi
 
 # ---- inside the private session bus -------------------------------------------------------------------------------------------------
@@ -64,6 +64,14 @@ ext_states() {
 }
 state_of()   { awk -F'\t' -v u="$1" '$1 == u {print $2}' "$2"; }
 probe()      { gdbus call --session --dest org.vitre.CiProbe --object-path /org/vitre/CiProbe --method "org.vitre.CiProbe.$1" "${@:2}" 2>&1; }
+# the shell is gone although nobody stopped it: say what it exited with and show the end of its log
+shell_died() {
+  local rc=0
+  wait "$SHELL_PID" 2>/dev/null; rc=$?
+  SHELL_PID=""
+  fail "gnome-shell died $1 (exit status $rc)"
+  echo "---- last lines of the shell log"; tail -40 "$SHELL_LOG" | sed 's/^/     /'
+}
 stop_shell() {
   [ -n "$SHELL_PID" ] || return 0
   kill -TERM "$SHELL_PID" 2>/dev/null
@@ -73,6 +81,19 @@ stop_shell() {
   SHELL_PID=""
 }
 trap stop_shell EXIT
+
+# Reads the shell log: lists the error records, fails on one from a Vitre extension
+scan_shell_log() {
+  local n_third
+  python3 -I "$CI_DIR/smoke-helpers.py" scan-log "$SHELL_LOG" "$REPO/settings/extensions.txt" | tee "$OUT/js-errors.txt"
+  if [ "${PIPESTATUS[0]}" -eq 0 ]; then pass "no JS ERROR or critical error from a Vitre extension in the shell log"; else fail "JS ERROR or critical error from a Vitre extension (see above and $OUT/js-errors.txt)"; fi
+  if grep -qE 'Segmentation fault|Stack trace of thread|core dumped|Aborted' "$SHELL_LOG"; then fail "the shell log shows a crash"; else pass "no crash in the shell log"; fi
+  n_third="$(grep -c 'error from THIRD-PARTY' "$OUT/js-errors.txt")"
+  if [ "$n_third" -gt 0 ]; then
+    note "warning: $n_third error record(s) come from bundled third-party extensions (not a failure)"
+    if [ -n "$IN_GH" ]; then echo "::warning title=Vitre CI::$n_third error record(s) from bundled third-party extensions; see js-errors.txt in the artifact"; fi
+  fi
+}
 
 group "environment"
 echo "$(gnome-shell --version), $(uname -m), $(. /etc/os-release && echo "${PRETTY_NAME:-unknown}")"
@@ -121,11 +142,10 @@ if [ "$up" -eq 1 ]; then
 elif shell_alive; then
   fail "gnome-shell did not appear on the session bus within ${TIMEOUT}s"
 else
-  wait "$SHELL_PID" 2>/dev/null; WRC=$?; SHELL_PID=""
-  fail "gnome-shell exited before it was up (exit status $WRC)"
+  shell_died "before it was up"
 fi
 if [ "$up" -ne 1 ]; then
-  echo "---- last lines of the shell log"; tail -40 "$SHELL_LOG" | sed 's/^/     /'
+  if shell_alive; then echo "---- last lines of the shell log"; tail -40 "$SHELL_LOG" | sed 's/^/     /'; fi
   endgroup; stop_shell; finish "smoke-test"; exit 1
 fi
 endgroup
@@ -137,7 +157,7 @@ all_active=0
 t0=$SECONDS
 quiet_since=""
 while :; do
-  shell_alive || { fail "gnome-shell died while the extensions were loading"; break; }
+  shell_alive || { shell_died "while the extensions were loading"; break; }
   ext_states > "$STATES"
   pending=0; broken=0
   for u in "${EXPECTED[@]}" "$PROBE_ID"; do
@@ -161,11 +181,16 @@ while :; do
   sleep 2
 done
 echo "extensions settled after $((SECONDS - t0))s"
+if ! shell_alive; then
+  echo "gnome-shell is gone: nothing else can be checked, here is what its log says"
+  scan_shell_log
+  endgroup; finish "smoke-test"; exit 1
+fi
 
 if [ "$all_active" -eq 1 ] && shell_alive; then
   note "all active; watching for ${SETTLE}s more"
   sleep "$SETTLE"
-  shell_alive || fail "gnome-shell died during the ${SETTLE}s after the extensions loaded"
+  shell_alive || shell_died "during the ${SETTLE}s after the extensions loaded"
   ext_states > "$STATES"
 fi
 
@@ -246,14 +271,7 @@ group "stop the shell, read its log"
 SHELL_ALIVE_AT_END=0; shell_alive && SHELL_ALIVE_AT_END=1
 stop_shell
 expect_eq "gnome-shell was still running at the end of the test" "1" "$SHELL_ALIVE_AT_END"
-python3 -I "$CI_DIR/smoke-helpers.py" scan-log "$SHELL_LOG" "$REPO/settings/extensions.txt" | tee "$OUT/js-errors.txt"
-if [ "${PIPESTATUS[0]}" -eq 0 ]; then pass "no JS ERROR or critical error from a Vitre extension in the shell log"; else fail "JS ERROR or critical error from a Vitre extension (see above and $OUT/js-errors.txt)"; fi
-if grep -qE 'Segmentation fault|Stack trace of thread|core dumped|Aborted' "$SHELL_LOG"; then fail "the shell log shows a crash"; else pass "no crash in the shell log"; fi
-n_third="$(grep -c 'error from THIRD-PARTY' "$OUT/js-errors.txt")"
-if [ "$n_third" -gt 0 ]; then
-  note "warning: $n_third error record(s) come from bundled third-party extensions (not a failure)"
-  if [ -n "$IN_GH" ]; then echo "::warning title=Vitre CI::$n_third error record(s) from bundled third-party extensions; see js-errors.txt in the artifact"; fi
-fi
+scan_shell_log
 endgroup
 
 {
