@@ -2,6 +2,8 @@
 
 A glass desktop for GNOME. Free and open source.
 
+[![CI](https://github.com/chrismteryli/vitre/actions/workflows/ci.yml/badge.svg)](https://github.com/chrismteryli/vitre/actions/workflows/ci.yml)
+
 **Website:** [chrismteryli.github.io/vitre](https://chrismteryli.github.io/vitre/)
 
 Vitre is a set of GNOME Shell extensions, a theme, icons, a cursor and wallpapers that work together. Most of the work went
@@ -59,8 +61,8 @@ Everything respects GNOME's animation setting. With animations off or reduced mo
 
 ## Requirements
 
-- GNOME Shell 51 on Wayland. Built and tested on Ubuntu 26.10 (arm64). x86_64 runs the same JavaScript and CSS but has not
-  been tested yet.
+- GNOME Shell 51 on Wayland. Built and tested on Ubuntu 26.10 (arm64). Installing and starting it on x86_64 is checked on every
+  change (see Testing below); the motion itself has only been tried by hand on arm64.
 - The Inter and JetBrains Mono fonts (the installer prints the package names if they are missing).
 - An internet connection during install. The base icon theme (MacTahoe's glyphs and folders, without its app icons) is fetched from
   its own project at a fixed version. To install offline, point `VITRE_ICONS_SRC` at a checkout of MacTahoe-icon-theme.
@@ -111,6 +113,13 @@ started. Sign out and back in afterwards.
 The Vitre login screen and boot splash need root, so `install.sh` leaves them out. They have their own installer in
 `system/`. Run `./system/install-system.sh --check` first. It only looks at your system and changes nothing.
 [system/README.txt](system/README.txt) has the rest, including how to put Ubuntu's login screen and splash back.
+
+## Testing
+
+Every push and pull request is checked on GitHub on x86_64 and arm64. The scripts and settings files are validated, Vitre is
+installed and uninstalled in an Ubuntu 26.10 container, and a real GNOME Shell 51 is started with Vitre installed. Every extension
+has to load without a JavaScript error, and the run keeps a screenshot of the desktop. It runs without a screen or a GPU, so it
+says nothing about how the motion looks, and it does not cover the apt packages or the login screen installer.
 
 ## Known limits
 

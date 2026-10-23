@@ -1,0 +1,157 @@
+Vitre-Icons wave 4 (2026-10-22): 50 apps, original art. Each line: id (glyph, tile) title, why it is in, names.
+
+firefox  (firefox, ember tile)  Firefox  [here, fh 201k, pc 125k]
+  names (19): firefox firefox-esr org.mozilla.firefox org.mozilla.Firefox org.mozilla.FirefoxBeta firefox-beta firefox-beta-bin firefox-bin firefox-default firefox-gtk3 firefox-icon firefox-icon-unbranded firefox-mozilla-build firefox-original firefox3 firefox-3.0 firefox-3.5 firefox-4.0 mozilla-firefox
+
+brave  (shield, flame tile)  Brave  [here, fh 161k]
+  names (7): brave-browser com.brave.Browser brave brave-bin brave-browser-beta brave-browser-nightly brave-desktop
+
+btop  (termgraph, graphite tile)  btop  [here, pc 23k]
+  names (1): btop
+
+htop  (meters, ink tile)  htop  [here, pc 109k]
+  names (1): htop
+
+neovim  (editor_n, emerald tile)  Neovim  [here]
+  names (9): nvim neovim io.neovim.nvim org.neovim.nvim nvim-qt nvim-gtk org.daa.NeovimGtk light_neovim_gtk pynvim
+
+vim  (cmdline, leaf tile)  Vim  [here]
+  names (5): gvim vim org.vim.Vim vim-qt vimlogo
+
+localsend  (beacon, teal tile)  LocalSend  [here, fh 68k]
+  names (3): localsend_app org.localsend.localsend_app localsend
+
+characters  (omega, azure tile)  Characters  [here, pc 74k]
+  names (8): org.gnome.Characters gnome-characters accessories-character-map gnome-character-map org.gnome.CharacterMap gucharmap org.gnome.Gucharmap kcharselect
+  already drawn by earlier Vitre art, left as is: org.kde.kcharselect
+
+resources  (gauge, sky tile)  Resources  [here, fh 22k]
+  names (2): net.nokyan.Resources org.gnome.Resources
+
+help  (lifebuoy, crimson tile)  Help  [here, pc 100k]
+  names (13): org.gnome.Yelp yelp help-browser gnome-help browser-help gtk-help help-info help_index stock_help khelpcenter org.kde.Help org.kde.khelpcenter susehelpcenter
+  left alone (also a toolbar/status glyph name): help-contents[actions,actions@2x] system-help[preferences,preferences@2x]
+
+passwords  (key, amber tile)  Passwords and Keys  [here, pc 76k]
+  names (4): org.gnome.seahorse.Application org.gnome.Seahorse seahorse keyring-manager
+
+spotify  (eqcircle, leaf tile)  Spotify  [here (web app), fh 111k]
+  names (12): spotify-web spotify Spotify spotify-client com.spotify.Client spotify-launcher spotify-linux-48x48 spotify-linux-512x512 spotify-web-player spotifywebplayer web-spotify solstice-spotify-spotify
+
+claude  (sparkle, clay tile)  Claude  [here]
+  names (3): claude-desktop com.anthropic.Claude claude
+
+chatgpt  (promptbubble, ink tile)  ChatGPT  [here]
+  names (2): chatgpt chatgpt-desktop
+
+hermes  (wing, indigo tile)  Hermes  [here]
+  names (2): hermes com.nousresearch.hermes
+
+chrome  (orb3, amber tile)  Chrome  [fh 170k, pc 27k]
+  names (10): google-chrome com.google.Chrome com.google.ChromeDev chrome google-chrome-stable google-chrome-beta google-chrome-dev google-chrome-unstable google-chrome2 googlechrome
+
+chromium  (orb, azure tile)  Chromium  [fh 58k, pc 29k]
+  names (7): chromium chromium-browser org.chromium.Chromium chromium-freeworld chromium-browser-privacy chromium-browser2 google-chromium
+
+zen  (enso, graphite tile)  Zen  [fh 57k]
+  names (6): app.zen_browser.zen zen-browser zen_browser zen zen-twilight zen_browser_twilight
+
+discord  (headset, indigo tile)  Discord  [fh 165k]
+  names (11): discord com.discordapp.Discord com.discordapp.DiscordCanary com.discordapp.DiscordPTB discord-bin discord-canary discord-development discord-ptb dev.vencord.Vesktop vesktop Vesktop
+
+telegram  (plane, sky tile)  Telegram  [fh 90k]
+  names (5): telegram org.telegram.desktop telegram-desktop telegramdesktop Telegram
+
+signal  (lockbubble, azure tile)  Signal  [fh 26k]
+  names (4): signal-desktop org.signal.Signal signal signal-desktop-beta
+
+thunderbird  (wingmail, navy tile)  Thunderbird  [fh 29k, pc 30k]
+  names (16): thunderbird org.mozilla.Thunderbird org.mozilla.thunderbird net.thunderbird.Thunderbird mozilla-thunderbird thunderbird-3.0 thunderbird-beta thunderbird-beta-bin thunderbird-bin thunderbird-branded thunderbird-early-bird thunderbird-icon thunderbird-mozilla-build thunderbird-nightly thunderbird-trunk thunderbird-esr
+
+vlc  (cone, ember tile)  VLC  [fh 108k, pc 67k]
+  names (2): vlc org.videolan.VLC
+
+obs  (broadcast, ink tile)  OBS Studio  [fh 88k]
+  names (3): com.obsproject.Studio obs obs-studio
+
+audacity  (wave, navy tile)  Audacity  [fh 20k]
+  names (4): audacity org.audacityteam.Audacity audacity16 audacity32
+
+rhythmbox  (disc, amber tile)  Rhythmbox  [pc 40k]
+  names (3): rhythmbox org.gnome.Rhythmbox3 org.gnome.Rhythmbox
+
+kdenlive  (timeline, indigo tile)  Kdenlive  [fh 39k]
+  names (2): kdenlive org.kde.kdenlive
+
+soundrec  (mic, crimson tile)  Sound Recorder  [pc 73k]
+  names (7): org.gnome.SoundRecorder gnome-sound-recorder audio-recorder krecorder org.kde.krecorder com.github.ryonakano.reco reco
+
+gimp  (brush, graphite tile)  GIMP  [fh 60k, pc 61k]
+  names (4): gimp org.gimp.GIMP gimp-2.99 gimp-3.0
+
+inkscape  (bezier, ink tile)  Inkscape  [fh 22k, pc 22k]
+  names (4): inkscape org.inkscape.Inkscape inkscape-logo inkscape.viewer
+
+krita  (palette, rose tile)  Krita  [fh 35k]
+  names (8): krita org.kde.krita org.krita.krita calligrakrita calligrakrita2 calligrakrita3 kritagemini kritasketch
+
+blender  (orbit, ember tile)  Blender  [fh 23k]
+  names (4): blender Blender org.blender.Blender org.blender.BlenderLTS
+
+darktable  (aperture, graphite tile)  darktable  [fh 229k]
+  names (2): darktable org.darktable.Darktable
+
+writer  (lowriter, azure tile)  Writer  [fh 58k (suite), pc 124k]
+  names (29): libreoffice-writer org.libreoffice.LibreOffice.writer org.libreoffice.LibreOffice-writer libreoffice3-writer libreoffice34-writer libreoffice4.2-writer libreoffice5.0-writer libreoffice5.1-writer libreoffice5.2-writer libreoffice5.3-writer libreoffice5.4-writer libreoffice6.0-writer libreoffice6.2-writer libreoffice6.3-writer libreoffice6.4-writer libreoffice7.0-writer libreoffice7.1-writer libreoffice7.2-writer libreoffice7.3-writer libreoffice7.4-writer libreoffice7.5-writer libreoffice7.6-writer libreoffice24.2-writer libreoffice24.8-writer libreoffice25.2-writer libreoffice25.8-writer libreoffice26.2-writer libreofficedev6.0-writer libreofficedev6.1-writer
+
+calc  (localc, leaf tile)  Calc  [fh 58k (suite)]
+  names (29): libreoffice-calc org.libreoffice.LibreOffice.calc org.libreoffice.LibreOffice-calc libreoffice3-calc libreoffice34-calc libreoffice4.2-calc libreoffice5.0-calc libreoffice5.1-calc libreoffice5.2-calc libreoffice5.3-calc libreoffice5.4-calc libreoffice6.0-calc libreoffice6.2-calc libreoffice6.3-calc libreoffice6.4-calc libreoffice7.0-calc libreoffice7.1-calc libreoffice7.2-calc libreoffice7.3-calc libreoffice7.4-calc libreoffice7.5-calc libreoffice7.6-calc libreoffice24.2-calc libreoffice24.8-calc libreoffice25.2-calc libreoffice25.8-calc libreoffice26.2-calc libreofficedev6.0-calc libreofficedev6.1-calc
+
+impress  (loimpress, flame tile)  Impress  [fh 58k (suite)]
+  names (29): libreoffice-impress org.libreoffice.LibreOffice.impress org.libreoffice.LibreOffice-impress libreoffice3-impress libreoffice34-impress libreoffice4.2-impress libreoffice5.0-impress libreoffice5.1-impress libreoffice5.2-impress libreoffice5.3-impress libreoffice5.4-impress libreoffice6.0-impress libreoffice6.2-impress libreoffice6.3-impress libreoffice6.4-impress libreoffice7.0-impress libreoffice7.1-impress libreoffice7.2-impress libreoffice7.3-impress libreoffice7.4-impress libreoffice7.5-impress libreoffice7.6-impress libreoffice24.2-impress libreoffice24.8-impress libreoffice25.2-impress libreoffice25.8-impress libreoffice26.2-impress libreofficedev6.0-impress libreofficedev6.1-impress
+
+office  (lostart, graphite tile)  Office  [fh 58k (suite)]
+  names (78): libreoffice-startcenter libreoffice-main libreoffice-start-centre libreoffice org.libreoffice.LibreOffice org.libreoffice.LibreOffice.startcenter libreoffice3 libreoffice34 libreoffice4.2 libreoffice5.0 libreoffice5.1 libreoffice5.2 libreoffice5.3 libreoffice5.4 libreoffice6.0 libreoffice6.2 libreoffice6.3 libreoffice6.4 libreoffice7.0 libreoffice7.1 libreoffice7.2 libreoffice7.3 libreoffice7.4 libreoffice7.5 libreoffice7.6 libreoffice24.2 libreoffice24.8 libreoffice25.2 libreoffice25.8 libreoffice26.2 libreoffice3-main libreoffice3-startcenter libreoffice34-main libreoffice34-startcenter libreoffice4.2-main libreoffice4.2-startcenter libreoffice5.0-main libreoffice5.0-startcenter libreoffice5.1-main libreoffice5.1-startcenter libreoffice5.2-main libreoffice5.2-startcenter libreoffice5.3-main libreoffice5.3-startcenter libreoffice5.4-main libreoffice5.4-startcenter libreoffice6.0-main libreoffice6.0-startcenter libreoffice6.2-main libreoffice6.2-startcenter libreoffice6.3-main libreoffice6.3-startcenter libreoffice6.4-main libreoffice6.4-startcenter libreoffice7.0-main libreoffice7.0-startcenter libreoffice7.1-main libreoffice7.1-startcenter libreoffice7.2-main libreoffice7.2-startcenter libreoffice7.3-main libreoffice7.3-startcenter libreoffice7.4-main libreoffice7.4-startcenter libreoffice7.5-main libreoffice7.5-startcenter libreoffice7.6-main libreoffice7.6-startcenter libreoffice24.2-main libreoffice24.2-startcenter libreoffice24.8-main libreoffice24.8-startcenter libreoffice25.2-main libreoffice25.2-startcenter libreoffice25.8-main libreoffice25.8-startcenter libreoffice26.2-main libreoffice26.2-startcenter
+
+obsidian  (gem, plum tile)  Obsidian  [fh 71k]
+  names (4): obsidian md.obsidian.Obsidian Obsidian appimagekit-obsidian
+
+code  (code, sky tile)  Code  [fh 55k + VSCodium 23k, pc 20k]
+  names (14): vscode com.visualstudio.code visual-studio-code code-oss com.visualstudio.code-oss com.visualstudio.code.oss visualstudiocode vsc vso vscodium com.vscodium.codium codium com.vscodium.codium-insiders vscodium-insiders
+
+steam  (gamepad, navy tile)  Steam  [fh 94k]
+  names (7): steam com.valvesoftware.Steam steam-launcher steam-native steam-icon steampowered 10B4_steam.0
+
+bottles  (bottle, crimson tile)  Bottles  [fh 135k]
+  names (2): com.usebottles.bottles bottles
+
+heroic  (sword, graphite tile)  Heroic  [fh 89k]
+  names (3): com.heroicgameslauncher.hgl heroic appimagekit-heroic
+
+lutris  (joystick, amber tile)  Lutris  [fh 52k]
+  names (2): lutris net.lutris.Lutris
+
+prism  (prism, emerald tile)  Prism Launcher  [fh 84k]
+  names (2): org.prismlauncher.PrismLauncher prismlauncher
+
+retroarch  (cartridge, ink tile)  RetroArch  [fh 63k]
+  names (3): retroarch org.libretro.RetroArch appimagekit-retroarch
+
+flatseal  (toggles, azure tile)  Flatseal  [fh 93k]
+  names (2): com.github.tchx84.Flatseal flatseal
+
+archives  (zipbox, umber tile)  Archives  [pc 78k (file-roller)]
+  names (22): org.gnome.FileRoller file-roller org.gnome.ArchiveManager archive-manager archivemanager accessories-archiver utilities-file-archiver ark org.kde.ark arca org.kde.arca engrampa xarchiver lxqt-archiver org.cubocore.CoreArchiver deepin-compressor p7zip p7zip-gui 7z J7Z xar gvfsd-archive-file
+  left alone (also a toolbar/status glyph name): 7zip[mimes,mimes@2x]
+
+scanner  (scanner, teal tile)  Document Scanner  [pc 78k (simple-scan)]
+  names (11): org.gnome.SimpleScan simple-scan xsane skanlite org.kde.skanlite deepin-scanner vuescan com.hamrick.VueScan epsonscan2 net.epson.epsonscan2 escan2_app
+  left alone (also a toolbar/status glyph name): scanner[devices,devices@2x]
+
+torrent  (peers, sky tile)  qBittorrent  [fh 56k]
+  names (2): qbittorrent org.qbittorrent.qBittorrent
+
+missioncenter  (dashboard, navy tile)  Mission Center  [fh 43k]
+  names (2): io.missioncenter.MissionCenter missioncenter
+
+TOTAL: 50 art files, 434 names
