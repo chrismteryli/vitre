@@ -6,7 +6,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
-B="${1:-$(ls -d "$DATA"/vitre-backup/[0-9]*[0-9]/ 2>/dev/null | sort | tail -1)}"
+B="${1:-$( { ls -d "$DATA"/vitre-backup/[0-9]*[0-9]/ 2>/dev/null || true; } | sort | tail -1)}"
 B="${B%/}"
 [ -n "$B" ] && [ -f "$B/dconf.ini" ] || { echo "vitre: no install backup found in $DATA/vitre-backup" >&2; exit 1; }
 echo "restoring from $B"

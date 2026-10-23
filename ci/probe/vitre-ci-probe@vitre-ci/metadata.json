@@ -1,0 +1,7 @@
+{
+  "uuid": "vitre-ci-probe@vitre-ci",
+  "name": "Vitre CI probe",
+  "description": "CI only. Lets ci/smoke-test.sh take a screenshot of the headless shell and read its state. Not part of Vitre; install.sh never installs it.",
+  "shell-version": ["51"],
+  "version": 1
+}

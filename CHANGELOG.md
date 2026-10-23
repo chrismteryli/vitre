@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Every push is tested on x86_64 and arm64 in GitHub Actions: static checks, install and uninstall in a throwaway home, and a
+  headless GNOME Shell 51 that has to load every Vitre extension without an error.
+- `uninstall.sh` says so when there is nothing to undo instead of stopping silently.
+
 ## 0.2.0
 
 - The Dock now ships as Vitre Dock, a fork of Dhruva with its own name (`vitre-dock@vitre-desktop`). Once a day GNOME replaces the

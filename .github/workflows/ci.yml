@@ -1,0 +1,89 @@
+# Checks every push and pull request on main.
+#   static   shellcheck (errors only), JSON and extension metadata, settings schemas (glib-compile-schemas --strict), JavaScript syntax.
+#   gnome51  on x86_64 and arm64, in an ubuntu:26.10 container (the release that ships GNOME Shell 51):
+#            the install test (./install.sh --check, install, uninstall, the settings and files come back) and the smoke test (a real
+#            GNOME Shell 51 on a virtual monitor with Vitre installed: every extension ACTIVE, no JS ERROR from Vitre, one screenshot).
+# The scripts are in ci/. With docker or podman installed, `ci/in-container.sh all` runs the same container steps on your machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # shellcheck, node and glib-compile-schemas are normally on the runner image already; this makes sure
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends shellcheck libglib2.0-bin
+
+      - name: shellcheck, JSON and metadata, schemas, JavaScript syntax
+        run: bash ci/static.sh
+
+  gnome51:
+    name: GNOME Shell 51 (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          # free for public repositories; if this leg gives trouble that is about the runner, delete these two lines
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Output folder
+        run: echo "VITRE_CI_OUT=$RUNNER_TEMP/vitre-ci-out" >> "$GITHUB_ENV"
+
+      - name: Start the ubuntu:26.10 container
+        run: bash ci/in-container.sh start
+
+      - name: Install GNOME Shell 51 and the test tools in it
+        run: bash ci/in-container.sh setup
+
+      - name: Install test (install.sh --check, install, uninstall)
+        run: bash ci/in-container.sh install-test
+
+      - name: Smoke test (GNOME Shell 51 with Vitre installed)
+        run: bash ci/in-container.sh smoke-test
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f "$VITRE_CI_OUT/summary.md" ]; then
+            { echo "### GNOME Shell 51 on ${{ matrix.arch }}"; cat "$VITRE_CI_OUT/summary.md"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vitre-ci-${{ matrix.arch }}
+          path: ${{ env.VITRE_CI_OUT }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove the container
+        if: always()
+        run: bash ci/in-container.sh stop
