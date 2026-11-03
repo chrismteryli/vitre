@@ -122,6 +122,8 @@ export function classify(info) {
 
 export default class WindowMotion extends Extension {
     enable() {
+        this._generation = (this._generation ?? 0) + 1;
+        this._openFlights = new Map();  // actor -> its overview wait, cancelled by disable
         this._log = [];
         this._noted = new Map();        // window -> {btn, at}
         this._docks = [];
@@ -163,6 +165,16 @@ export default class WindowMotion extends Extension {
     }
 
     disable() {
+        this._generation = (this._generation ?? 0) + 1;
+        for (const actor of this._openFlights?.keys() ?? []) {
+            try {
+                if (actor.get_stage())
+                    actor.opacity = 255;
+            } catch (_e) {
+                // the actor was destroyed while its overview wait was pending
+            }
+        }
+        this._openFlights?.clear();
         this._snap?.disable();
         this._snap = null;
         for (const id of this._ids ?? [])
@@ -498,14 +510,24 @@ export default class WindowMotion extends Extension {
             return;
         // nothing of the window shows before GNOME's ease exists (it may wait for the overview to hide)
         actor.opacity = 0;
-        this._retargetOpen(actor).catch(() => {});
+        const generation = this._generation;
+        this._openFlights.set(actor, generation);
+        this._retargetOpen(actor, generation).catch(e => {
+            console.warn(`Vitre window motion: open left to GNOME (${e.message})`);
+            if (generation === this._generation && this._openFlights?.get(actor) === generation && actor.get_stage?.())
+                actor.opacity = 255;
+        }).finally(() => {
+            if (this._openFlights?.get(actor) === generation)
+                this._openFlights.delete(actor);
+        });
     }
 
     // GNOME's map handler awaits the overview before it calls ease(); awaiting the same promise here queues this
     // continuation after GNOME's, so its transitions exist when it runs.
-    async _retargetOpen(actor) {
+    async _retargetOpen(actor, generation) {
         await Main.wm._waitForOverviewToHide();
-        if (!Main.wm._mapping?.has(actor))
+        if (generation !== this._generation || this._openFlights?.get(actor) !== generation ||
+            !Main.wm._mapping?.has(actor))
             return;
         const opacity = actor.get_transition('opacity');
         const sx = actor.get_transition('scale-x');
@@ -514,7 +536,7 @@ export default class WindowMotion extends Extension {
             return;
         const {frame, at} = this._rest(actor.meta_window);
         fly(actor, {kind: 'open', carrier: opacity, carrierProp: 'opacity', frame, at, from: scaled(frame, SCALE.open), to: frame,
-            lead: 'bottom', exit: false, op: 'fade', opFrom: 0, opTo: 1});
+            lead: 'bottom', exit: false, op: 'fade', opFrom: 0, opTo: 1, role: 'pour'});
         this._note(actor, 'open', 'motion');
     }
 

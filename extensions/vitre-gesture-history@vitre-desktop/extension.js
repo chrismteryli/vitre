@@ -56,6 +56,25 @@ function warnOnce(key, message) {
     console.warn(`${LOG_TAG} ${message}`);
 }
 
+// Motion Lab 2 (the engine's frame rule: a frame the shell holds slows the motion there instead of skipping it, as
+// liquidClock's Ticker caps a step at 1/30 s): the plan's time advances at most capMs per painted frame; what was held back
+// lengthens the timeline, so the spring still ends at its rest. A held first frame (the overview's or a switch's first
+// paint) no longer makes the picture jump ahead. Returns the progress (0..1) of the plan's own time.
+function heldProgress(tr, progress, capMs) {
+    if (progress >= 1)
+        return 1;
+    const c = tr._vitreHeld ?? (tr._vitreHeld = {last: 0, held: 0, dur: Math.max(1, tr.get_duration())});
+    const el = tr.get_elapsed_time();
+    const d = el - c.last;
+    c.last = el;
+    if (d > capMs) {
+        const extra = Math.round(d - capMs);
+        c.held += extra;
+        tr.set_duration(tr.get_duration() + extra);
+    }
+    return Math.min(1, Math.max(0, (el - c.held) / c.dur));
+}
+
 function getTransitionClass() {
     if (state.TransitionClass)
         return state.TransitionClass;
@@ -68,7 +87,7 @@ function getTransitionClass() {
             let p = progress;
             if (plan) {
                 try {
-                    p = plan.progress(progress * plan.T);
+                    p = plan.progress(heldProgress(this, progress, 1000 / 30) * plan.T);
                     if (progress >= 1 || !Number.isFinite(p))
                         p = 1;
                 } catch (e) {
@@ -100,12 +119,19 @@ function captureRelease(tracker, velocity, distance, isTouchpad) {
     return {tracker, v, gnomeV, distance, isTouchpad};
 }
 
+export function shouldUseStockRelease(settings) {
+    return settings.reducedMotion === St.ReducedMotion.REDUCE;
+}
+
 // Replaces the stock ease for one release.  `call(params)` runs GNOME's own ease with the given params.
 function runRelease(kind, owner, prop, target, params, rel, basePx, call) {
     const TransitionClass = state.TransitionClass;
+    const settings = St.Settings.get();
+    if (shouldUseStockRelease(settings))
+        return call(params);
     let plan = null;
     try {
-        const slow = St.Settings.get().slow_down_factor;
+        const slow = settings.slow_down_factor;
         plan = planRelease(owner[prop], target, rel.v, slow, basePx);
         if (plan)
             plan.slow = slow;

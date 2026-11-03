@@ -47,6 +47,7 @@ const _docks = [];
 const WM_SIGNAL_OWNER = {};
 
 const _animatingActors = [];
+const _pendingFades = new Map();
 let _effectTimers = null;
 let _effectIdleId = 0;
 
@@ -85,6 +86,21 @@ function _addAnimatingActor(actor) {
 function _removeAnimatingActor(actor) {
     const idx = _animatingActors.indexOf(actor);
     if (idx !== -1) _animatingActors.splice(idx, 1);
+}
+
+function _finishFade(actor, restore) {
+    if (!_pendingFades.delete(actor)) return;
+    _removeAnimatingActor(actor);
+    if (!isActorAlive(actor)) return;
+    actor.set_pivot_point(0, 0);
+    actor.set_scale(1.0, 1.0);
+    actor.opacity = 255;
+    if (restore) {
+        finishRestoreEffect(actor);
+    } else {
+        actor.hide();
+        finishMinimizeEffect(actor);
+    }
 }
 
 function _addEffectIdle(cb) {
@@ -240,6 +256,24 @@ export function finishRestoreEffect(actor) {
     }
 }
 
+function _settleFade(actor) {
+    const fade = _pendingFades.get(actor);
+    if (!fade)
+        return;
+    _pendingFades.delete(actor);
+    if (isActorAlive(actor)) {
+        actor.set_pivot_point(0, 0);
+        actor.set_scale(1.0, 1.0);
+        actor.opacity = 255;
+        if (fade === 'minimize')
+            actor.hide();
+    }
+    if (fade === 'minimize')
+        finishMinimizeEffect(actor);
+    else
+        finishRestoreEffect(actor);
+}
+
 export function setupWindowEffects(settings, dockUI) {
     if (!_docks.includes(dockUI)) {
         _docks.push(dockUI);
@@ -273,23 +307,13 @@ export function setupWindowEffects(settings, dockUI) {
 
                 const fadeDuration = Math.max(120, Math.round(_getEffectDuration() * 0.5));
                 actor.set_pivot_point(0.5, 0.5);
+                _pendingFades.set(actor, 'minimize');
                 liquidEase(actor, {
                     opacity: 0,
                     scale_x: 0.95,
                     scale_y: 0.95,
                     duration: fadeDuration,
-                    onComplete: () => {
-                        _removeAnimatingActor(actor);
-                        if (isActorAlive(actor)) {
-                            actor.set_pivot_point(0, 0);
-                            actor.set_scale(1.0, 1.0);
-                            actor.opacity = 255;
-                            actor.hide();
-                            if (_origCompletedMinimize && Main.wm && Main.wm._shellwm) {
-                                _origCompletedMinimize.call(Main.wm._shellwm, actor);
-                            }
-                        }
-                    }
+                    onStopped: () => _settleFade(actor),
                 });
                 return;
             }
@@ -374,22 +398,13 @@ export function setupWindowEffects(settings, dockUI) {
                 actor.set_pivot_point(0.5, 0.5);
                 actor.set_scale(0.95, 0.95);
 
+                _pendingFades.set(actor, 'restore');
                 liquidEase(actor, {
                     opacity: 255,
                     scale_x: 1.0,
                     scale_y: 1.0,
                     duration: fadeDuration,
-                    onComplete: () => {
-                        _removeAnimatingActor(actor);
-                        if (isActorAlive(actor)) {
-                            actor.set_pivot_point(0, 0);
-                            actor.set_scale(1.0, 1.0);
-                            actor.opacity = 255;
-                            if (_origCompletedUnminimize && Main.wm && Main.wm._shellwm) {
-                                _origCompletedUnminimize.call(Main.wm._shellwm, actor);
-                            }
-                        }
-                    }
+                    onStopped: () => _settleFade(actor),
                 });
                 return;
             }
@@ -468,6 +483,17 @@ export function teardownWindowEffects(dockUI) {
         global.window_manager.disconnectObject(WM_SIGNAL_OWNER);
         _clearEffectIdles();
 
+        for (const actor of [..._animatingActors]) {
+            if (_pendingFades.has(actor)) {
+                _settleFade(actor);
+                continue;
+            }
+            const effect = actor.get_effect?.(MIN_EFFECT_NAME) ?? actor.get_effect?.(UNMIN_EFFECT_NAME);
+            if (effect?.destroy)
+                effect.destroy();
+        }
+        for (const actor of [..._pendingFades.keys()])
+            _settleFade(actor);
         _animatingActors.length = 0;
         _pendingActor = null;
         _pendingIcon = null;

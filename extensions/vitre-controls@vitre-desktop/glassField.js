@@ -73,6 +73,12 @@ function createMask() {
     return Clutter.ShaderEffect.new_with_snippet(snippet);
 }
 
+// The uniform names of one shape ('u_s3x' ...) are made once per index, not as new strings on every frame, and a shape slot nobody fills
+// reads the same empty shape (nothing writes to it).
+const SHAPE_NAMES = [];
+const shapeNames = i => SHAPE_NAMES[i] ?? (SHAPE_NAMES[i] = [`u_s${i}x`, `u_s${i}y`, `u_s${i}w`, `u_s${i}h`, `u_s${i}r`]);
+const NO_SHAPE = Object.freeze({x: -10000, y: -10000, w: 0, h: 0, r: 0});
+
 export class GlassField {
     /* `sizeW` x `sizeH` is the maximum field (shapes live inside it, at least MARGIN from its edges).
      * The field is a child of its parent at (0, 0) of its own coordinates; the caller positions
@@ -141,12 +147,13 @@ export class GlassField {
     /* shapes: array of {x, y, w, h, r} in field px (centre, half sizes, corner radius); k: softness. */
     setShapes(shapes, k) {
         for (let i = 0; i < N_SHAPES; i++) {
-            const s = shapes[i] ?? {x: -10000, y: -10000, w: 0, h: 0, r: 0};
-            this._set(`u_s${i}x`, s.x);
-            this._set(`u_s${i}y`, s.y);
-            this._set(`u_s${i}w`, s.w);
-            this._set(`u_s${i}h`, s.h);
-            this._set(`u_s${i}r`, s.r);
+            const s = shapes[i] ?? NO_SHAPE;
+            const n = shapeNames(i);
+            this._set(n[0], s.x);
+            this._set(n[1], s.y);
+            this._set(n[2], s.w);
+            this._set(n[3], s.h);
+            this._set(n[4], s.r);
         }
         this._set('u_k', Math.max(0.01, k));
         this.actor.queue_redraw();

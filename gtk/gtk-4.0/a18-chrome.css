@@ -100,32 +100,51 @@ headerbar:not(#a18) windowcontrols > button.close:not(#a18), headerbar:not(#a18)
   color: @window_fg_color;
 }
 headerbar:not(#a18) windowcontrols > button:not(#a18) > image { background: none; background-color: transparent; color: transparent; padding: 0; margin: 0; min-width: 0; min-height: 0; opacity: 0; box-shadow: none; -gtk-icon-size: 1px; }
-headerbar:not(#a18) windowcontrols > button:not(#a18):first-child { border-radius: 21px 0 0 21px; }
-headerbar:not(#a18) windowcontrols > button:not(#a18):last-child { border-radius: 0 21px 21px 0; }
-headerbar:not(#a18) windowcontrols > button:not(#a18):only-child { border-radius: 21px; min-width: 41px; }
+/* Hit targets (review 2026-11-02, finding 18): each segment reaches 3.5 px above and below the capsule through a transparent
+   border pulled back by a negative margin, so the target is 48 px tall while the drawing (padding box: fills, dividers, focus
+   ring, glyph) stays the 36 x 41 segment and the capsule does not move. The end segments also reach outward: 8 px to the
+   window edge, 4 px into the gap before the next header group (half of it). The radii are elliptical on the outside
+   (horizontal / vertical) so the drawn corners stay 21 px circles inside the transparent border. */
+headerbar:not(#a18) windowcontrols > button.close:not(#a18), headerbar:not(#a18) windowcontrols > button.minimize:not(#a18), headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) {
+  border-style: solid; border-color: transparent; border-width: 3.5px 0; margin: -3.5px 0; background-clip: padding-box;
+}
+headerbar:not(#a18) windowcontrols.start > button:not(#a18):first-child { border-left-width: 8px; margin-left: -8px; }
+headerbar:not(#a18) windowcontrols.start > button:not(#a18):last-child { border-right-width: 4px; margin-right: -4px; }
+headerbar:not(#a18) windowcontrols.end > button:not(#a18):first-child { border-left-width: 4px; margin-left: -4px; }
+headerbar:not(#a18) windowcontrols.end > button:not(#a18):last-child { border-right-width: 8px; margin-right: -8px; }
+headerbar:not(#a18) windowcontrols.start > button:not(#a18):first-child { border-radius: 29px 0 0 29px / 24.5px 0 0 24.5px; }
+headerbar:not(#a18) windowcontrols.start > button:not(#a18):last-child { border-radius: 0 25px 25px 0 / 0 24.5px 24.5px 0; }
+headerbar:not(#a18) windowcontrols.end > button:not(#a18):first-child { border-radius: 25px 0 0 25px / 24.5px 0 0 24.5px; }
+headerbar:not(#a18) windowcontrols.end > button:not(#a18):last-child { border-radius: 0 29px 29px 0 / 0 24.5px 24.5px 0; }
+headerbar:not(#a18) windowcontrols.start > button:not(#a18):only-child, headerbar:not(#a18) windowcontrols.end > button:not(#a18):only-child {
+  border-width: 3.5px 4px; margin: -3.5px -4px; border-radius: 25px / 24.5px; min-width: 41px; }
 headerbar:not(#a18) windowcontrols > button:not(#a18):not(:first-child) { box-shadow: inset 0.58px 0 0 var(--a18-divider); }
 headerbar:not(#a18) windowcontrols > button:not(#a18):hover:not(:backdrop), headerbar:not(#a18) windowcontrols > button:not(#a18):active,
 headerbar:not(#a18) windowcontrols > button:not(#a18):hover:not(:backdrop) + button, headerbar:not(#a18) windowcontrols > button:not(#a18):active + button { box-shadow: none; }
+/* Keyboard focus (finding 8): the libadwaita focus ring (accent at 50 %, 2 px) drawn inside the segment, so it follows the
+   capsule's round ends and leaves the neighbours' dividers alone; backdrop windows have no keyboard focus. */
+headerbar:not(#a18) windowcontrols > button:not(#a18):focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent-color) 50%, transparent); }
 headerbar:not(#a18) windowcontrols > button.close:not(#a18) { background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")); }
 headerbar:not(#a18) windowcontrols > button.minimize:not(#a18) { background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")); }
 headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")); }
 window.maximized headerbar:not(#a18) windowcontrols > button.maximize:not(#a18) { background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")); }
 headerbar:not(#a18) windowcontrols > button.close:not(#a18):hover:not(:backdrop) { color: white; background-size: 18px 18px, cover;
   background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")), linear-gradient(to bottom, #ff7d83, #e5484d); }
-headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):hover:not(:backdrop) { color: white; background-size: 18px 18px, cover;
-  background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); }
-headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):hover:not(:backdrop) { color: white; background-size: 18px 18px, cover;
-  background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); }
+/* minimize / maximize fill with the system accent (finding 25: they were always Vitre blue); close keeps its coral */
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):hover:not(:backdrop) { color: var(--accent-fg-color); background-size: 18px 18px, cover;
+  background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, color-mix(in srgb, white 22%, var(--accent-bg-color)), var(--accent-bg-color)); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):hover:not(:backdrop) { color: var(--accent-fg-color); background-size: 18px 18px, cover;
+  background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, color-mix(in srgb, white 22%, var(--accent-bg-color)), var(--accent-bg-color)); }
 window.maximized headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):hover:not(:backdrop) {
-  background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); }
+  background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, color-mix(in srgb, white 22%, var(--accent-bg-color)), var(--accent-bg-color)); }
 headerbar:not(#a18) windowcontrols > button.close:not(#a18):active { color: white; background-size: 18px 18px, cover;
   background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")), linear-gradient(to bottom, #d9414a, #b8303a); }
-headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):active { color: white; background-size: 18px 18px, cover;
-  background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); }
-headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):active { color: white; background-size: 18px 18px, cover;
-  background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); }
+headerbar:not(#a18) windowcontrols > button.minimize:not(#a18):active { color: var(--accent-fg-color); background-size: 18px 18px, cover;
+  background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, color-mix(in srgb, black 10%, var(--accent-bg-color)), color-mix(in srgb, black 24%, var(--accent-bg-color))); }
+headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):active { color: var(--accent-fg-color); background-size: 18px 18px, cover;
+  background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, color-mix(in srgb, black 10%, var(--accent-bg-color)), color-mix(in srgb, black 24%, var(--accent-bg-color))); }
 window.maximized headerbar:not(#a18) windowcontrols > button.maximize:not(#a18):active {
-  background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); }
+  background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, color-mix(in srgb, black 10%, var(--accent-bg-color)), color-mix(in srgb, black 24%, var(--accent-bg-color))); }
 headerbar:not(#a18):backdrop windowcontrols > button.close:not(#a18), headerbar:not(#a18):backdrop windowcontrols > button.minimize:not(#a18),
 headerbar:not(#a18):backdrop windowcontrols > button.maximize:not(#a18) { color: var(--a18-glyph-off); }
 
@@ -149,6 +168,12 @@ headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):n
 headerbar:not(#a18):backdrop button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action) {
   background-color: var(--a18-glass-off);
   box-shadow: inset 0.58px 0 0 var(--a18-rim-x-off), inset -0.58px 0 0 var(--a18-rim-x-off), inset 0 0.58px 0 var(--a18-rim-y-off), inset 0 -0.58px 0 var(--a18-rim-y-off);
+}
+/* Keyboard focus (finding 8): the glass capsules above set outline: none; the libadwaita ring comes back for keyboard focus
+   only, 2 px inside the capsule (it follows the pill, the circle and each segment of a group, and the dividers stay). */
+headerbar:not(#a18) button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):not(.a18-skip):focus-visible,
+headerbar:not(#a18) menubutton > button:not(#a18):not(.close):not(.minimize):not(.maximize):not(.suggested-action):not(.destructive-action):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 50%, transparent); outline-offset: -2px;
 }
 /* prominent (suggested / destructive) header buttons keep their tint but take the capsule shape */
 headerbar:not(#a18) button.suggested-action:not(#a18), headerbar:not(#a18) button.destructive-action:not(#a18) { min-height: 41px; min-width: 41px; border-radius: 21px; padding: 0 16px; }

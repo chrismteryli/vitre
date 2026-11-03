@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.3.1 (2026-11-03)
+
+Smoother motion, fewer hitches, easier to read
+
+Motion
+
+- Windows open and close the way Motion Lab 2 shows them: a new window pours open, and on close every edge moves on the same exit
+  spring, so no edge trails behind.
+- Menus settle 6 px as they fade in and lift as they fade out (not with reduced motion on).
+- The volume and brightness capsule moves its content with the glass instead of being cut by it, and drains 1.1 s after the last change.
+- The overview and a workspace switch no longer jump forward in one frame when the first frame is late.
+- Dock auto-hide no longer jumps when you show and hide it in quick succession, and it always ends at rest.
+- With reduced motion on, a swipe release and the Dock's deform effects hand over to GNOME's own transition and finish in place.
+- Turning Window Open off while a window waits for the overview no longer leaves GNOME's animation on a five second linear timer.
+- A delayed motion that gets replaced or cancelled is cancelled once and cleanly, in every copy of the spring engine.
+
+Hitches
+
+- The first time you open Notification Center, Control Center or the Logo Menu is smoother: GNOME and the other extensions run their
+  open code once at login, out of sight, so it does not happen at your first click.
+- Menus, Control Center, Notification Center and the Logo Menu pour with much less garbage per frame (a Control Center frame
+  went from 24 KB to 8 KB), so there are fewer small stalls while they move.
+- Not fixed: GNOME's JavaScript engine still takes a short pause about every 10 seconds. That is a collection of the whole heap on a
+  timer, also in a bare GNOME Shell. Making it incremental needs a patched gjs.
+
+Look
+
+- Bright wallpapers: the clear glass is darkened just enough to keep white text readable (4.5:1). Dark wallpapers look the same. The
+  lock screen card holds its contrast over a bright wallpaper, and the login screen uses one fixed dark wallpaper.
+- Keyboard focus rings are back on GTK 4 header buttons, menu buttons, segmented groups and the Files path bar.
+- Larger click targets: the Next button on the lock and login screens (56 px), the notification close and expand buttons, the calendar
+  days and the GTK window buttons. What is drawn is the same.
+- Stage cells are quiet at rest, with one rim, and show the full glass under the pointer or on focus. Minimize and maximize follow
+  the accent on hover and press; close stays coral.
+- The lock and login cards are about a fifth larger. The Stage style sheet is on the same type, radius and glass scale as the rest.
+- The login screen theme (`system/`) has the larger card and the contrast change.
+
+Install
+
+- The apt packages and the Fedora and Arch recipes stay at 0.2.0. Use `./install.sh` for 0.3.1.
+
 ## 0.3.0 (2026-11-03)
 
 Motion and look

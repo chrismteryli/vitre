@@ -118,7 +118,7 @@ sign out, click the gear on the login screen and pick Vitre. The steps by hand a
 ## Fedora and Arch (recipes, not published yet)
 
 `packaging/` has an RPM spec for COPR and a PKGBUILD for the AUR, in the same ten-package split as the `.deb`s. Nothing is published and
-neither has been built on Fedora or Arch yet; they build the v0.2.0 tag, so like the `.deb`s they do not have anything new in 0.3.0. [packaging/README.md](packaging/README.md) says what was checked and
+neither has been built on Fedora or Arch yet; they build the v0.2.0 tag, so like the `.deb`s they do not have anything new in 0.3.0 or 0.3.1. [packaging/README.md](packaging/README.md) says what was checked and
 how to run the checks.
 
 ## Uninstall
@@ -160,7 +160,7 @@ recipes in `packaging/` get their own file checks (`python3 packaging/check-dist
 - This is an early release, tested on one machine. Expect rough edges and please report them.
 - The Downloads stack and the Trash were tested in a headless GNOME Shell and are new to daily use.
 - Dock auto-hide, a second monitor with the Stage band, and keyboard focus rings on the window buttons are not covered by the tests;
-  expect gaps there. Over very bright wallpapers the clear glass can be low in contrast, and a few fallback paths (the Dock's own
+  expect gaps there. Over very bright wallpapers the clear glass is darkened for white text since 0.3.1 (checked on test images, not on every wallpaper), and a few fallback paths (the Dock's own
   minimize effects, a workspace swipe when Vitre Workspaces is off) do not yet follow the reduced motion setting.
 - The apt packages and the Fedora and Arch recipes are still 0.2.0 (see above).
 - Apps that draw their own window buttons (Claude, ChatGPT and other Electron apps) keep them. Vitre cannot restyle those.

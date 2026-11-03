@@ -273,8 +273,9 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 0 0 1000px rgba(255, 255, 255, 0.22);
 }
 
-/* ---- submenu (Wi-Fi networks, Bluetooth devices, Power Mode, output): one G2 glass tile, r-2xl ---- */
-/* the rim copies the modules' liquid rim (bright top, faint sides) with a hairline + a strong top highlight */
+/* ---- submenu (Wi-Fi networks, Bluetooth devices, Power Mode, output): one G2 lit glass tile, r-2xl ---- */
+/* G2 lit (TOKENS.md, a named variant of G2): G2's tint and hairline with a 0.55 top highlight, because the submenu opens among
+   the Control Center modules, whose shader rim is bright at the top (glass.js rimTop 0.80); with G2's 0.10 it read dull there. */
 .cc-menu.cc-menu.cc-menu.cc-menu .quick-toggle-menu {
   background-color: rgba(28, 28, 32, 0.60) !important;
   color: #ffffff !important;

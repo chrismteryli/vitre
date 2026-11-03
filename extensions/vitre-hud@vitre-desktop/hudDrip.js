@@ -78,6 +78,8 @@ export class HudDripAdapter {
     frame(fr, tau, phase) {
         const hud = this._hud;
         const a = hud._actors;
+        if (a)
+            this._mapContent(fr);
         if (!a || !hud._swap)
             return;
         const now = tau / 1000;
@@ -91,8 +93,37 @@ export class HudDripAdapter {
             hud._swap.indicators.opacity = Math.round(hud._swap.indicatorsOp * (1 - p));
     }
 
+    // Motion Lab 2 (HUD): the content rides on the glass. Its box is mapped onto the moving glass box (top-left origin, x and y
+    // apart), as the lab maps the capsule's content onto the pour's box; at rest the two boxes are one and nothing is scaled.
+    _mapContent(fr) {
+        const g = this._hud._geo;
+        const d = fr?.drop;
+        let kx = 1, ky = 1, bx = 0, by = 0;
+        if (g && d && d.x > -9000 && d.w > 0 && d.h > 0 && fr.mode !== 'closed') {
+            kx = Math.min(2, Math.max(0.01, 2 * d.w / g.w));
+            ky = Math.min(2, Math.max(0.01, 2 * d.h / g.h));
+            bx = d.x - d.w - g.x;
+            by = d.y - d.h - g.y;
+        }
+        this._setContentPose(kx, ky, bx, by);
+    }
+
+    _setContentPose(kx, ky, bx, by) {
+        for (const c of this._content()) {
+            const [px, py] = c.get_pivot_point();
+            if (px !== 0 || py !== 0)
+                c.set_pivot_point(0, 0);
+            if (c.scale_x !== kx || c.scale_y !== ky)
+                c.set_scale(kx, ky);
+            c.translation_x = bx + c.x * (kx - 1);
+            c.translation_y = by + c.y * (ky - 1);
+        }
+    }
+
     end() {
         const a = this._hud._actors;
+        if (a)
+            this._setContentPose(1, 1, 0, 0);
         this._held = false;
         this._pillT = null;
         if (!a)

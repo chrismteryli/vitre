@@ -5,7 +5,7 @@
  * Motion (liquid v3, liquid.js springs; drip-style liquid pours it out of the bar, see liquidDrip.js):
  *   enter : classic: the capsule's presence on a Fade spring, its scale about the top-centre on a 'pour' spring from
  *           0.92 high / 0.945 wide to 1.0 (the top edge never moves), the glass a little behind the content
- *   dwell : 0.9 s after the last value change; a new value moves the fill (a 'bead' spring: it sloshes and settles),
+ *   dwell : 1.1 s after the last value change; a new value moves the fill (a 'bead' spring: it sloshes and settles),
  *           jostles the settled capsule and extends the dwell (no re-enter); a value during the exit turns it around
  *           from where it is, with its speed
  *   exit  : presence on the fade exit spring, the scale to 0.92 / 0.95 on the pour exit spring (never bouncing)

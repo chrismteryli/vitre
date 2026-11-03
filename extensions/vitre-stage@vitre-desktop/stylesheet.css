@@ -1,27 +1,41 @@
 /* Frameless window previews and compact app badges.
-   Corner radius and shadow of the previews are set from the extension (they scale with the
-   screen); the values below are the 1920-wide defaults. No hover highlight (the reference design has none). */
+   Corner radius and shadow of the previews are set from the extension per actor (they scale with the screen and with a
+   flight); the two values below are only the defaults an actor has before that, snapped to the tokens (review 2026-11-02,
+   finding 19): r-s 8 (the band's thumbnails and cells) and e1. No hover highlight on the pictures (the reference design has
+   none). */
 .stage-manager-item {
     padding: 0;
     border-radius: 0;
     background-color: transparent;
 }
+/* keyboard focus: the token focus ring, white at 0.55 (it sits on pictures of any colour), with the cells' r-s 8 corner
+   (it was a square ring around a pile of rounded pictures) */
 .stage-manager-item:focus {
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
+    border-radius: 8px;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
 }
 /* Both flight and rail use this same composition. */
 .stage-manager-preview {
-    border-radius: 5px;
+    border-radius: 8px;
     background-color: rgba(0, 0, 0, 0.10);
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
 }
+/* an empty pile: a quiet glass well (G1 quiet, as a cell at rest) */
 .stage-manager-thumb-empty {
-    border-radius: 5px;
-    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
-/* Polish 2026-11-01: the band's cell (every parked window gets the same one; the picture is fitted and centred in it). Clear
-   glass on the plate (tokens G1: tint 0.10, hairline 0.16, highlight 0.22); the radius (r-s 8) is set from the extension. */
+/* The band's cell (every parked window gets the same one; the picture is fitted and centred in it; the radius, r-s 8, is set
+   from the extension). It sits inside the band's outlined glass plate, so at rest it is G1 quiet (TOKENS.md: tint 0.04, no
+   hairline, a 0.10 top highlight) and the plate stays the only rim: no capsule inside a capsule (review 2026-11-02, finding
+   25). Under the pointer or keyboard focus the cell takes the full G1 recipe (tint 0.10, hairline 0.16, highlight 0.22). */
 .stage-band-cell {
+    background-color: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+.stage-manager-item:hover .stage-band-cell,
+.stage-manager-item:focus .stage-band-cell {
     background-color: rgba(255, 255, 255, 0.10);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }

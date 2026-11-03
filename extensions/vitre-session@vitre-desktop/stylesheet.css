@@ -14,11 +14,14 @@
 
 /* ======================================================================================================== LOCK == */
 
-/* a navy veil over the blurred wallpaper: the lock screen reads as one calm sheet of dark glass */
+/* a navy veil over the blurred wallpaper: the lock screen reads as one calm sheet of dark glass.
+   Contrast floor (review 2026-11-02, finding 17): GNOME blurs the lock background at brightness 0.65, so a white wallpaper
+   arrives at 0.65; the veil takes it under relative luminance 0.18 behind the card (white text 4.5:1 or better, measured on
+   the rig, PROGRESS.md). Over the dark Vitre wallpapers the deeper veil changes little: navy over navy. */
 .vitre-lock-scrim {
   background-gradient-direction: vertical;
-  background-gradient-start: rgba(8, 18, 38, 0.10);
-  background-gradient-end: rgba(8, 18, 38, 0.40);
+  background-gradient-start: rgba(8, 18, 38, 0.40);
+  background-gradient-end: rgba(8, 18, 38, 0.55);
 }
 
 /* ---- the mark (small bead at the top) ---- */
@@ -66,10 +69,12 @@
 }
 
 /* ---- prompt page: the unlock card (G1 glass, r-3xl, e3) ---- */
-/* content width 336: [back 48] 8 [password capsule 224] 8 [balance 48]; padding 32 all round */
+/* Optical scale (review 2026-11-02, finding 25): the card read small on the canvas, so it grew one step (about 1.2x), no new
+   panels: content width 400: [back 56] 8 [password capsule 272] 8 [balance 56]; padding 40, 32 at the bottom; avatar 112,
+   name 18 pt, capsule 56 high with 13 pt text, the Next disc 40 concentric in it. Every target is 56 px (finding 18). */
 .vitre-lock.vitre-lock .vitre-card {
-  min-width: 336px;
-  padding: 32px 32px 24px 32px;
+  min-width: 400px;
+  padding: 40px 40px 32px 40px;
   border-radius: 32px;
   background-color: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -83,6 +88,7 @@
   box-shadow: none;
 }
 .vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-layout {
+  width: 400px;   /* the base theme's 23em (336 px) would let the wider row overflow to the right */
   spacing: 0;
   padding: 0;
 }
@@ -90,43 +96,46 @@
   spacing: 16px;
 }
 .vitre-lock.vitre-lock .vitre-card .user-widget.vertical .user-icon {
-  icon-size: 96px;
+  icon-size: 112px;
   background-color: rgba(255, 255, 255, 0.16);
   border: 2px solid rgba(255, 255, 255, 0.55);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
 }
 .vitre-lock.vitre-lock .vitre-card .user-widget.vertical .user-icon StIcon {
-  padding: 20px;
+  padding: 24px;
 }
 .vitre-lock.vitre-lock .vitre-card .user-widget.vertical .user-widget-label {
   font-weight: 600;
-  font-size: 15pt;
+  font-size: 18pt;
   color: #ffffff;
   text-shadow: none;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 /* the row under the name: back button, password capsule, balance (GNOME binds the balance to the back button's width) */
 .vitre-lock.vitre-lock .vitre-card .login-dialog-button-box {
   spacing: 0;
+  min-height: 56px;   /* the base theme's row was 59 high and stretched the capsule past the 56 px circles beside it */
+  height: 56px;
 }
-/* the row: [back 48] 8 [capsule 224] 8 [balance 48] = 336, the card's content width. The base themes put 80 px above the
+/* the row: [back 56] 8 [capsule 272] 8 [balance 56] = 400, the card's content width. The base themes put 80 px above the
    prompt and 20 px each side of the capsule: both reset here. */
 .vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-layout {
   margin: 0 !important; }
 .vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry-area {
   margin: 0 8px !important; }
 
-/* the password capsule: G1 on the card, 48 high, the Next button concentric at its right end (8 px inset) */
+/* the password capsule: G1 on the card, 56 high, the Next disc concentric at its right end (8 px inset) */
 .vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry {
-  width: 158px;      /* content: 158 + padding 16 + 48 + border 2 = 224 (St adds padding and border) */
-  min-height: 46px;
-  padding: 0 48px 0 16px;  /* the Next button sits over the right end: 8 + 32 + 8 */
+  width: 194px;      /* content: 194 + padding 20 + 56 + border 2 = 272 (St adds padding and border) */
+  min-height: 54px;
+  height: 54px;      /* 54 + border 2 = 56 (the base themes' 1.5em left it at 59) */
+  padding: 0 56px 0 20px;  /* the Next button covers the right end: 8 + 40 + 8 */
   border-radius: 999px;
   background-color: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  font-size: 11pt;
+  font-size: 13pt;
   color: #ffffff;
   caret-color: #7dd3fc;
   selection-background-color: rgba(34, 211, 238, 0.40);
@@ -146,23 +155,39 @@
 .vitre-lock.vitre-lock .vitre-card .login-dialog-prompt-entry StIcon {
   color: rgba(255, 255, 255, 0.70);
 }
+/* Next (finding 18): the button is the whole 56 x 56 end of the capsule (it was a 32 px disc); the disc is drawn by its icon,
+   40 px (16 + 2 x 11 padding + 2 x 1 border), 8 px inside the capsule, so the hit target grew and the drawing did not. */
 .vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button {
-  width: 30px;
-  height: 30px;
+  width: 56px;
+  height: 56px;
   padding: 0;
-  margin: 0 8px 0 0;
+  margin: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+.vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button StIcon {
+  icon-size: 16px;
+  padding: 11px;  /* token-exception: sizes the disc: 16 + 2 x 11 + 2 x 1 = 40 */
   border-radius: 999px;
   color: #ffffff;
   background-color: rgba(34, 211, 238, 0.40);
   border: 1px solid rgba(125, 211, 252, 0.55);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
-.vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button:hover {
+.vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button:hover StIcon {
   background-color: rgba(34, 211, 238, 0.55);
 }
+.vitre-lock.vitre-lock .vitre-card .login-dialog-button.next-button:insensitive StIcon {
+  background-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.40);
+}
 .vitre-lock.vitre-lock .vitre-card .login-dialog-button.cancel-button {
-  width: 46px;
-  height: 46px;
+  width: 54px;
+  height: 54px;
   padding: 0;
   margin: 0;
   border-radius: 999px;
@@ -172,7 +197,7 @@
   color: #ffffff;
 }
 .vitre-lock.vitre-lock .vitre-card .login-dialog-message {
-  font-size: 10pt;
+  font-size: 11pt;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.70);
   margin-top: 12px;
@@ -190,10 +215,10 @@
 .vitre-lock.vitre-lock .login-dialog-bottom-button-group .login-dialog-button,
 .vitre-lock.vitre-lock .login-dialog-button.switch-user-button {
   border-radius: 999px;
-  padding: 8px 16px;
+  padding: 12px 20px;
   margin: 0 0 24px 12px;
   font-weight: 500;
-  font-size: 10pt;
+  font-size: 11pt;
   color: #ffffff;
   background-color: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -207,14 +232,15 @@
 /* ============================================================================================ END SESSION == */
 
 /* the card: ink glass, r-3xl, e3. With the glass sheet (class vitre-es-glass) the card paints nothing itself;
- * without it (the sheet failed) the card keeps a solid ink fill (G3) so the text stays readable. */
+ * without it (the sheet failed) the card keeps a solid fill so the text stays readable: G3 ink, the named G3 variant for the
+ * session scenes (TOKENS.md: G3 with the brand ink #081226 as its tint; hairline and highlight as G3). */
 .vitre-es.vitre-es.vitre-es {
   min-width: 400px;
   max-width: 400px;
   padding: 0;
   border-radius: 32px;
-  background-color: rgba(10, 20, 44, 0.90);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background-color: rgba(8, 18, 38, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 24px 64px rgba(0, 0, 0, 0.40);
 }
 .vitre-es.vitre-es.vitre-es.vitre-es-glass {

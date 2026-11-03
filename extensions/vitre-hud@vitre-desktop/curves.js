@@ -14,7 +14,7 @@ export const ENTER_FROM = {sx: 0.945, sy: 0.92};    // the measured start pose o
 export const EXIT_TO = {sx: 0.95, sy: 0.92};        // ... and its end pose
 export const GLASS_FROM = 0.15;                     // the glass layer comes in once the presence is past this
 
-export const DWELL_MS = 900;      // measured 0.92 s and 0.88 s after the last value change
+export const DWELL_MS = 1100;     // Motion Lab 2 (HUD): it drains 1.1 s after the last value change (v2 measured 0.9 s)
 export const JOSTLE_PX = 35;      // a press kicks the capsule's half width by this many px per second (the lab's 70 x volume 0.5)
 
 export const clamp01 = v => Math.min(1, Math.max(0, v));

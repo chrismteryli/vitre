@@ -201,6 +201,8 @@ export class DripController {
         this._pendingSince = 0;
         this._lastFrame = null;
         this._lastPieces = [];
+        this._fieldShapes = [];         // the field's copy of the frame's shapes, reused every frame (the field reads it at once and keeps none of it)
+        this._pieceArg = {real: 0, content: 0, clip: null};      // what the adapter is told about one piece, reused (adapters read it at once)
         this._measure = null;
         this._log = null;
         this._destroyed = false;
@@ -865,7 +867,18 @@ export class DripController {
             const by = this._fieldBox.y;
             const A = this.adapter.flipAxis;
             const flip = Number.isFinite(A);
-            const shapes = fr.shapes.map(s => ({x: s.x - bx, y: (flip ? A - s.y : s.y) - by, w: s.w, h: s.h, r: s.r}));
+            const src = fr.shapes;
+            const shapes = this._fieldShapes;
+            for (let i = 0; i < src.length; i++) {
+                const s = src[i];
+                const o = shapes[i] ?? (shapes[i] = {x: 0, y: 0, w: 0, h: 0, r: 0});
+                o.x = s.x - bx;
+                o.y = (flip ? A - s.y : s.y) - by;
+                o.w = s.w;
+                o.h = s.h;
+                o.r = s.r;
+            }
+            shapes.length = src.length;
             field.setShapes(shapes, fr.k);
             this._boost(field, fr.boost);
             field.actor.opacity = this._measure === 'coverage' ? 255 : Math.round(255 * fr.fieldAlpha);
@@ -938,7 +951,10 @@ export class DripController {
             if (!this._mask && !fp.started)
                 content = 0;
             out.push({id: pieces[i].id, real, content, clip: null, solid: Boolean(pieces[i].rect?.solid)});
-            this.adapter.setPiece(pieces[i].id, {real, content, clip: null});
+            const arg = this._pieceArg;
+            arg.real = real;
+            arg.content = content;
+            this.adapter.setPiece(pieces[i].id, arg);
         }
         this._lastPieces = out;
     }

@@ -31,13 +31,17 @@ function float(v) {
 /* One shader does the whole "clear glass" finish on the blurred backdrop (outermost effect):
  *  - cuts the rounded shape (anti-aliased signed-distance coverage),
  *  - adds a light white tint,
+ *  - holds a contrast floor (review 2026-11-02, finding 17): where the tinted backdrop is brighter than relative luminance
+ *    floorKnee, it is darkened smoothly (same hue, linear light) so it never passes floorMax. White text on floorMax 0.18 is
+ *    1.05 / 0.23 = 4.57:1 (WCAG AA for body text). Dark backdrops (his wallpapers) sit below the knee and are untouched,
  *  - adds the specular rim as a gradient by edge direction: brightest along the top edge,
  *    a little less along the lower edge, faint along the sides, soft falloff inward.
  * Distances are logical px. The shader sees premultiplied colour (alpha ~ 1 inside). */
 function createMask() {
     const snippet = Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT,
         `uniform float u_w; uniform float u_h; uniform float u_r; uniform float u_m;
-         uniform float u_tint; uniform float u_rs; uniform float u_rt; uniform float u_rb; uniform float u_rw;`,
+         uniform float u_tint; uniform float u_rs; uniform float u_rt; uniform float u_rb; uniform float u_rw;
+         uniform float u_fk; uniform float u_fm;`,
         `vec2 size = vec2(u_w - 2.0 * u_m, u_h - 2.0 * u_m);
          vec2 hs = size * 0.5;
          // the offscreen texture is the actor enlarged by about 2 px left/top (measured) and 3 px in size
@@ -54,13 +58,22 @@ function createMask() {
          float rim = clamp(strength * (1.0 - smoothstep(0.0, u_rw, -d)), 0.0, 1.0);
          vec4 c = cogl_color_out;
          vec3 rgb = mix(c.rgb, vec3(c.a), u_tint);
+         // contrast floor: luminance in linear light (sRGB ~ gamma 2.2), a soft knee from u_fk that never reaches u_fm
+         vec3 lin = pow(clamp(rgb / max(c.a, 0.001), 0.0, 1.0), vec3(2.2));
+         float y = dot(lin, vec3(0.2126, 0.7152, 0.0722));
+         if (y > u_fk && u_fm > u_fk) {
+             float y2 = u_fk + (u_fm - u_fk) * (1.0 - exp((u_fk - y) / (u_fm - u_fk)));
+             rgb = pow(lin * (y2 / y), vec3(1.0 / 2.2)) * c.a;
+         }
          rgb = mix(rgb, vec3(c.a), rim);
          cogl_color_out = vec4(rgb, c.a) * cov;`);
     return Clutter.ShaderEffect.new_with_snippet(snippet);
 }
 
 // Finish of the glass (the reference "clear" Liquid Glass, measured against the the reference design guide images).
-export const GLASS_FINISH = {tint: 0.10, rimSide: 0.16, rimTop: 0.80, rimBottom: 0.70, rimWidth: 1.9};
+// floorKnee / floorMax: the contrast floor (relative luminance). floorMax 0.18 keeps white text at 4.5:1 or better on any
+// wallpaper; a finish without them (or floorMax 1) has no floor.
+export const GLASS_FINISH = {tint: 0.10, rimSide: 0.16, rimTop: 0.80, rimBottom: 0.70, rimWidth: 1.9, floorKnee: 0.12, floorMax: 0.18};
 
 // Actor groups the desktop is made of, below every panel and menu.
 export function backdropSources() {
@@ -85,6 +98,8 @@ export class GlassLayer {
         this._mask.set_uniform_value('u_rt', float(finish.rimTop));
         this._mask.set_uniform_value('u_rb', float(finish.rimBottom));
         this._mask.set_uniform_value('u_rw', float(finish.rimWidth));
+        this._mask.set_uniform_value('u_fk', float(finish.floorKnee ?? 1));
+        this._mask.set_uniform_value('u_fm', float(finish.floorMax ?? 1));
         this._blur = new Shell.BlurEffect({
             mode: Shell.BlurMode.ACTOR, radius: blurRadius, brightness,
         });

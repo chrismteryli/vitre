@@ -42,6 +42,7 @@ export default class AutoHideManager {
 
         this.isHidden = false;
         this.isAnimating = false;
+        this._animationGeneration = 0;
         this._isHovered = false;
         this._wasFullscreen = false;
         this._isGrabPassThrough = false;
@@ -474,8 +475,10 @@ export default class AutoHideManager {
 
         this.isHidden = false;
         this.isAnimating = true;
+        const generation = ++this._animationGeneration;
 
         animateShow(this.dockUI, () => {
+            if (generation !== this._animationGeneration) return;
             this.isAnimating = false;
             if (this.dockUI && this.dockUI._dockBlur) {
                 this.dockUI._dockBlur.syncGeometry();
@@ -511,8 +514,10 @@ export default class AutoHideManager {
 
         this.isHidden = true;
         this.isAnimating = true;
+        const generation = ++this._animationGeneration;
 
         animateHide(this.dockUI, () => {
+            if (generation !== this._animationGeneration) return;
             this.isAnimating = false;
         });
     }

@@ -12,8 +12,10 @@
 // role, the trailing edge on glide x viscosity (it stretches with speed and relaxes on its own). The picture is that box:
 // a scale (x and y apart) and a translation of the window actor. A window's springs outlive a killed effect for a moment,
 // so a restore that interrupts a minimize (or the reverse) turns around from where the window is, with its speed.
-//   open      the box grows from 0.9 of the frame (glide), opacity in on the fade role
-//   close     the box shrinks to 0.94 on the glide exit spring (never bouncing), opacity out on the fade exit spring
+//   open      the box grows from 0.9 of the frame (pour: the lab's window open; the top edge on pour x viscosity), opacity in on
+//             the fade role
+//   close     the box shrinks to 0.94 on the glide exit spring, every edge on it (never bouncing, no trailing edge: the lab's
+//             close), opacity out on the fade exit spring
 //   minimize  the box pours into the Dock button (bottom edge leads, the top trails); the window melts as it nears the
 //             icon's size; the icon swallows it (a bead kick) as the bottom edge arrives
 //   restore   the box pours back out of the button (the far, top edge leads); the icon gives (a bead kick) as it leaves
@@ -131,8 +133,11 @@ export function fly(actor, o) {
             st.op.snap(o.kind === 'restore' ? 0 : o.opFrom ?? 1);
         st.op.set(opTo, REDUCED);
     } else {
-        const lead = o.exit ? role('glide', {exit: true}) : role('glide');
-        const trail = {r: lead.r * feel().visc, z: lead.z};
+        // Motion Lab 2 (windows): an open pours (role 'pour', the top edge on pour x viscosity); a close shrinks on the glide exit
+        // spring with no trailing edge (the lab gives every edge the same exit spring); minimize and restore glide
+        const roleName = o.role ?? 'glide';
+        const lead = o.exit ? role(roleName, {exit: true}) : role(roleName);
+        const trail = o.kind === 'close' ? lead : {r: lead.r * feel().visc, z: lead.z};
         const trailEdge = o.lead === 'top' ? 'bottom' : 'top';
         const e = edgesOf(o.to);
         for (const k of EDGES)

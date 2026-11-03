@@ -99,8 +99,13 @@ export class BaseDeformEffect extends Clutter.DeformEffect {
             this
         );
 
-        this._timeline.start();
         actor.connectObject('destroy', () => this._finish(), this);
+        if (!Main.wm._shouldAnimate()) {
+            this._setProgress(1);
+            this._finish();
+            return;
+        }
+        this._timeline.start();
     }
 
     _buildTarget() {

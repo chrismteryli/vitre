@@ -50,8 +50,13 @@ export const smoothstep = (a, b, v) => {
 };
 
 const EDGES = ['top', 'bottom', 'left', 'right'];
-const EMPTY = {x: -10000, y: -10000, w: 0, h: 0, r: 0};
+const emptyShape = () => ({x: -10000, y: -10000, w: 0, h: 0, r: 0});
 const edgesOf = r => ({top: r.y, bottom: r.y + r.h, left: r.x, right: r.x + r.w});
+// one edge of a rectangle, without the object edgesOf makes (the pour reads edges several times a frame)
+const edgeOf = (r, k) => (k === 'top' ? r.y : k === 'bottom' ? r.y + r.h : k === 'left' ? r.x : r.x + r.w);
+// the fade role's parameters, made once: role() makes a new object per call, and step() asks for them every frame
+const FADE = role('fade');
+const FADE_EXIT = role('fade', {exit: true});
 
 // the box the glass leaves from: fromW x fromH of the button, at its centre (the far side of a box that small is inside it)
 export function sourceBox(pill) {
@@ -209,14 +214,15 @@ export class Pour {
 
     step(dt) {
         this.t += dt;
-        for (const p of this.pieces) {
+        for (let i = 0; i < this.pieces.length; i++) {
+            const p = this.pieces[i];
             if (p.go && !p.begun) {
                 p.wait -= dt;
                 if (p.wait <= 0)
                     p.go();
             }
-            for (const k of EDGES)
-                p.s[k].step(dt);
+            for (let j = 0; j < 4; j++)
+                p.s[EDGES[j]].step(dt);
         }
         const least = this.openness();
         if (this.mode === 'opening') {
@@ -228,9 +234,9 @@ export class Pour {
                     this.real.snap(1);
                     this.field.snap(0);
                 } else {
-                    this.real.set(1, role('fade'));
+                    this.real.set(1, FADE);
                     if (this.real.x >= DRIP.realFrom)
-                        this.field.set(0, role('fade', {exit: true}));
+                        this.field.set(0, FADE_EXIT);
                 }
             }
         }
@@ -246,11 +252,12 @@ export class Pour {
     }
 
     get geometryRest() {
-        for (const p of this.pieces) {
+        for (let i = 0; i < this.pieces.length; i++) {
+            const p = this.pieces[i];
             if (!p.begun)
                 return false;
-            for (const k of EDGES) {
-                if (!p.s[k].rest)
+            for (let j = 0; j < 4; j++) {
+                if (!p.s[EDGES[j]].rest)
                     return false;
             }
         }
@@ -264,13 +271,13 @@ export class Pour {
     // how far the least advanced piece is from the source box toward its rectangle (0 at the button, 1 at rest), read on its far edge
     openness() {
         let least = Infinity;
-        for (const p of this.pieces)
-            least = Math.min(least, this._open(p));
+        for (let i = 0; i < this.pieces.length; i++)
+            least = Math.min(least, this._open(this.pieces[i]));
         return Number.isFinite(least) ? least : 1;
     }
 
     _open(p) {
-        const a = edgesOf(this.from)[p.far], b = edgesOf(p.rect)[p.far];
+        const a = edgeOf(this.from, p.far), b = edgeOf(p.rect, p.far);
         if (Math.abs(b - a) < 1e-6)
             return 1;
         return (p.s[p.far].x - a) / (b - a);
@@ -280,15 +287,18 @@ export class Pour {
     homeProgress() {
         if (!this._homeFrom)
             return 1;
-        const home = edgesOf(this.from);
+        const from = this.from;
         let d0 = 0, d = 0;
-        this.pieces.forEach((p, i) => {
+        for (let i = 0; i < this.pieces.length; i++) {
+            const p = this.pieces[i];
             const e0 = this._homeFrom[i];
-            for (const k of EDGES) {
-                d0 += Math.abs(home[k] - e0[k]);
-                d += Math.abs(home[k] - p.s[k].x);
+            for (let j = 0; j < 4; j++) {
+                const k = EDGES[j];
+                const h = edgeOf(from, k);
+                d0 += Math.abs(h - e0[k]);
+                d += Math.abs(h - p.s[k].x);
             }
-        });
+        }
         return d0 < 1e-6 ? 1 : 1 - d / d0;
     }
 
@@ -306,28 +316,42 @@ export class Pour {
         return lerp(p.r0, p.rect.r, clamp01(this._open(p)));
     }
 
+    _radiusAt(p, open) {
+        return lerp(p.r0, p.rect.r, clamp01(open));
+    }
+
     // ---- the frame the controller draws -----------------------------------------------------------------------------
 
     frame() {
         const pill = this.pill;
-        const bodies = [];
         const out = [];
         let doneCount = 0;
-        const least = clamp01(this.openness());
-        for (const p of this.pieces) {
-            const e = this._edges(p);
-            const left = Math.min(e.left, e.right), right = Math.max(e.left, e.right);
-            const top = Math.min(e.top, e.bottom), bottom = Math.max(e.top, e.bottom);
+        let rawLeast = Infinity;
+        // [the button's shape, two unused slots (one for a single piece), then one shape per piece]: filled in order, the button's
+        // shape last because it depends on how far the least advanced piece is
+        const shapes = [null, emptyShape()];
+        if (this.multi)
+            shapes.push(emptyShape());
+        const hollow = this.reduced || this.mode === 'closed';
+        const done = this.mode === 'open';
+        for (let i = 0; i < this.pieces.length; i++) {
+            const p = this.pieces[i];
+            const s = p.s;
+            const eTop = s.top.x, eBottom = s.bottom.x, eLeft = s.left.x, eRight = s.right.x;
+            const open = this._open(p);                     // read once: the radius, the piece's progress and the least all use it
+            rawLeast = Math.min(rawLeast, open);
+            const left = Math.min(eLeft, eRight), right = Math.max(eLeft, eRight);
+            const top = Math.min(eTop, eBottom), bottom = Math.max(eTop, eBottom);
             const hw = Math.max(0, (right - left) / 2), hh = Math.max(0, (bottom - top) / 2);
-            const r = Math.max(0, Math.min(this._radius(p), hw, hh));
-            const shape = this.reduced || this.mode === 'closed' ? {...EMPTY} : {x: (left + right) / 2, y: (top + bottom) / 2, w: hw, h: hh, r};
-            bodies.push(shape);
-            const done = this.mode === 'open';
+            const r = Math.max(0, Math.min(this._radiusAt(p, open), hw, hh));
+            const shape = hollow ? emptyShape() : {x: (left + right) / 2, y: (top + bottom) / 2, w: hw, h: hh, r};
+            shapes.push(shape);
             if (done)
                 doneCount++;
-            out.push({id: p.id, shape, e: this._open(p), done, started: p.begun || this.reduced, contentAlpha: this.content.x,
-                real: this.real.x, clip: null, bloomU: clamp01(this._open(p))});
+            out.push({id: p.id, shape, e: open, done, started: p.begun || this.reduced, contentAlpha: this.content.x,
+                real: this.real.x, clip: null, bloomU: clamp01(open)});
         }
+        const least = clamp01(Number.isFinite(rawLeast) ? rawLeast : 1);
         // the button: kept when it has a highlight of its own, else it thins away upward as the glass leaves it
         let pillHh = pill.h / 2, pillCy = pill.y + pill.h / 2;
         if (!pill.keep) {
@@ -335,18 +359,14 @@ export class Pour {
             pillHh *= 1 - f;
             pillCy -= pill.h * 0.5 * f;
         }
-        const pillShape = this.reduced || (!pill.keep && pillHh < DRIP.pillGoneHh) ? {...EMPTY}
+        shapes[0] = this.reduced || (!pill.keep && pillHh < DRIP.pillGoneHh) ? emptyShape()
             : {x: pill.x + pill.w / 2, y: pillCy, w: pill.w / 2, h: pillHh, r: Math.min(pill.w / 2, pillHh)};
-        const shapes = [pillShape, {...EMPTY}];
-        if (this.multi)
-            shapes.push({...EMPTY});
-        shapes.push(...bodies);
         return {
             shapes, k: lerp(DRIP.kStart * this.ph, DRIP.k0, smoothstep(0.15, 1, least)),
             fieldAlpha: this.reduced ? 0 : this.field.x,
             boost: 1 - smoothstep(0.6, 0.98, least),        // the glass is lit while it moves (liquidDrip _boost)
             pieces: out, allDone: out.length > 0 && doneCount === out.length, mode: this.mode, openness: least,
-            drop: bodies[0] ?? {...EMPTY}, carrier: this.multi ? -1 : 0,
+            drop: out.length ? out[0].shape : emptyShape(), carrier: this.multi ? -1 : 0,
         };
     }
 }

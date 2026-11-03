@@ -119,6 +119,25 @@ function setVisible(a, v) {
         a.visible = v;
 }
 
+// Motion Lab 2 (the engine's frame rule: a frame the shell holds slows the motion there instead of skipping it, as
+// liquidClock's Ticker caps a step at 1/30 s): the plan's time advances at most capMs per painted frame; what was held back
+// lengthens the timeline, so the spring still ends at its rest. A held first frame (the overview's or a switch's first
+// paint) no longer makes the picture jump ahead. Returns the progress (0..1) of the plan's own time.
+function heldProgress(tr, progress, capMs) {
+    if (progress >= 1)
+        return 1;
+    const c = tr._vitreHeld ?? (tr._vitreHeld = {last: 0, held: 0, dur: Math.max(1, tr.get_duration())});
+    const el = tr.get_elapsed_time();
+    const d = el - c.last;
+    c.last = el;
+    if (d > capMs) {
+        const extra = Math.round(d - capMs);
+        c.held += extra;
+        tr.set_duration(tr.get_duration() + extra);
+    }
+    return Math.min(1, Math.max(0, (el - c.held) / c.dur));
+}
+
 // ---- the spring as a Clutter transition --------------------------------------------------------------------------------
 // The timeline runs LINEAR over the plan's duration (x the film factor); the plan decides the value. The interval is
 // [0, 1] so the value handed to the interval IS the progress (Clutter's interval interpolates outside 0..1 too).
@@ -133,7 +152,7 @@ function springTransitionClass() {
             let value = progress;
             if (run) {
                 try {
-                    const t = Math.min(run.plan.T, Math.max(0, progress) * run.plan.T);
+                    const t = Math.min(run.plan.T, heldProgress(this, progress, 1000 / 30 * (run.slow || 1)) * run.plan.T);
                     run.t = t;
                     value = run.att.clampProgress(run.plan.at(t));
                     if (!run.logicFired && t >= run.plan.Tlogic && run.plan.Tlogic < run.plan.T) {

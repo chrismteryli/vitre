@@ -23,6 +23,9 @@ const LG_UUID = 'liquid-glass@thinkingcoding1231.gmail.com';
 // values.
 const LG_LOOK = {blurRadius: 24, tintStrength: 0.42, tintColor: [28 / 255, 28 / 255, 30 / 255], brightness: 0.92, saturation: 1.7, corner: 14, expand: 12};
 
+// the menu content's drop as it fades in (the lab's menus: translateY((1 - a) x -6 px))
+const CONTENT_DROP = 6;
+
 export class MenuDripAdapter {
     constructor(managed) {
         this._m = managed;
@@ -132,6 +135,11 @@ export class MenuDripAdapter {
         const {menu} = this._m;
         const box = menu.box;
         box.opacity = op255(content);
+        // Motion Lab 2 (menus): the content settles into place as it fades in (it starts CONTENT_DROP px high) and lifts as it
+        // fades out, on the same fade spring as its opacity
+        // (reduced motion: a cross-fade in place, nothing travels)
+        const still = St.Settings.get().reducedMotion === St.ReducedMotion.REDUCE;
+        box.translation_y = still ? 0 : -CONTENT_DROP * (1 - Math.min(1, Math.max(0, content)));
         const glass = this._lg()?.glass;
         if (glass)
             glass.opacity = op255(real);
@@ -149,6 +157,7 @@ export class MenuDripAdapter {
         const box = menu.box;
         box.set_scale(1, 1);
         box.opacity = 255;
+        box.translation_y = 0;
         if (pointer._border)
             pointer._border.opacity = saved?.border ?? 255;
         const glass = this._lg()?.glass;

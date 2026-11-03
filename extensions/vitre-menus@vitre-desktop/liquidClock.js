@@ -128,10 +128,7 @@ export function animate(actor, targets, {p = null, fade = null, onDone = null} =
                 st.springs.clear();
                 st.written.clear();
                 st.owners.clear();
-                if (actor._vitreEaseDelay) {
-                    GLib.Source.remove(actor._vitreEaseDelay);
-                    actor._vitreEaseDelay = 0;
-                }
+                cancelEaseDelay(actor);
                 for (const c of [...st.calls]) {
                     st.calls.delete(c);
                     if (!c.done) {
@@ -178,9 +175,28 @@ export function animate(actor, targets, {p = null, fade = null, onDone = null} =
         const params = isOp ? (mode === 'reduced' ? REDUCED : fade ?? role('fade')) : p ?? role('bead');
         s.set(isOp ? to / 255 : to, params);
     }
+    const callMoving = c => {
+        for (const prop of c.props) {
+            const s = st.springs.get(prop);
+            if (s && !s.rest)
+                return true;
+        }
+        return false;
+    };
     const settle = () => {
+        // asked every frame, and almost always nothing has settled: look first without copying anything (no callback runs in this
+        // pass, so the set cannot change under it); the copy below is only made on the frame a call ends
+        let any = false;
+        for (const c of st.calls) {
+            if (!c.done && !callMoving(c)) {
+                any = true;
+                break;
+            }
+        }
+        if (!any)
+            return;
         for (const c of [...st.calls]) {
-            const moving = [...c.props].some(prop => st.springs.has(prop) && !st.springs.get(prop).rest);
+            const moving = callMoving(c);
             if (!moving && !c.done) {
                 c.done = true;
                 st.calls.delete(c);
@@ -237,6 +253,7 @@ export function animate(actor, targets, {p = null, fade = null, onDone = null} =
 
 // stop every spring on the actor where it is (callbacks: not finished)
 export function stopAnimate(actor) {
+    cancelEaseDelay(actor);
     const st = actor._vitreSprings;
     if (!st)
         return;
@@ -244,10 +261,7 @@ export function stopAnimate(actor) {
     st.springs.clear();
     st.owners.clear();
     st.written?.clear();
-    if (actor._vitreEaseDelay) {
-        GLib.Source.remove(actor._vitreEaseDelay);
-        actor._vitreEaseDelay = 0;
-    }
+    cancelEaseDelay(actor);
     for (const c of [...st.calls]) {
         st.calls.delete(c);
         if (!c.done) {
@@ -260,6 +274,18 @@ export function stopAnimate(actor) {
 // is any property of the actor still moving on a spring
 export function animating(actor) {
     return Boolean(actor._vitreSprings?.springs.size);
+}
+
+function cancelEaseDelay(actor) {
+    const pending = actor._vitreEaseDelay;
+    if (!pending)
+        return;
+    actor._vitreEaseDelay = null;
+    if (pending.done)
+        return;
+    pending.done = true;
+    GLib.Source.remove(pending.id);
+    pending.onStopped?.(false);
 }
 
 // GNOME's ease(), on springs: ease(actor, {prop: value, ..., duration, mode, delay, onComplete, onStopped}, {role}) moves each
@@ -276,6 +302,7 @@ export function ease(actor, params, {role: roleName = 'bead'} = {}) {
     const {duration, mode: _mode, delay, onComplete, onStopped, repeatCount, autoReverse, animationRequired: _ar, ...props} = params;
     if (repeatCount || autoReverse || Object.values(props).some(v => typeof v !== 'number'))
         return actor.ease(params);
+    cancelEaseDelay(actor);
     const done = finished => {
         onStopped?.(finished);
         if (finished)
@@ -292,16 +319,19 @@ export function ease(actor, params, {role: roleName = 'bead'} = {}) {
         }
         animate(actor, props, {p: role(roleName, {exit}), fade: role('fade', {exit: exit || (props.opacity ?? 255) < actor.opacity}), onDone: done});
     };
-    if (actor._vitreEaseDelay) {
-        GLib.Source.remove(actor._vitreEaseDelay);
-        actor._vitreEaseDelay = 0;
-    }
     if (delay > 0 && motionMode() !== 'off') {
-        actor._vitreEaseDelay = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(delay * slowFactor()), () => {
-            actor._vitreEaseDelay = 0;
+        const pending = {id: 0, done: false, onStopped};
+        actor._vitreEaseDelay = pending;
+        pending.id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(delay * slowFactor()), () => {
+            if (pending.done)
+                return GLib.SOURCE_REMOVE;
+            pending.done = true;
+            if (actor._vitreEaseDelay === pending)
+                actor._vitreEaseDelay = null;
             start();
             return GLib.SOURCE_REMOVE;
         });
+        actor.connect?.('destroy', () => cancelEaseDelay(actor));
         return;
     }
     start();

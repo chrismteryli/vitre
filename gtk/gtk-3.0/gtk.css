@@ -42,9 +42,17 @@ headerbar:backdrop > box.left, headerbar:backdrop > box.right {
 headerbar button.titlebutton.close, headerbar button.titlebutton.minimize, headerbar button.titlebutton.maximize,
 headerbar button.titlebutton.close:backdrop, headerbar button.titlebutton.minimize:backdrop, headerbar button.titlebutton.maximize:backdrop,
 headerbar button.titlebutton.close:backdrop:hover, headerbar button.titlebutton.minimize:backdrop:hover, headerbar button.titlebutton.maximize:backdrop:hover {
-  min-width: 28px; min-height: 33px; padding: 0; margin: 0; border: 4px solid transparent; border-radius: 21px;
+  min-width: 28px; min-height: 33px; padding: 0; margin: -3.5px 0; border-style: solid; border-color: transparent; border-width: 7.5px 4px;
+  border-radius: 21px / 24.5px;
   background-color: transparent; background-clip: padding-box; background-repeat: no-repeat; background-position: center; background-size: 18px 18px;
   color: @theme_fg_color; box-shadow: none; outline: none; text-shadow: none; -gtk-icon-shadow: none;
+}
+/* Hit targets (review 2026-11-02, finding 18): the transparent border (4 px, the bead's inset) grew 3.5 px above and below and
+   a negative margin pulls it back, so each button is a 36 x 48 target while the capsule (the box, 41 px) and the 28 x 33 bead
+   stay where they were. The elliptical outer radius keeps the bead's corners 17 px circles. Keyboard focus (finding 8): a
+   2 px accent ring on the bead, shown only for keyboard focus (GTK 3 draws outlines only then). */
+headerbar button.titlebutton.close:focus, headerbar button.titlebutton.minimize:focus, headerbar button.titlebutton.maximize:focus {
+  outline: 2px solid alpha(@theme_selected_bg_color, 0.5); outline-offset: -8px; -gtk-outline-radius: 15px;
 }
 headerbar button.titlebutton + button.titlebutton { margin-left: -6px; }
 headerbar > box.left > separator.titlebutton { margin: 0 0 0 -6px; }
@@ -57,12 +65,14 @@ headerbar button.titlebutton.maximize, headerbar button.titlebutton.maximize:bac
 headerbar button.titlebutton.close:backdrop, headerbar button.titlebutton.minimize:backdrop, headerbar button.titlebutton.maximize:backdrop,
 headerbar button.titlebutton.close:backdrop:hover, headerbar button.titlebutton.minimize:backdrop:hover, headerbar button.titlebutton.maximize:backdrop:hover { color: alpha(@theme_fg_color, 0.40); }
 headerbar button.titlebutton.close:hover { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")), linear-gradient(to bottom, #ff7d83, #e5484d); background-size: 18px 18px, auto; }
-headerbar button.titlebutton.minimize:hover { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); background-size: 18px 18px, auto; }
-headerbar button.titlebutton.maximize:hover { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); background-size: 18px 18px, auto; }
-.maximized headerbar button.titlebutton.maximize:hover { background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); }
+/* minimize / maximize fill with the theme's accent (finding 25: they were always Vitre blue; each accent has its own
+   Vitre-Glass theme, so @theme_selected_bg_color is the accent); close keeps its coral */
+headerbar button.titlebutton.minimize:hover { color: @theme_selected_fg_color; background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, shade(@theme_selected_bg_color, 1.22), @theme_selected_bg_color); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.maximize:hover { color: @theme_selected_fg_color; background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, shade(@theme_selected_bg_color, 1.22), @theme_selected_bg_color); background-size: 18px 18px, auto; }
+.maximized headerbar button.titlebutton.maximize:hover { background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, shade(@theme_selected_bg_color, 1.22), @theme_selected_bg_color); }
 headerbar button.titlebutton.close:active { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")), linear-gradient(to bottom, #d9414a, #b8303a); background-size: 18px 18px, auto; }
-headerbar button.titlebutton.minimize:active { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); background-size: 18px 18px, auto; }
-headerbar button.titlebutton.maximize:active { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.minimize:active { color: @theme_selected_fg_color; background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, shade(@theme_selected_bg_color, 0.9), shade(@theme_selected_bg_color, 0.76)); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.maximize:active { color: @theme_selected_fg_color; background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, shade(@theme_selected_bg_color, 0.9), shade(@theme_selected_bg_color, 0.76)); background-size: 18px 18px, auto; }
 headerbar separator.titlebutton { min-width: 0; min-height: 0; padding: 0; opacity: 0; background: none; border: none; }
 
 /* ---- title + subtitle ---- */

@@ -67,7 +67,8 @@ export function animateShow(dockUI, onComplete) {
         translation_y: 0,
         opacity: 255,
         duration: getAnimDuration(),
-        onStopped: (_isFinished) => {
+        onStopped: (isFinished) => {
+            if (!isFinished) return;
             dockUI.actor.opacity = 255;
             if (dockUI._dockBlur) {
                 dockUI._dockBlur.syncGeometry();
@@ -94,7 +95,8 @@ export function animateHide(dockUI, onComplete) {
         translation_y: hideY,
         opacity: 0,
         duration: getAnimDuration(),
-        onStopped: (_isFinished) => {
+        onStopped: (isFinished) => {
+            if (!isFinished) return;
             dockUI.actor.opacity = 0;
             if (dockUI._dockBlur) {
                 dockUI._dockBlur._hideBlur();

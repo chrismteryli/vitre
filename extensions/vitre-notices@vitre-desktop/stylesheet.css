@@ -88,16 +88,24 @@
 .nc-panel.nc-panel.nc-panel .message .event-time { font-size: 10pt; font-weight: 400; color: rgba(255, 255, 255, 0.6) !important; padding-top: 2px; }
 .nc-panel.nc-panel.nc-panel .message .message-action-bin { padding: 0 12px 12px; spacing: 4px; }
 .nc-panel.nc-panel.nc-panel .message .message-action-bin .button { padding: 4px 8px; font-size: 10pt; }
-/* hover-only buttons: close (top left), expand (bottom right) */
+/* hover-only buttons: close (top left), expand (bottom right).
+   Hit targets (review 2026-11-02, finding 18): the 22 px disc is drawn by the icon (12 + 2 x 5 padding), and the button
+   around it is the target: 32 x 32 for close (it grows into the card, away from the corner, 4 px of the old margin kept on
+   the corner side; more would cover the app icon), 40 x 40 for expand (open space at the bottom right). The disc sits where it
+   was (centre 15 px from the card's corner). */
 .nc-panel.nc-panel.nc-panel .message .nc-hover-button,
 .nc-panel.nc-panel.nc-panel .message .nc-hover-button:hover {
-  width: 22px; height: 22px; min-width: 0; min-height: 0; padding: 0; margin: 4px;
+  width: 22px; height: 22px; min-width: 0; min-height: 0; padding: 4px 6px 6px 4px; margin: 0;  /* token-exception: a hit area around a 22 px disc: 4 + 22 + 6 = 32 */
   border-radius: 12px; background-color: transparent; border: none; box-shadow: none; color: transparent;
 }
-.nc-panel.nc-panel.nc-panel .message .nc-hover-button StIcon { icon-size: 12px; color: transparent; }
-.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button { background-color: rgba(120, 120, 128, 0.55); }
-.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button StIcon { color: #ffffff; }
-.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button:hover { background-color: rgba(160, 160, 168, 0.7); }
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button.message-expand-button,
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button.message-expand-button:hover { padding: 14px 4px 4px 14px; }  /* token-exception: hit area: 14 + 22 + 4 = 40 */
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button StIcon {
+  icon-size: 12px; padding: 5px; border-radius: 999px; background-color: transparent; color: transparent;  /* token-exception: sizes the disc: 12 + 2 x 5 = 22 */
+}
+.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button StIcon { background-color: rgba(120, 120, 128, 0.55); color: #ffffff; }
+.nc-panel.nc-panel.nc-panel .message:hover .nc-hover-button:hover StIcon { background-color: rgba(160, 160, 168, 0.70); }
+.nc-panel.nc-panel.nc-panel .message .nc-hover-button:focus StIcon { box-shadow: inset 0 0 0 2px -st-accent-color; }
 
 /* ---- Clear: a small glass pill, only while the pointer is over the notifications ---------- */
 .nc-panel.nc-panel.nc-panel .message-list-controls { padding: 0; spacing: 0; height: 0; margin: 0; }
@@ -154,12 +162,17 @@
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .calendar-month-label {
   width: 160px; text-align: left; padding: 0; font-size: 10pt; font-weight: 600; color: #ff453a !important;
 }
-.nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .pager-button { width: 22px; height: 18px; min-height: 0; min-width: 0; padding: 0; color: rgba(255, 255, 255, 0.6); }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .pager-button { width: 22px; height: 18px; min-height: 0; min-width: 0; padding: 4px 0; color: rgba(255, 255, 255, 0.60); }
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-month-header .pager-button StIcon { icon-size: 10px; }
+/* Day hit targets (review 2026-11-02, finding 18): the button now fills its whole cell of the grid (it had 2 px of dead margin
+   all round: a 19 x 16 target at his size became 23 x 20, the grid does not move). St paints a button's background under its
+   border, so the day disc keeps its drawn size by a 2 px border in the widget's own solid colour (#1c1c1e) that hides the outer
+   2 px: what shows is the old disc, radius 8 (10 - 2). This relies on the calendar widget being a solid surface. */
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-day {
   width: 18px; height: 18px; min-width: 0; min-height: 0;
-  margin: 2px; padding: 0; font-size: 8pt; font-weight: 500;
-  border: none; border-radius: 8px; color: #ffffff;
+  margin: 0; padding: 0; font-size: 8pt; font-weight: 500;
+  border: 2px solid #1c1c1e; color: #ffffff;
+  border-radius: 10px;  /* token-exception: outer edge of the masking border; the drawn disc is r-s 8 */
 }
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-day-heading {
   width: 22px; height: 15px; min-width: 0; min-height: 0;
@@ -167,7 +180,7 @@
 }
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-other-month { color: rgba(255, 255, 255, 0.40); }
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-day:hover { background-color: rgba(255, 255, 255, 0.10); }
-.nc-panel.nc-panel.nc-panel .nc-month .calendar-day:selected { background-color: rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
+.nc-panel.nc-panel.nc-panel .nc-month .calendar-day:selected { background-color: rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.60); }
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-day:focus { box-shadow: inset 0 0 0 2px -st-accent-color; }
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-today,
 .nc-panel.nc-panel.nc-panel .nc-month .calendar-today:selected { background-color: #ff453a; color: #ffffff !important; font-weight: 600; }
