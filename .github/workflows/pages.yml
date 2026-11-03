@@ -1,5 +1,5 @@
 # The website (docs/) and the apt repository (/apt) on GitHub Pages.
-# The apt files are not kept in git: each release carries them as vitre-apt-<version>.tar, and this job unpacks the latest one into /apt.
+# The apt files are not kept in git: each release carries them as vitre-apt-<version>.tar, and this job unpacks the newest one that has it into /apt.
 name: Pages
 
 on:
@@ -34,7 +34,13 @@ jobs:
         run: |
           mkdir -p _site/apt
           cp -a docs/. _site/
-          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          # the newest release that carries an apt tar (a release may ship only the zip, e.g. 0.3.x while apt stays 0.2.0)
+          tag=""
+          for t in $(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 50 --json tagName -q '.[].tagName'); do
+            if gh release view "$t" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -q '^vitre-apt-.*\.tar$'; then tag=$t; break; fi
+          done
+          test -n "$tag" || { echo "no release carries vitre-apt-*.tar"; exit 1; }
+          echo "apt repository from $tag"
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern 'vitre-apt-*.tar' --dir /tmp/apt
           tar -xf /tmp/apt/vitre-apt-*.tar -C _site/apt
           test -s _site/apt/InRelease
