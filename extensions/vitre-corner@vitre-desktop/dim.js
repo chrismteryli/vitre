@@ -4,17 +4,18 @@
  * it. Over the dark desktop that reads well; over a bright full-screen frame (a daylight scene, a white page) the tiles
  * measured 1.5:1 to 2:1 against white text in the rig: unreadable. Dimming the window under it to DIM of its brightness
  * puts the Control Center on a dark backdrop again (the glass copies the dimmed window), and reads as the window stepping
- * back while the panel is up. It eases in and out with the menu (GNOME's own Quick Settings dim uses the same effect
- * and the same 127-based colour) and is removed completely when the menu has closed: the window is left exactly as it was. */
+ * back while the panel is up. It follows the menu on a Fade spring (liquid.js fade role: never past its target; GNOME's own
+ * Quick Settings dim uses the same effect and the same 127-based colour) and is removed completely when the menu has
+ * closed: the window is left exactly as it was. Reduced motion: the 160 ms cross-fade. */
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 
 import {motionAllowed} from './liquidDrip.js';
+import {Fade, role, REDUCED} from './liquid.js';
+import {Ticker, motionMode} from './liquidClock.js';
 
 const EFFECT = 'vitre-corner-dim';
 export const DIM = 0.45;            // the window's brightness while the Control Center is open over it (1 = unchanged)
-const IN_MS = 200;
-const OUT_MS = 160;
 
 const level = v => {
     const c = Math.round(127 * v);
@@ -39,6 +40,19 @@ export class WindowDim {
     constructor() {
         this._actor = null;
         this._effect = null;
+        this._v = new Fade(1, role('fade'), 1e-3);
+        this._done = null;
+        this._ticker = new Ticker(dt => {
+            const v = this._v.step(dt);
+            if (this._effect)
+                this._effect.brightness = level(v);
+            if (!this._v.rest && this._effect)
+                return true;
+            const done = this._done;
+            this._done = null;
+            done?.();
+            return false;
+        });
     }
 
     get dimmed() {
@@ -55,13 +69,14 @@ export class WindowDim {
             this._actor = actor;
             this._effect = new Clutter.BrightnessContrastEffect();
             this._effect.brightness = level(1);
+            this._v.snap(1);
             actor.add_effect_with_name(EFFECT, this._effect);
             actor.connectObject('destroy', () => {
                 this._actor = null;
                 this._effect = null;
             }, this);
         }
-        this._ease(DIM, IN_MS, null);
+        this._ease(DIM, false, null);
     }
 
     undim(instant = false) {
@@ -72,31 +87,31 @@ export class WindowDim {
             return;
         }
         const effect = this._effect;
-        this._ease(1, OUT_MS, () => {
+        this._ease(1, true, () => {
             if (this._effect === effect)
                 this._remove();
         });
     }
 
-    _ease(value, ms, done) {
+    _ease(value, leaving, done) {
         const actor = this._actor;
         actor.remove_transition(`@effects.${EFFECT}.brightness`);
+        this._done = null;
         if (!motionAllowed()) {
+            this._ticker.stop();
+            this._v.snap(value);
             this._effect.brightness = level(value);
             done?.();
             return;
         }
-        actor.ease_property(`@effects.${EFFECT}.brightness`, level(value), {
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            duration: ms,
-            onStopped: finished => {
-                if (finished)
-                    done?.();
-            },
-        });
+        this._v.set(value, motionMode() === 'reduced' ? REDUCED : role('fade', {exit: leaving}));
+        this._done = done;
+        this._ticker.start();
     }
 
     _remove() {
+        this._ticker.stop();
+        this._done = null;
         const actor = this._actor;
         const effect = this._effect;
         this._actor = null;

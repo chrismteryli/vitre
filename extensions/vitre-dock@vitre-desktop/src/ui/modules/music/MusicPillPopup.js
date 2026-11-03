@@ -29,6 +29,9 @@ import { BlurEffect } from '../../blur/BlurEffect.js';
 import { TimeoutTracker } from '../../../core/TimeoutTracker.js';
 import { extractColorsFromPixbuf } from './MusicColorExtractor.js';
 import { isActorAlive, setBoxVertical } from '../../../core/Utils.js';
+import {ease as springEase} from '../../../liquid/liquidClock.js';
+// liquid v3: this file's motion is a surface leaving its source: the 'pour' role (liquid.js); opacity on the fade role
+const liquidEase = (actor, params) => springEase(actor, params, {role: 'pour'});
 
 
 let POPUP_ART_BLUR_INTENSITY = 4.0;
@@ -692,12 +695,11 @@ export class MusicPillPopup {
         this._box.scale_x = 0.88;
         this._box.set_pivot_point(0.5, 0.5);
 
-        this._box.ease({
+        liquidEase(this._box, {
             opacity: 255,
             scale_x: 1.0,
             scale_y: 1.0,
             duration: 220,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
 
         if (this._loopId) {
@@ -756,12 +758,11 @@ export class MusicPillPopup {
         if (this._isOpen) {
             this._isOpen = false;
 
-            this._box.ease({
+            liquidEase(this._box, {
                 opacity: 0,
                 scale_x: 0.9,
                 scale_y: 0.9,
                 duration: 160,
-                mode: Clutter.AnimationMode.EASE_IN_QUAD,
                 onStopped: () => {
                     if (!this._isOpen && isActorAlive(this._overlay)) {
                         if (this._overlay.get_parent()) Main.layoutManager.uiGroup.remove_child(this._overlay);

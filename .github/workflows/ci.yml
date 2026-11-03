@@ -1,5 +1,6 @@
 # Checks every push and pull request on main.
-#   static   shellcheck (errors only), JSON and extension metadata, settings schemas (glib-compile-schemas --strict), JavaScript syntax.
+#   static   shellcheck (errors only), JSON and extension metadata, settings schemas (glib-compile-schemas --strict), JavaScript syntax,
+#            and the checks of the Fedora and Arch recipes in packaging/.
 #   gnome51  on x86_64 and arm64, in an ubuntu:26.10 container (the release that ships GNOME Shell 51):
 #            the install test (./install.sh --check, install, uninstall, the settings and files come back) and the smoke test (a real
 #            GNOME Shell 51 on a virtual monitor with Vitre installed: every extension ACTIVE, no JS ERROR from Vitre, one screenshot).
@@ -36,6 +37,9 @@ jobs:
 
       - name: shellcheck, JSON and metadata, schemas, JavaScript syntax
         run: bash ci/static.sh
+
+      - name: Fedora and Arch recipes (spec, PKGBUILD, .SRCINFO, scriptlets' syntax)
+        run: python3 -I packaging/check-distro.py
 
   gnome51:
     name: GNOME Shell 51 (${{ matrix.arch }})

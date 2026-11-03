@@ -34,6 +34,9 @@ import { HYBRID_PANEL_CONFIG } from '../../core/PanelConfig.js';
 import { resolvePopupBubbleColors } from './DockThemeResolver.js';
 import { isActorAlive, setBoxVertical } from '../../core/Utils.js';
 import { setMagnifierPauseState } from '../magnifier/MagnifierState.js';
+import {ease as springEase} from '../../liquid/liquidClock.js';
+// liquid v3: this file's motion is a surface leaving its source: the 'pour' role (liquid.js); opacity on the fade role
+const liquidEase = (actor, params) => springEase(actor, params, {role: 'pour'});
 
 
 export const OVERFLOW_BUTTON_KEY = 'dhruva-overflow-button';
@@ -133,12 +136,11 @@ export class DockOverflowMenu {
         this._container.opacity = 0;
         this._container.translation_x = -ax * CFG.OVERFLOW_SLIDE_PX;
         this._container.translation_y = -ay * CFG.OVERFLOW_SLIDE_PX;
-        this._container.ease({
+        liquidEase(this._container, {
             opacity: 255,
             translation_x: 0,
             translation_y: 0,
             duration: CFG.OVERFLOW_OPEN_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
     }
 
@@ -157,12 +159,11 @@ export class DockOverflowMenu {
 
             const [ax, ay] = awayFromDock(this._dockUI.dockPosition);
             this._container.remove_all_transitions();
-            this._container.ease({
+            liquidEase(this._container, {
                 opacity: 0,
                 translation_x: -ax * CFG.OVERFLOW_SLIDE_PX * 0.6,
                 translation_y: -ay * CFG.OVERFLOW_SLIDE_PX * 0.6,
                 duration: CFG.OVERFLOW_CLOSE_MS,
-                mode: Clutter.AnimationMode.EASE_IN_QUAD,
                 onComplete: () => {
                     if (!this._isOpen) this._detachPopup();
                 },

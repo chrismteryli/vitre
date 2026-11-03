@@ -16,6 +16,9 @@ import Gio from 'gi://Gio';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import {Spring, Fade, role, EPS_OPACITY} from './liquid.js';
+import {Ticker, motionMode} from './liquidClock.js';
+
 const PT = 1.15;                                // GNOME logical px per the reference point
 export const APPS = {
     cols: 5,
@@ -27,7 +30,7 @@ export const APPS = {
     hairH: 9,
     padTop: 6,
     padBottom: 10,
-    ripple: {fromScale: 0.92, ms: 200, msPerPx: 0.32, maxDelay: 170},
+    ripple: {fromScale: 0.92, msPerPx: 0.32, maxDelay: 170},     // a tile starts this much later per px from the origin (a spill)
 };
 
 // the reference design's categories, mapped from freedesktop Categories= keys (first match wins)
@@ -54,15 +57,6 @@ function categoryOf(app) {
             return c.id;
     }
     return 'other';
-}
-
-function slowFactor() {
-    return St.Settings.get().slow_down_factor || 1;
-}
-
-function motionAllowed() {
-    const s = St.Settings.get();
-    return s.enable_animations && s.reducedMotion !== St.ReducedMotion.REDUCE;
 }
 
 export class AppsGrid {
@@ -293,17 +287,18 @@ export class AppsGrid {
         }
     }
 
-    // icons fade and grow in, later the farther they are from where the view was opened
+    // icons fade in (fade role) and grow in (bead), later the farther they are from where the view was opened (a spill delay
+    // per px, as the lab's Dock stack); reduced motion: they are there at once
     _ripple(tiles) {
-        if (!motionAllowed())
+        this._rippleTicker?.stop();
+        if (motionMode() !== 'full')
             return;
-        const k = 1 / slowFactor();
         const R = APPS.ripple;
         // positions are known only after the first allocation: use the layout grid instead
         const ox = this._origin ? this._origin.x : null;
         const oy = this._origin ? this._origin.y : null;
         const [ax, ay] = this.actor.get_transformed_position();
-        tiles.forEach((t, i) => {
+        const items = tiles.map((t, i) => {
             const inSuggest = this._suggestBox.contains(t);
             const gi = inSuggest ? i : i - this._suggestBox.get_n_children();
             const col = gi % APPS.cols;
@@ -311,11 +306,43 @@ export class AppsGrid {
             const cx = ax + col * APPS.tileW + APPS.tileW / 2;
             const cy = ay + APPS.chipsH + row * APPS.tileH + APPS.tileH / 2;
             const d = ox === null ? Math.hypot(col - (APPS.cols - 1) / 2, row) * APPS.tileW : Math.hypot(cx - ox, cy - oy);
-            const delay = Math.min(R.maxDelay, d * R.msPerPx);
+            t.remove_all_transitions();
             t.opacity = 0;
             t.set_scale(R.fromScale, R.fromScale);
-            t.ease({opacity: 255, scale_x: 1, scale_y: 1, delay: delay * k, duration: R.ms * k,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+            return {t, wait: Math.min(R.maxDelay, d * R.msPerPx) / 1000, op: new Fade(0, role('fade'), EPS_OPACITY),
+                s: new Spring(R.fromScale, role('bead'), 1e-4), alive: true};
         });
+        for (const it of items)
+            it.t.connectObject('destroy', () => (it.alive = false), it);
+        const ticker = new Ticker(dt => {
+            let more = false;
+            for (const it of items) {
+                if (!it.alive)
+                    continue;
+                if (it.wait > 0) {
+                    it.wait -= dt;
+                    if (it.wait > 0) {
+                        more = true;
+                        continue;
+                    }
+                    it.op.set(1);
+                    it.s.set(1);
+                }
+                it.t.opacity = Math.round(255 * it.op.step(dt));
+                const sc = it.s.step(dt);
+                it.t.set_scale(sc, sc);
+                if (!it.op.rest || !it.s.rest)
+                    more = true;
+            }
+            if (!more) {
+                for (const it of items) {
+                    if (it.alive)
+                        it.t.disconnectObject(it);
+                }
+            }
+            return more;
+        });
+        this._rippleTicker = ticker;
+        ticker.start();
     }
 }

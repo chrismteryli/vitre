@@ -1,31 +1,30 @@
 // Vitre window motion (B19, 2026-10-15).
 //
-// One motion language for a window's whole life, taken from the Stage swaps he likes (a window flies between a small
-// picture and its place and clicks in):
+// One motion language for a window's whole life, on liquid.js springs (liquid v3, feel A Viscous; windowMotion.js):
 //
-//   restore      the window flies out of its Dock button: it rises first, then slides across (a slight arc, as if lifted
-//                out of the Dock), grows from the button's size and clicks into place (1 % overshoot), 460 ms
-//   minimize     the exact reverse: a 1 % wind-up, then it slides into the Dock button, staying opaque until the
-//                last moment, 400 ms
-//   open         a new window grows 0.9 -> 1 about its centre while it fades in, 300 ms (no travel, no extra layers)
-//   close        it shrinks to 0.92 and fades, 200 ms
+//   restore      the window pours out of its Dock button: the box of its frame leaves the button and its far (top) edge
+//                leads on the 'glide' spring, the edge at the Dock trailing on glide x viscosity; the icon gives as it leaves
+//   minimize     it pours into the button: the bottom edge leads, the top trails; it melts as it nears the icon's size and the
+//                icon swallows it (a bead kick)
+//   open         a new window grows from 0.9 on the glide spring while it fades in (fade role)
+//   close        it shrinks to 0.94 on the glide exit spring (never bouncing) and fades out (fade exit)
 //   snap         tiled, maximized, restored, dragged out of a tile, sent to another monitor: the window flows from its old
-//                frame to the new one on the Vitre stretch spring, as the fullscreen motion does (snapMotion.js)
+//                frame to the new one on the glide spring (snapMotion.js)
+//   launch hop   the Dock icon jumps under gravity until the app's window appears; each landing squashes from its impact
+//                speed (area kept); the hop in flight always lands
 //   dialogs, transient windows, Stage's own swaps and parks, show-desktop: untouched (GNOME, or their owner)
 //
 // The Dock button is the one that was clicked (Dhruva tells us through global.__vitreWindowMotion.noteOrigin), else
 // the app's button in the Dock; a window with no button (or minimized by the Desktop button) shrinks in place.
 //
 // How it works: GNOME's own map / minimize / unminimize / destroy handlers keep ownership of the effect and of its
-// completion (completed_*). This extension runs after them and reshapes the transitions GNOME's ease() created
-// (start, end, duration, curve), and adds translation and opacity transitions of its own with the same length. Only
-// properties rounded-window-corners mirrors onto its shadow are moved (scale, translation, opacity, pivot), so the
-// shadow travels with the window. Durations are absolute (set on the Clutter transitions, so Just Perfection's
-// slow-down factor does not stretch them). Reduced motion or animations off: GNOME's behaviour, untouched.
+// completion (completed_*). This extension runs after them and takes GNOME's transitions over (windowMotion.js fly():
+// the carrier transition is kept and follows the springs, the others are removed). Only properties rounded-window-corners
+// mirrors onto its shadow are moved (scale, translation, opacity, pivot), so the shadow travels with the window. Every
+// motion can be interrupted: the window's springs carry over into the next effect with their speed. Reduced motion: a
+// 160 ms cross-fade in place. Animations off: GNOME's behaviour, untouched.
 
-import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
-import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -34,70 +33,18 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {SnapMotion} from './snapMotion.js';
+import {fly, IconKick, SCALE, scaled} from './windowMotion.js';
+import {Spring, role, feel, squash, hopLaunch, stepHop} from './liquid.js';
+import {Ticker, motionMode, animate} from './liquidClock.js';
 
-// Rig only: VITRE_MOTION_SLOW=8 plays every motion 8 times slower, for filmstrips. Unset in a session.
-const ENV_SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
-const slowNow = () => Math.max(1, Number(globalThis.__vitreMotionSlow) || ENV_SLOW);     // the rig can change it between filmed moments
-
-// Progress curves are cubic-bezier(x1, y1, x2, y2), as in CSS. A y above 1 overshoots and comes back.
-const rev = ([x1, y1, x2, y2]) => [1 - x2, 1 - y2, 1 - x1, 1 - y1];    // the same curve played backwards
-
-const RESTORE = {
-    ms: 460,
-    x: [0.4, 0.55, 0.3, 1],         // across: starts later than the rise ...
-    y: [0.18, 0.9, 0.3, 1],         // ... up: lifts out of the Dock first
-    scale: [0.3, 0.8, 0.3, 1.035],  // grows, ~1 % past its size at 85 %, clicks back
-    fade: [0.05, 0.9, 0.3, 1],      // visible from the first frames
-};
-const MOTION = {
-    restore: RESTORE,
-    minimize: {ms: 400, x: rev(RESTORE.y), y: rev(RESTORE.x), scale: rev(RESTORE.scale), fade: rev(RESTORE.fade)},
-    // no Dock button: in place
-    restoreInPlace: {ms: 300, from: 0.88, scale: [0.2, 0.85, 0.3, 1], fade: [0.15, 0.85, 0.35, 1]},
-    minimizeInPlace: {ms: 220, to: 0.88, scale: [0.4, 0, 0.6, 1], fade: [0.45, 0, 0.75, 0.5]},
-    open: {ms: 300, from: 0.9, scale: [0.2, 0.85, 0.3, 1], fade: [0.15, 0.85, 0.35, 1]},
-    close: {ms: 200, to: 0.92, scale: [0.3, 0, 0.1, 1], fade: [0.4, 0, 0.6, 1]},
-};
-const LINEAR = [0, 0, 1, 1];
-
-// Launch feedback (B25): the Dock icon hops (rises 38 % of its height and falls with a small squash, 0.62 s a hop) until a
-// window of the app appears, at most 8 s; the hop in flight always finishes, so the icon never stops in the air.
-const HOP = {rise: 0.38, upMs: 250, downMs: 230, squashMs: 140, squash: 0.9, maxMs: 8000};
+// Launch feedback (B25): the Dock icon hops until a window of the app appears, at most 8 s; the hop in flight always lands.
+// Under gravity (liquid.js feel: 1300 px/s^2): launched to rise this fraction of the icon's height, a short crouch before
+// each jump and a short pause on the ground between jumps; the squash is a bead spring kicked at take-off and at landing
+// (from the impact speed), drawn area-keeping.
+const HOP = {rise: 0.38, crouchS: 0.07, groundS: 0.06, maxMs: 8000, crouch: -1.6, launch: 0.6, impact: 0.009};
 const ORIGIN_TTL_US = 1500 * 1000;  // a Dock click names the button for this long
 
 // ---- helpers ---------------------------------------------------------------
-
-// Shape a transition: absolute duration and a cubic-bezier progress curve.
-function shape(transition, ms, [x1, y1, x2, y2]) {
-    transition.set_duration(Math.max(1, Math.round(ms * slowNow())));
-    transition.set_cubic_bezier_progress(new Graphene.Point({x: x1, y: y1}), new Graphene.Point({x: x2, y: y2}));
-}
-
-// A transition of our own on `prop` from `from` to `to`; `after` runs when it stops (finished or removed: GNOME's
-// Done removes every transition when its effect ends).
-function own(actor, prop, from, to, ms, curve, after = null) {
-    actor[prop] = from;
-    actor.ease({
-        [prop]: to,
-        duration: 1000,     // replaced below (ease() would scale it by the slow-down factor)
-        mode: Clutter.AnimationMode.LINEAR,
-        onStopped: after ?? undefined,
-    });
-    const t = actor.get_transition(prop.replace(/_/g, '-'));
-    if (t)
-        shape(t, ms, curve);
-}
-
-// Retarget one of GNOME's transitions (it may be the one that carries GNOME's completion).
-function retarget(t, ms, curve, {from, to} = {}) {
-    if (!t)
-        return;
-    if (from !== undefined)
-        t.set_from(from);
-    if (to !== undefined)
-        t.set_to(to);
-    shape(t, ms, curve);
-}
 
 const finalValue = transition => {
     try {
@@ -189,6 +136,14 @@ export default class WindowMotion extends Extension {
             wm.connect_after('unminimize', (_wm, actor) => this._guard('unminimize', actor, () => this._onUnminimize(actor))),
         ];
         this._hops = new Map();         // app id -> {actor, stop}
+        // reduced motion: GNOME's restore eases a window that is not mapped yet, so it lands at once. When a window is
+        // restored, note whether another owner (Stage, Show Desktop) told GNOME to skip its effect: the cross-fade is only
+        // for restores GNOME meant to animate.
+        this._restoring = new Map();    // window -> {at, skipped}
+        this._winIds = new Map();       // window -> its signal ids
+        this._displayId = global.display.connect('window-created', (_d, win) => this._watch(win));
+        for (const a of global.get_window_actors())
+            this._watch(a.meta_window);
         global.__vitreWindowMotion = {
             launchHop: (actor, appId) => this._launchHop(actor, appId),
             noteOrigin: (win, btn) => {
@@ -213,6 +168,13 @@ export default class WindowMotion extends Extension {
         for (const id of this._ids ?? [])
             global.window_manager.disconnect(id);
         this._ids = null;
+        if (this._displayId)
+            global.display.disconnect(this._displayId);
+        this._displayId = 0;
+        for (const win of [...(this._winIds?.keys() ?? [])])
+            this._unwatch(win);
+        this._winIds = null;
+        this._restoring = null;
         if (global.__vitreWindowMotion)
             delete global.__vitreWindowMotion;
         for (const hop of this._hops?.values() ?? [])
@@ -256,13 +218,14 @@ export default class WindowMotion extends Extension {
     }
 
     _launchHop(first, appId) {
-        if (!first || !this._hops || this._reduced())
+        if (!first || !this._hops || motionMode() !== 'full')
             return;
         this._hops.get(appId)?.stop();
         let stopped = false;
+        let ended = false;
         let cur = first;
-        let lostAt = 0;
-        let gen = 0;                     // a step of an older run (its icon replaced meanwhile) must not carry on
+        let lostFor = 0;
+        let lookIn = 0;
         // the icons this hop moves: one the Dock has destroyed is never touched again
         const icons = new Mortal();
         icons.watch(first);
@@ -279,20 +242,23 @@ export default class WindowMotion extends Extension {
             const live = alive(cur);
             this._note({meta_window: null}, `hop:${what}`, `${appId} alive=${live} ty=${live ? cur.translation_y.toFixed(1) : '-'} ${extra}`);
         };
+        // the physics: a crouch, a jump under gravity, a landing squashed from its impact speed, a pause on the ground
+        const F = feel();
+        const vol = F.volume;
+        const h = {phase: 'crouch', wait: HOP.crouchS, y: 0, vy: 0};
+        const sq = new Spring(0, role('bead'), 1e-3);
+        sq.kick(HOP.crouch);
         const finish = () => {
+            if (ended)
+                return;
+            ended = true;
             trace('finish');
-            gen++;
-            if (beat)
-                GLib.Source.remove(beat);
-            beat = 0;
+            ticker.stop();
             disconnectApp();
             // every icon the Dock shows for the app is put at rest: a rebuilt icon can start from the old one's lifted pose, and a
             // rebuild can come just after the end
-            const settle = () => {
-                rest(cur);
-                rest(this._iconOf(appId));      // found just now: it exists
-            };
-            settle();
+            rest(cur);
+            rest(this._iconOf(appId));      // found just now: it exists
             icons.clear();
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
                 if (this._hops)
@@ -302,61 +268,74 @@ export default class WindowMotion extends Extension {
             if (this._hops?.get(appId) === hop)
                 this._hops.delete(appId);
         };
-        // one hop = up, down, squash, release; every step checks that its icon still exists (then carries on with the new one)
-        const next = () => {
-            const mine = ++gen;
-            if (stopped)
-                return finish();
+        const ticker = new Ticker(dt => {
+            if (ended)
+                return false;
             if (!alive(cur)) {
-                trace('icon-lost');
-                cur = icons.watch(this._iconOf(appId));
-                trace('icon-found', String(Boolean(cur)));
-                if (!cur) {
-                    lostAt = lostAt || GLib.get_monotonic_time();
-                    if (GLib.get_monotonic_time() - lostAt > 1500 * 1000)
-                        return finish();
-                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-                        if (gen === mine)
-                            next();
-                        return GLib.SOURCE_REMOVE;
-                    });
-                    return;
+                // the Dock rebuilt the icon: carry on with the new one (looked up every 100 ms, given up after 1.5 s)
+                lostFor += dt;
+                lookIn -= dt;
+                if (lookIn <= 0) {
+                    lookIn = 0.1;
+                    trace('icon-lost');
+                    cur = icons.watch(this._iconOf(appId));
+                    trace('icon-found', String(Boolean(cur)));
                 }
-                lostAt = 0;
-                rest(cur);
+                if (!alive(cur)) {
+                    if (lostFor > 1.5 || stopped)
+                        finish();
+                    return !ended;
+                }
+                lostFor = 0;
+                cur.remove_all_transitions();
             }
             const a = cur;
-            const h = Math.max(8, a.height * HOP.rise);
-            const step = (props, ms, mode, then) => {
-                if (gen !== mine)
-                    return;
-                if (!alive(a))
-                    return next();
-                a.ease({...props, duration: Math.max(1, ms * slowNow()), mode, onComplete: () => {
-                    if (gen === mine)
-                        then();
-                }});
-            };
+            if (h.phase === 'crouch' || h.phase === 'ground') {
+                h.wait -= dt;
+                if (h.wait <= 0) {
+                    if (h.phase === 'ground') {
+                        h.phase = 'crouch';
+                        h.wait = HOP.crouchS;
+                        sq.kick(HOP.crouch);
+                    } else {
+                        h.phase = 'air';
+                        h.vy = hopLaunch(Math.max(8, a.height * HOP.rise), F.gravity);
+                        sq.kick(3.2 * vol + HOP.launch);
+                    }
+                }
+            } else if (h.phase === 'air') {
+                const impact = stepHop(h, dt, F.gravity);
+                if (impact > 0) {
+                    sq.kick(-impact * HOP.impact * (0.4 + vol));
+                    h.phase = stopped ? 'settle' : 'ground';
+                    h.wait = HOP.groundS;
+                }
+            }
+            sq.step(dt);
+            const flight = h.phase === 'air' ? Math.min(0.12, Math.abs(h.vy) / 2600) * vol : 0;
+            const q = squash(sq.x + flight, Math.max(0.5, vol));
             a.set_pivot_point(0.5, 1.0);
-            const M = Clutter.AnimationMode;
-            step({translation_y: -h, scale_y: 1.04, scale_x: 0.98}, HOP.upMs, M.EASE_OUT_QUAD, () =>
-                step({translation_y: 0, scale_y: 1, scale_x: 1}, HOP.downMs, M.EASE_IN_QUAD, () =>
-                    step({scale_y: HOP.squash, scale_x: 1 + (1 - HOP.squash) * 0.6}, HOP.squashMs * 0.4, M.EASE_OUT_QUAD, () =>
-                        step({scale_y: 1, scale_x: 1}, HOP.squashMs * 0.6, M.EASE_OUT_QUAD, next))));
-        };
+            a.translation_y = h.y;
+            a.set_scale(q.across, q.along);
+            if (h.phase === 'settle' && sq.rest) {
+                finish();
+                return false;
+            }
+            return true;
+        });
         const timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, HOP.maxMs, () => {
             stop();
             return GLib.SOURCE_REMOVE;
         });
-        // the hop in flight finishes its cycle (the icon never stops in the air); stopping at rest is immediate
+        // the hop in flight lands (the icon never stops in the air); on the ground it settles its squash and ends
         const stop = () => {
             if (stopped)
                 return;
             stopped = true;
             trace('stop');
             GLib.Source.remove(timeout);
-            if (cur && alive(cur) && cur.translation_y === 0 && !cur.get_transition('translation-y') && !cur.get_transition('scale-y'))
-                finish();
+            if (h.phase !== 'air')
+                h.phase = 'settle';
         };
         const hop = {actor: first, stop};
         this._hops.set(appId, hop);
@@ -371,13 +350,9 @@ export default class WindowMotion extends Extension {
             if (wid)
                 app.disconnect(wid);
         };
-        // a destroyed icon never completes its transition: this notices it and the hop carries on with the new one
-        let beat = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-            if (!alive(cur))
-                next();             // (a stopped hop whose icon has gone finishes there)
-            return beat ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
-        });
-        next();
+        if (alive(cur))
+            cur.remove_all_transitions();
+        ticker.start();
         this._note({meta_window: null}, 'launch-hop', appId);
     }
 
@@ -398,9 +373,35 @@ export default class WindowMotion extends Extension {
             this._log.shift();
     }
 
-    _reduced() {
-        const settings = St.Settings.get();
-        return settings.reducedMotion === St.ReducedMotion.REDUCE || !settings.enableAnimations;
+    _watch(win) {
+        if (!win || !this._winIds || this._winIds.has(win))
+            return;
+        this._winIds.set(win, [
+            win.connect('notify::minimized', () => {
+                if (win.minimized || !this._restoring)
+                    return;
+                const a = win.get_compositor_private();
+                this._restoring.set(win, {at: GLib.get_monotonic_time(), skipped: Boolean(a && Main.wm._skippedActors?.has(a))});
+            }),
+            win.connect('unmanaged', () => this._unwatch(win)),
+        ]);
+    }
+
+    _unwatch(win) {
+        for (const id of this._winIds?.get(win) ?? []) {
+            try {
+                win.disconnect(id);
+            } catch (_e) {
+                // gone
+            }
+        }
+        this._winIds?.delete(win);
+        this._restoring?.delete(win);
+    }
+
+    // animations off: GNOME's own effects, untouched (reduced motion is ours: a cross-fade in place)
+    _off() {
+        return motionMode() === 'off';
     }
 
     _kind(actor) {
@@ -415,6 +416,7 @@ export default class WindowMotion extends Extension {
     // Where a window goes to / comes from in the Dock: the button that was just clicked for it, else its app's button.
     // null: in place (no button, or the Desktop button minimized it).
     _origin(win) {
+        this._originBtn = null;
         const noted = this._noted?.get(win);
         this._noted?.delete(win);
         if (noted && GLib.get_monotonic_time() - noted.at < ORIGIN_TTL_US) {
@@ -422,8 +424,10 @@ export default class WindowMotion extends Extension {
                 return null;
             // a button the Dock has rebuilt since the click is not asked (it is gone): its app's button is used below
             const r = this._buttons?.alive(noted.btn) ? rectOf(noted.btn) : null;
-            if (r)
+            if (r) {
+                this._originBtn = noted.btn;
                 return this._clampToMonitor(r, win);
+            }
         }
         const app = Shell.WindowTracker.get_default().get_window_app(win);
         if (!app)
@@ -435,8 +439,10 @@ export default class WindowMotion extends Extension {
                 const a = btn._delegate?.app;
                 if (a && typeof a.get_id === 'function' && a.get_id() === app.get_id()) {
                     const r = rectOf(btn);
-                    if (r)
+                    if (r) {
+                        r.btn = this._buttons?.watch(btn);
                         rects.push(r);
+                    }
                 }
             }
         }
@@ -444,6 +450,7 @@ export default class WindowMotion extends Extension {
             return null;
         const geo = global.display.get_monitor_geometry(monitor);
         const onMonitor = rects.find(r => r.x + r.w / 2 >= geo.x && r.x + r.w / 2 < geo.x + geo.width);
+        this._originBtn = (onMonitor ?? rects[0]).btn ?? null;
         return this._clampToMonitor(onMonitor ?? rects[0], win);
     }
 
@@ -455,14 +462,24 @@ export default class WindowMotion extends Extension {
         return {x: cx - r.w / 2, y: cy - r.h / 2, w: r.w, h: r.h};
     }
 
-    // Scale and translation (about the actor's centre) that put the window's frame on `r`: the frame is `s` of its
-    // size and centred on the button. The actor is the buffer (frame plus the client's shadow), at (ax, ay).
-    _pose(actor, win, r, ax = actor.x, ay = actor.y) {
+    // where the window's frame is at rest, and where the actor is then (the buffer's origin)
+    _rest(win) {
         const f = win.get_frame_rect();
-        const s = Math.min(1, Math.max(0.02, r.w / Math.max(1, f.width)));
-        const c = {x: ax + actor.width / 2, y: ay + actor.height / 2};
-        const fc = {x: f.x + f.width / 2 + (ax - actor.x), y: f.y + f.height / 2 + (ay - actor.y)};
-        return {s, tx: r.x + r.w / 2 - c.x - s * (fc.x - c.x), ty: r.y + r.h / 2 - c.y - s * (fc.y - c.y)};
+        const b = win.get_buffer_rect();
+        return {frame: {x: f.x, y: f.y, w: f.width, h: f.height}, at: {x: b.x, y: b.y}};
+    }
+
+    // the Dock icon (an St.Bin) inside the button a window goes to or comes from, as an IconKick
+    _kickFor(btn) {
+        if (!btn || !this._buttons?.alive(btn))
+            return null;
+        const bin = a => a instanceof St.Bin ? a : [...(a.get_children?.() ?? [])].map(bin).find(Boolean);
+        const icon = bin(btn);
+        if (!icon)
+            return null;
+        const life = new Mortal();
+        life.watch(icon);
+        return new IconKick(icon, x => life.alive(x));
     }
 
     // ---- open ----
@@ -473,15 +490,13 @@ export default class WindowMotion extends Extension {
             if (app)
                 this._hops.get(app.get_id())?.stop();
         }
-        if (!actor.meta_window || !Main.wm._mapping?.has(actor) || this._reduced())
+        if (!actor.meta_window || !Main.wm._mapping?.has(actor) || this._off())
             return;
         const kind = this._kind(actor);
         this._note(actor, 'map', kind);
         if (kind === 'native' || actor.get_transition('scale-x'))
             return;
-        const m = MOTION.open;
-        actor.set_pivot_point(0.5, 0.5);
-        actor.set_scale(m.from, m.from);
+        // nothing of the window shows before GNOME's ease exists (it may wait for the overview to hide)
         actor.opacity = 0;
         this._retargetOpen(actor).catch(() => {});
     }
@@ -492,39 +507,31 @@ export default class WindowMotion extends Extension {
         await Main.wm._waitForOverviewToHide();
         if (!Main.wm._mapping?.has(actor))
             return;
-        const m = MOTION.open;
         const opacity = actor.get_transition('opacity');
         const sx = actor.get_transition('scale-x');
-        const sy = actor.get_transition('scale-y');
         // only the exact native opening (nothing another owner chose)
-        if (!opacity || finalValue(opacity) !== 255 || ![sx, sy].every(t => t && finalValue(t) === 1))
+        if (!opacity || finalValue(opacity) !== 255 || (sx && finalValue(sx) !== 1))
             return;
-        retarget(opacity, m.ms, m.fade);
-        retarget(sx, m.ms, m.scale);
-        retarget(sy, m.ms, m.scale);
+        const {frame, at} = this._rest(actor.meta_window);
+        fly(actor, {kind: 'open', carrier: opacity, carrierProp: 'opacity', frame, at, from: scaled(frame, SCALE.open), to: frame,
+            lead: 'bottom', exit: false, op: 'fade', opFrom: 0, opTo: 1});
         this._note(actor, 'open', 'motion');
     }
 
     // ---- close ----
 
     _onDestroy(actor) {
-        if (!actor.meta_window || !Main.wm._destroying?.has(actor) || this._reduced())
+        if (!actor.meta_window || !Main.wm._destroying?.has(actor) || this._off())
             return;
         if (this._kind(actor) === 'native')
             return;
         const opacity = actor.get_transition('opacity');
-        const x = actor.get_transition('scale-x');
-        const y = actor.get_transition('scale-y');
-        // only the exact native normal-window close pose, in this signal's synchronous setup frame
-        const matches = (t, target) => t && t.get_elapsed_time() === 0 && finalValue(t) === target;
-        if (!matches(x, 0.8) || !matches(y, 0.8) || !matches(opacity, 0))
+        // only the exact native normal-window close, in this signal's synchronous setup frame
+        if (!opacity || opacity.get_elapsed_time() !== 0 || finalValue(opacity) !== 0)
             return;
-        const m = MOTION.close;
-        // GNOME's open effect (a window closed while it still opens) resets the pivot to the corner: centre it again
-        actor.set_pivot_point(0.5, 0.5);
-        retarget(opacity, m.ms, m.fade);
-        retarget(x, m.ms, m.scale, {to: m.to});
-        retarget(y, m.ms, m.scale, {to: m.to});
+        const {frame, at} = this._rest(actor.meta_window);
+        fly(actor, {kind: 'close', carrier: opacity, carrierProp: 'opacity', frame, at, from: frame, to: scaled(frame, SCALE.close),
+            lead: 'bottom', exit: true, op: 'fade', opFrom: actor.opacity / 255, opTo: 0});
         this._note(actor, 'destroy', 'close');
     }
 
@@ -532,38 +539,21 @@ export default class WindowMotion extends Extension {
 
     _onMinimize(actor) {
         const win = actor.meta_window;
-        if (!win || !Main.wm._minimizing?.has(actor) || this._reduced())
+        if (!win || !Main.wm._minimizing?.has(actor) || this._off())
             return;        // GNOME declined (Stage's park, show-desktop, animations off): not ours
         if (this._kind(actor) === 'native')
             return;
-        const origin = this._origin(win);
         const opacity = actor.get_transition('opacity');
-        const tx = actor.get_transition('x'), ty = actor.get_transition('y');
-        const sx = actor.get_transition('scale-x'), sy = actor.get_transition('scale-y');
         if (!opacity)
             return;
-        const m = origin ? MOTION.minimize : MOTION.minimizeInPlace;
-        // GNOME moves the window to the screen's corner (it does not know the Dock): it stays where it is instead
-        retarget(tx, m.ms, LINEAR, {from: actor.x, to: actor.x});
-        retarget(ty, m.ms, LINEAR, {from: actor.y, to: actor.y});
-        actor.set_pivot_point(0.5, 0.5);
-        retarget(opacity, m.ms, m.fade);      // GNOME's: 255 -> 0, and it carries GNOME's completion
-        const pose = origin ? this._pose(actor, win, origin) : {s: m.to, tx: 0, ty: 0};
-        for (const t of [sx, sy])
-            retarget(t, m.ms, m.scale, {from: 1, to: pose.s});
-        if (!sx)
-            own(actor, 'scale_x', 1, pose.s, m.ms, m.scale);
-        if (!sy)
-            own(actor, 'scale_y', 1, pose.s, m.ms, m.scale);
-        if (origin) {
-            // translation is ours: put back to 0 when the effect ends (the hidden window keeps no offset)
-            own(actor, 'translation_x', 0, pose.tx, m.ms, m.x, () => {
-                actor.translation_x = 0;
-            });
-            own(actor, 'translation_y', 0, pose.ty, m.ms, m.y, () => {
-                actor.translation_y = 0;
-            });
-        }
+        const origin = this._origin(win);
+        const btn = this._originBtn;
+        const {frame, at} = this._rest(win);
+        fly(actor, origin
+            ? {kind: 'minimize', carrier: opacity, carrierProp: 'opacity', frame, at, from: frame, to: origin, lead: 'bottom',
+                exit: false, op: 'size', opFrom: 1, opTo: 1, icon: this._kickFor(btn)}
+            : {kind: 'close', carrier: opacity, carrierProp: 'opacity', frame, at, from: frame, to: scaled(frame, SCALE.inPlace),
+                lead: 'bottom', exit: true, op: 'fade', opFrom: 1, opTo: 0});
         this._note(actor, 'minimize', origin ? 'dock' : 'in-place');
     }
 
@@ -571,58 +561,47 @@ export default class WindowMotion extends Extension {
 
     _onUnminimize(actor) {
         const win = actor.meta_window;
-        if (!win || !Main.wm._unminimizing?.has(actor) || this._reduced())
+        if (win && motionMode() === 'reduced' && !Main.wm._unminimizing?.has(actor)) {
+            this._reducedRestore(actor);
+            return;
+        }
+        if (!win || !Main.wm._unminimizing?.has(actor) || this._off())
             return;
         if (this._kind(actor) === 'native')
             return;
+        // GNOME's carrier: scale-x (it flies the window from its icon geometry or the screen's corner), or opacity for a
+        // monitor-sized window and in reduced motion
+        const sx = actor.get_transition('scale-x');
+        const carrier = sx ?? actor.get_transition('opacity');
+        if (!carrier)
+            return;
         const origin = this._origin(win);
-        const m = origin ? MOTION.restore : MOTION.restoreInPlace;
-        // GNOME starts the window at its icon geometry or the screen's corner and moves x / y to its place: it is put
-        // at its place now, and those transitions stand still (one of them may carry GNOME's completion)
-        // A property GNOME animates is never set directly here: that cancels its transition, and the one that carries
-        // GNOME's completion would end the effect at once. Its transitions are reshaped instead (their first frame
-        // writes the new start values).
-        const dest = win.get_buffer_rect();
-        const tx = actor.get_transition('x'), ty = actor.get_transition('y');
-        retarget(tx, m.ms, LINEAR, {from: dest.x, to: dest.x});
-        retarget(ty, m.ms, LINEAR, {from: dest.y, to: dest.y});
-        if (!tx)
-            actor.x = dest.x;
-        if (!ty)
-            actor.y = dest.y;
-        actor.set_pivot_point(0.5, 0.5);
-        const pose = origin ? this._pose(actor, win, origin, dest.x, dest.y) : {s: m.from, tx: 0, ty: 0};
-        const sx = actor.get_transition('scale-x'), sy = actor.get_transition('scale-y');
-        for (const t of [sx, sy])
-            retarget(t, m.ms, m.scale, {from: pose.s, to: 1});
-        if (!sx)
-            own(actor, 'scale_x', pose.s, 1, m.ms, m.scale);
-        if (!sy)
-            own(actor, 'scale_y', pose.s, 1, m.ms, m.scale);
-        const opacity = actor.get_transition('opacity');
-        if (opacity)
-            retarget(opacity, m.ms, m.fade);  // a monitor-sized window: GNOME fades it 0 -> 255
-        else
-            own(actor, 'opacity', 0, 255, m.ms, m.fade);
-        if (origin) {
-            own(actor, 'translation_x', pose.tx, 0, m.ms, m.x, () => {
-                actor.translation_x = 0;
-            });
-            own(actor, 'translation_y', pose.ty, 0, m.ms, m.y, () => {
-                actor.translation_y = 0;
-            });
-        }
+        const btn = this._originBtn;
+        const {frame, at} = this._rest(win);
+        const prop = sx ? 'scale_x' : 'opacity';
+        fly(actor, origin
+            ? {kind: 'restore', carrier, carrierProp: prop, frame, at, from: origin, to: frame, lead: 'top', exit: false,
+                op: 'size', opFrom: 1, opTo: 1, icon: this._kickFor(btn)}
+            : {kind: 'open', carrier, carrierProp: prop, frame, at, from: scaled(frame, SCALE.inPlace), to: frame, lead: 'bottom',
+                exit: false, op: 'fade', opFrom: 0, opTo: 1});
         this._note(actor, 'unminimize', origin ? 'dock' : 'in-place');
-        if (slowNow() > 1 || GLib.getenv('VITRE_MOTION_DEBUG')) {
-            const desc = p => {
-                const t = actor.get_transition(p);
-                if (!t)
-                    return null;
-                const i = t.get_interval();
-                return {d: t.get_duration(), from: i?.peek_initial_value?.(), to: i?.peek_final_value?.(), playing: t.is_playing()};
-            };
-            this._note(actor, 'unminimize-debug', JSON.stringify({sx: desc('scale-x'), x: desc('x'), op: desc('opacity'),
-                tx: desc('translation-x'), scale: actor.scale_x, pose}));
-        }
+    }
+
+    // Reduced motion: GNOME's restore has already landed (its ease ran on a window that was not mapped yet). Cross-fade the
+    // window in place on the 160 ms spring, as its minimize faded it out. Not when another owner skipped GNOME's effect or
+    // GNOME would not have animated it.
+    _reducedRestore(actor) {
+        const win = actor.meta_window;
+        const asked = this._restoring?.get(win);
+        this._restoring?.delete(win);
+        if (!asked || asked.skipped || GLib.get_monotonic_time() - asked.at > 2_000_000)
+            return;
+        if (!Main.wm._shouldAnimate() || !actor.get_texture() || this._kind(actor) === 'native')
+            return;
+        if (actor.opacity !== 255 || actor.get_transition('opacity'))
+            return;
+        actor.opacity = 0;
+        animate(actor, {opacity: 255});
+        this._note(actor, 'unminimize', 'reduced');
     }
 }

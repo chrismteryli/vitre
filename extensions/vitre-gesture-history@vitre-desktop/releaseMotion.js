@@ -1,21 +1,12 @@
 // Pure math for the swipe-release hand-off (no GNOME imports, so it can be unit-tested with node).
 //
-// A finger lifts off at position x0 moving at velocity v0 (value units per ms, signed) and the animation must
-// carry on from exactly that speed to the target.  With e = x - target the motion is the critically damped spring
-//
-//     e(t) = (e0 + (v0 + w e0) t) exp(-w t),      e(0) = e0,  e'(0) = v0,   w = omega (1/ms)
-//
-// which never crosses the target as long as w > |v0| / |e0| (we always use w >= C_STIFF |v0| / |e0|, C_STIFF = 2.35).
-// At lift-off the motion has exactly the fingers' speed.  A fast flick then slows down to zero; a medium or slow release
-// is pulled toward the target by the spring, so its speed rises a little first (about 1.1x-1.5x for a medium swipe) and
-// then falls, which is what finishing in GNOME's time from a low speed needs.  See README.txt for the measured numbers.
+// A finger lifts off at position x0 moving at velocity v0 (value units per ms, signed) and the animation must carry on from
+// exactly that speed to the target. v3 (liquid): the motion is the liquid engine's track spring (liquid.js, feel A Viscous:
+// response 0.42 s, damping 0.90, about 0.2 % past the target at most) with state {x, v} = the finger's position and speed,
+// stepped by the engine's own integrator; it rests when the remaining step is under a quarter pixel. No stiffening for fast
+// flicks, no duration floor or cap: the spring's role is the whole feel.
 
-// -- tuning (calibrated in the headless rig against the stock timings, see README) ------------------------------------
-export const OMEGA_REF = 0.025;   // 1/ms at slow-down 1.0: a medium swipe settles (99.5 %) in about GNOME's stock time
-export const C_STIFF = 2.35;      // stiffness per unit of v0/|e0|: keeps fast flicks within ~1.2x of the stock settle time
-export const TOL_PX = 0.5;        // the transition ends when the remaining distance is below this (logical px)
-export const MIN_T_MS = 40;
-export const MAX_T_MS = 1500;
+import {Plan, role, epsFor} from './liquid.js';
 
 // -- release velocity from the touchpad samples -----------------------------------------------------------------------
 // GNOME averages the last 150 ms (lags by ~75 ms).  A straight-line fit of position over 50 ms still lags by ~25 ms,
@@ -105,41 +96,24 @@ export function estimateReleaseVelocity(data, releaseTime, gnomeVelocity = 0) {
 
 // -- the spring --------------------------------------------------------------------------------------------------------
 
-export function springOmega(e0, v0, slowDown) {
-    const slow = Number.isFinite(slowDown) && slowDown > 0 ? slowDown : 1;
-    return Math.max(OMEGA_REF, C_STIFF * Math.abs(v0) / Math.abs(e0)) / slow;
-}
-
-export function springError(t, e0, v0, w) {
-    return (e0 + (v0 + w * e0) * t) * Math.exp(-w * t);
-}
-
-/** normalized progress 0..1 (value = start + (target - start) * progress); exactly 1 for t >= T */
-export function springProgress(t, e0, v0, w, T) {
-    if (!(t > 0))
-        return 0;
-    if (t >= T)
-        return 1;
-    return 1 - springError(t, e0, v0, w) / e0;
-}
-
-/** smallest whole-ms duration after which the remaining distance stays below TOL_PX logical pixels */
-export function springDuration(e0, v0, w, basePx) {
-    const tol = TOL_PX / basePx;
-    let last = 0;
-    for (let t = 0; t <= 4000; t += 1) {
-        if (Math.abs(springError(t, e0, v0, w)) > tol)
-            last = t;
-    }
-    return Math.min(MAX_T_MS, Math.max(MIN_T_MS, Math.ceil(last + 1)));
-}
-
-/** everything needed to run one release; null when the inputs make no sense (the caller keeps GNOME's animation) */
+/**
+ * Everything needed to run one release; null when the inputs make no sense (the caller keeps GNOME's animation).
+ * Times are ms; slowDown > 1 (rig films through St's slow-down) stretches them, a value below 1 (Just Perfection's speed-up)
+ * leaves the spring as its role defines it. basePx: px per value unit (the rest tolerance is a quarter of one px).
+ * Returns {e0, v0, T, start, target, progress(t)}: progress is 0..1 of start -> target (exactly 1 for t >= T).
+ */
 export function planRelease(start, target, v0, slowDown, basePx) {
     const e0 = start - target;
     if (![e0, v0, basePx].every(Number.isFinite) || Math.abs(e0) < 1e-6 || !(basePx > 0))
         return null;
-    const w = springOmega(e0, v0, slowDown);
-    const T = springDuration(e0, v0, w, basePx);
-    return {e0, v0, w, T, start, target};
+    const slow = Number.isFinite(slowDown) && slowDown > 1 ? slowDown : 1;
+    const plan = new Plan({from: start, to: target, v0: v0 * 1000, p: role('track'), eps: epsFor(basePx)});
+    const T = Math.max(1, Math.ceil(plan.T * 1000 * slow));
+    return {e0, v0, T, start, target, role: 'track', w: null,
+        progress: t => t >= T ? 1 : (plan.at(Math.max(0, t) / slow / 1000) - start) / (target - start)};
+}
+
+/** normalized progress 0..1 of a plan at t ms (kept for callers of the v2 API) */
+export function springProgress(t, plan) {
+    return plan.progress(t);
 }

@@ -39,6 +39,7 @@ import { resetMagnification } from '../magnifier/MagnifierReset.js';
 import { KaraokeLyricsWidget } from './music/KaraokeLyricsWidget.js';
 import { extractColorsFromPixbuf } from './music/MusicColorExtractor.js';
 import { isPointerWithinDockBounds } from '../magnifier/MagnifierMath.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 Gio._promisify(Soup.Session.prototype, 'send_and_read_async', 'send_and_read_finish');
@@ -827,10 +828,9 @@ export const MusicPill = GObject.registerClass(
                 inActor.opacity = 255;
                 if (this._cancellable) this._restartAllMarquees();
             } else {
-                outActor.ease({
+                liquidEase(outActor, {
                     opacity: 0,
                     duration: duration,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     onComplete: () => {
                         if (!isActorAlive(outActor)) return;
                         outActor.hide();
@@ -838,10 +838,9 @@ export const MusicPill = GObject.registerClass(
                     },
                 });
 
-                inActor.ease({
+                liquidEase(inActor, {
                     opacity: 255,
                     duration: duration,
-                    mode: Clutter.AnimationMode.EASE_IN_QUAD,
                 });
             }
 
@@ -865,13 +864,12 @@ export const MusicPill = GObject.registerClass(
                 btn.remove_all_transitions();
                 btn.reactive = visible;
 
-                btn.ease({
+                liquidEase(btn, {
                     opacity: targetOpacity,
                     width: targetWidth,
                     scale_x: targetScale,
                     scale_y: targetScale,
                     duration: 160,
-                    mode: visible ? Clutter.AnimationMode.EASE_OUT_QUAD : Clutter.AnimationMode.EASE_IN_QUAD,
                 });
             }
         }

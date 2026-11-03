@@ -8,9 +8,13 @@
  *       buttons Apps / Files / Actions / Clipboard
  *       panelClip -> list   result rows, clipped to the panel's current height
  *
- * Motion (motion.js, all measured tables): open = materialize 300 ms; close = dematerialize 125 ms with
- * growth + blur; results panel expand 334 ms (+2.5 % overshoot) / collapse 183 ms; filter split 800 ms.
- * One Clutter.Timeline drives every track (unscaled by St's slow-down factor, like the reference's numbers).
+ * Motion (motion.js, liquid.js springs; Motion Lab 2 for the open and close): open = the glass pours out of a pill at the
+ * top bar's centre into the field and the content fades in at 55 % of the way; close = the content goes, the glass drains
+ * back into the pill on the pour exit spring; result rows pour in top to bottom (fade + a 10 px drop on pour, staggered),
+ * a row that goes fades on {r: 0.1, z: 1}; results panel on the pour spring; the filter split as springs (bar, four buttons
+ * spilling out, their radius, the glyphs' fade). One Clutter.Timeline paces every track (unscaled by St's slow-down
+ * factor). While the glass is above the field the field reaches up to it (its top margin follows the shape). Reduced
+ * motion: opacity crosses on the 160 ms spring, nothing travels.
  */
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -22,10 +26,11 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {LegibleField, MARGIN} from './legibleField.js';
 import {SearchBackend, GROUPS, GROUP_TITLES} from './searchBackend.js';
 import {AppsGrid} from './appsView.js';
-import {
-    GEO, OPEN_MS, CLOSE_MS, SPLIT_MS, openFrame, closeFrame, buildSplit, panelProgress, panelDuration,
-    openTimeForAlpha, closeTimeForAlpha,
-} from './motion.js';
+import {GEO, ShowMotion, PanelMotion, SplitMotion, RowMotion} from './motion.js';
+import {motionMode} from './liquidClock.js';
+
+const SPLIT_POS_MS = 800;        // the rig's split position scale (progress x this), as before
+const MAX_STEP_MS = 34;          // a frame the shell held slows the motion instead of skipping it
 
 const FX = MARGIN + 60;          // field margin left/right of the wide bar (room for the open-scale and close-growth)
 const FYT = MARGIN + 44;         // field margin above the bar (close growth of a tall panel)
@@ -36,6 +41,8 @@ const HEAD_H = 28;
 const PAD_TOP = 4;
 const PAD_BOTTOM = 12;
 const PT_TO_PX = 1.15;           // GNOME logical px per the reference point (plan A9 k)
+const PILL_H = 21;               // the pill the glass pours out of: the height of the top bar's highlight pill ...
+const PILL_W = 134;              // ... and the lab's search pill's proportion (140 x 22)
 // Shell.BlurEffect radius per px of gaussian sigma. Calibrated in the rig (m-close edge 10-90 % widths,
 // sigma = width / 2.563): sigma_px = 0.56 * radius, so radius = 1.78 * sigma.
 const BLUR_RADIUS_PER_SIGMA = 1.78;
@@ -49,30 +56,34 @@ const KIND = {apps: 'Application', actions: 'Action', files: 'File', clipboard: 
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+// full motion (reduced motion still cross-fades, but nothing travels)
 function animationsAllowed() {
-    const s = St.Settings.get();
-    return s.enable_animations && s.reducedMotion !== St.ReducedMotion.REDUCE;
+    return motionMode() === 'full';
 }
 
 export class VitreSearch {
     constructor(settings) {
         this._settings = settings;
-        this._split = buildSplit();
+        this._showM = new ShowMotion();
+        this._panelM = new PanelMotion();
+        this._splitM = new SplitMotion();
+        this._lastNow = null;
         this._mode = 'closed';           // closed | opening | open | closing
         this._now = 0;
         this._epoch = 0;
         this._timeline = null;
         this._manual = false;
         this._frameLog = null;
-        this._show = {t0: 0, off: 0};
-        this._panel = {h: 0, from: 0, to: 0, ref: 1, kind: 'expand', t0: 0, active: false};
-        this._splitState = {pos: 0, dir: 0, t0: 0, from: 0};
+        this._panel = {h: 0, to: 0, ref: 1, active: false};
+        this._splitState = {pos: 0, dir: 0};
         this._filter = null;
         this._selected = -1;
         this._flat = [];
         this._grab = null;
         this._pointerStart = null;
-        this._lastShow = {alpha: 0, sx: 1, sy: 1, blur: 0};
+        this._lastShow = {alpha: 0, glass: 0, box: null, blur: 0};
+        this._rows = [];                 // RowMotion per list child (by index)
+        this._top = FYT;                 // the field's margin above the bar (it reaches up to the pill while the glass is there)
         this._geom = null;
         this._ghost = false;
         this._appsMode = false;
@@ -217,11 +228,11 @@ export class VitreSearch {
         this._root.reactive = true;
         this._entry.grab_key_focus();
         this._mode = 'opening';
-        const fromAlpha = wasClosing ? this._lastShow.alpha : 0;
-        this._show = {t0: this._now, off: wasClosing ? openTimeForAlpha(fromAlpha) : 0};
-        if (!animationsAllowed()) {
-            this._show.off = OPEN_MS;
-        }
+        // a reopen while it closes turns the springs around from where they are, with their speed
+        if (motionMode() === 'off')
+            this._showM.settle(true, this._mainRect());
+        else
+            this._showM.open(motionMode() === 'reduced', this._pillShape(), this._mainRect());
         this._ensureTicker();
         this._tick(this._now);
         this._pointerStart = null;
@@ -270,11 +281,13 @@ export class VitreSearch {
         if (this._mode === 'closed' || this._mode === 'closing')
             return;
         this._release();
-        const fromAlpha = this._lastShow.alpha;
         this._mode = 'closing';
-        this._show = {t0: this._now, off: closeTimeForAlpha(Math.min(1, fromAlpha))};
-        if (!animationsAllowed())
-            this._show.off = CLOSE_MS;
+        if (motionMode() === 'off') {
+            this._showM.settle(false);
+        } else {
+            this._showM.close(motionMode() === 'reduced', this._mainRect());
+            this._rows.forEach(r => r.leave(motionMode()));
+        }
         this._ensureTicker();
         this._tick(this._now);
     }
@@ -306,9 +319,12 @@ export class VitreSearch {
         this._selected = -1;
         this._flat = [];
         this._list.destroy_all_children();
+        this._rows = [];
         this._ghost = false;
-        this._panel = {h: 0, from: 0, to: 0, ref: 1, kind: 'expand', t0: this._now, active: false};
-        this._splitState = {pos: 0, dir: 0, t0: this._now, from: 0};
+        this._panel = {h: 0, to: 0, ref: 1, active: false};
+        this._panelM.snap(0);
+        this._splitM.settle(false);
+        this._splitState = {pos: 0, dir: 0};
         for (const b of this._buttons) {
             b.remove_style_pseudo_class('active');
             b.visible = false;
@@ -322,6 +338,11 @@ export class VitreSearch {
         this._root.reactive = false;
         this._blur.set_enabled(false);
         this._fx.opacity = 255;
+        this._group.set_scale(1, 1);
+        this._group.set_translation(0, 0, 0);
+        this._group.opacity = 255;
+        this._setTop(FYT);
+        this._showM.settle(false);
         this._resetState();
         this._stopTicker();
     }
@@ -333,11 +354,49 @@ export class VitreSearch {
         const T = Math.round(mon.height * GEO.TOP_FRACTION);
         this._root.set_position(mon.x, mon.y);
         this._root.set_size(mon.width, mon.height);
-        this._fx.set_position(L - FX, T - FYT);
         this._origin = {L, T, stageX: mon.x + L, stageY: mon.y + T};
         this._field.actor.set_position(0, 0);
-        this._field.sync(mon.x + L - FX, mon.y + T - FYT);
+        this._setTop(FYT, true);
         this._maxPanel = Math.max(0, mon.height - T - H - 70);
+    }
+
+    // the field's margin above the bar: FYT at rest, more while the glass is up at the pill
+    _setTop(top, force = false) {
+        top = Math.ceil(top);
+        if ((!force && top === this._top) || !this._origin)
+            return;
+        this._top = top;
+        const o = this._origin;
+        this._fx.set_position(o.L - FX, o.T - top);
+        this._group.set_position(FX, top);
+        this._field.sync(o.stageX - FX, o.stageY - top);
+    }
+
+    // the field's rectangle at rest (group coordinates): the bar and the results panel
+    _mainRect() {
+        const sf = this._splitM.on ? this._splitM.frame() : null;
+        return {x: 0, y: 0, w: sf ? sf.barRight : GEO.W0, h: GEO.H + (this._panel?.h ?? 0)};
+    }
+
+    // the pill the glass pours out of (group coordinates): there is no search pill in the top bar, so a pill of the top bar's
+    // pill height at the bar's centre, where one would be (lab 2: the search pill); with no top bar, just above the field
+    _pillShape() {
+        const o = this._origin;
+        let y = -GEO.H;
+        try {
+            const panel = Main.panel;
+            if (panel?.mapped) {
+                const [, py] = panel.get_transformed_position();
+                const [, ph] = panel.get_transformed_size();
+                if (Number.isFinite(py) && ph > 0)
+                    y = py + (ph - PILL_H) / 2 - o.stageY;
+            }
+        } catch (_e) {
+            y = -GEO.H;
+        }
+        const cx = GEO.W0 / 2;
+        // the lab's source: the whole pill, 0.8 as wide at its bottom (geomOf(P, 0.8))
+        return {tY: y, bY: y + PILL_H, tCx: cx, bCx: cx, tHw: PILL_W / 2, bHw: PILL_W / 2 * 0.8};
     }
 
     // ---- clock --------------------------------------------------------------------------------
@@ -400,40 +459,43 @@ export class VitreSearch {
     // ---- per-frame evaluation -----------------------------------------------------------------
 
     _tick(now) {
+        const dt = this._lastNow === null ? 0 : Math.min(MAX_STEP_MS, Math.max(0, now - this._lastNow)) / 1000;
+        this._lastNow = now;
         this._now = now;
-        let show;
         let busy = false;
-        if (this._mode === 'opening') {
-            const t = this._show.off + (now - this._show.t0);
-            if (t >= OPEN_MS) {
-                show = openFrame(OPEN_MS);
-                this._mode = 'open';
-            } else {
-                show = openFrame(Math.max(0, t));
-                busy = true;
-            }
-        } else if (this._mode === 'closing') {
-            const t = this._show.off + (now - this._show.t0);
-            if (t >= CLOSE_MS) {
-                this._lastShow = {alpha: 0, sx: 1, sy: 1, blur: 0};
-                this._finishClose();
-                if (this._frameLog)
-                    this._frameLog.push({now, closed: true});
-                return;
-            }
-            show = closeFrame(Math.max(0, t));
-            busy = true;
-        } else {
-            show = {alpha: 1, sx: 1, sy: 1, blur: 0};
+        const sm = this._showM;
+        if (sm.mode === 'opening')
+            sm.retarget(this._mainRect());
+        const show = sm.moving ? sm.step(dt) : sm.frame();
+        if (this._mode === 'opening' && sm.mode === 'open') {
+            this._mode = 'open';
+        } else if (this._mode === 'closing' && sm.mode === 'closed') {
+            this._lastShow = {alpha: 0, glass: 0, box: null, blur: 0};
+            this._finishClose();
+            if (this._frameLog)
+                this._frameLog.push({now, closed: true});
+            return;
         }
+        if (this._mode === 'open')
+            Object.assign(show, {alpha: 1, glass: 1, box: null, blur: 0});
+        busy ||= sm.moving;
         this._lastShow = show;
+
+        // result rows
+        const nowS = now / 1000;
+        for (const r of this._rows) {
+            if (!r.moving)
+                continue;
+            r.step(dt, nowS);
+            busy = true;
+        }
+        this._applyRows();
 
         // results panel height
         const p = this._panel;
         if (p.active) {
-            const s = now - p.t0;
-            const dur = panelDuration(p.kind);
-            if (s >= dur) {
+            p.h = this._panelM.step(dt);
+            if (this._panelM.rest) {
                 p.h = p.to;
                 p.active = false;
                 if (p.to === 0 && this._ghost) {
@@ -441,69 +503,79 @@ export class VitreSearch {
                     this._list.destroy_all_children();
                 }
             } else {
-                p.h = p.from + (p.to - p.from) * panelProgress(p.kind, Math.max(0, s));
                 busy = true;
             }
         }
 
         // filter split
+        const spm = this._splitM;
         const sp = this._splitState;
-        if (sp.dir !== 0) {
-            const pos = sp.from + sp.dir * (now - sp.t0);
-            if ((sp.dir > 0 && pos >= SPLIT_MS) || (sp.dir < 0 && pos <= 0)) {
-                sp.pos = sp.dir > 0 ? SPLIT_MS : 0;
-                sp.dir = 0;
-            } else {
-                sp.pos = Math.max(0, pos);
-                busy = true;
-            }
+        let sf = null;
+        if (spm.moving) {
+            sf = spm.step(dt);
+            busy = true;
+            sp.dir = spm.on ? 1 : -1;
+        } else {
+            sp.dir = 0;
+            if (spm.on)
+                sf = spm.frame();
         }
-        const sf = sp.pos > 0 ? this._split(sp.pos) : null;
+        if (sf && !spm.on && sf.rho <= 0.05 && !spm.moving)
+            sf = null;
+        sp.pos = sf ? Math.max(0, sf.progress) * SPLIT_POS_MS : 0;
 
         this._applyFrame(show, p.h, sf);
 
         if (this._frameLog) {
-            this._frameLog.push({now, mode: this._mode, alpha: show.alpha, sx: show.sx, sy: show.sy, blur: show.blur,
+            this._frameLog.push({now, mode: this._mode, alpha: show.alpha, glass: show.glass, box: show.box, blur: show.blur,
                 panelH: p.h, splitPos: sp.pos, barRight: sf ? sf.barRight : GEO.W0,
                 lobes: sf ? sf.lobes.map(v => Math.round(v * 100) / 100) : null, rho: sf ? sf.rho : null, k: sf ? sf.k : null,
                 paintClock: GLib.get_monotonic_time() / 1000});
         }
-        if (!busy)
+        if (!busy) {
             this._stopTicker();
+            this._lastNow = null;
+        }
     }
 
     _applyFrame(show, panelH, sf) {
         const {H, W0, PANEL_R} = GEO;
         const barRight = sf ? sf.barRight : W0;
         const hMain = H + panelH;
-        const cx = W0 / 2;
-        const cy = hMain / 2;
-        const sx = show.sx;
-        const sy = show.sy;
-        const tf = (x, y) => [cx + (x - cx) * sx, cy + (y - cy) * sy];
-
-        const [mx, my] = tf(barRight / 2, hMain / 2);
-        const hw = barRight / 2 * sx;
-        const hh = hMain / 2 * sy;
-        const shapes = [{x: FX + mx, y: FYT + my, w: hw, h: hh, r: Math.min(PANEL_R * Math.min(sx, sy), hh, hw)}];
+        // the glass's box (group coordinates): the pour's shape while it moves, the field itself at rest
+        const b = show.box ?? {x: 0, y: 0, w: barRight, h: hMain};
+        const sx = Math.max(1e-3, b.w / barRight);
+        const sy = Math.max(1e-3, b.h / hMain);
+        const tf = (x, y) => [b.x + x * sx, b.y + y * sy];
+        // the field reaches up to the glass while it is above the bar
+        this._setTop(Math.max(FYT, MARGIN + 8 - b.y));
+        const top = this._top;
+        const hw = b.w / 2;
+        const hh = b.h / 2;
+        const shapes = [{x: FX + b.x + hw, y: top + b.y + hh, w: hw, h: hh, r: Math.min(PANEL_R, hh, hw)}];
         if (sf && sf.rho > 0.05) {
             for (const c of sf.lobes) {
                 const [lx, ly] = tf(c, H / 2);
                 const rw = sf.rho * sx;
                 const rh = sf.rho * sy;
-                shapes.push({x: FX + lx, y: FYT + ly, w: rw, h: rh, r: Math.min(rw, rh)});
+                shapes.push({x: FX + lx, y: top + ly, w: rw, h: rh, r: Math.min(rw, rh)});
             }
         }
-        const k = (sf ? sf.k : 3) * Math.min(sx, sy);
+        const k = (sf ? sf.k : 3) * Math.min(1, sx, sy);
         const fieldW = W0 + 2 * FX;
-        const fieldH = FYT + (my + hh) + FYB;
+        const fieldH = top + Math.max(b.y + b.h, 0) + FYB;
         this._fx.set_size(fieldW, fieldH);
         this._field.actor.set_size(fieldW, fieldH);
         this._field.setFieldSize(fieldW, fieldH);
         this._field.setShapes(shapes, k);
         this._geom = {shapes, k, fieldW, fieldH, barRight, hMain};
 
-        this._fx.opacity = Math.round(clamp(show.alpha, 0, 1) * 255);
+        // the glass's alpha on the whole field; the content follows the box and fades on its own
+        this._fx.opacity = Math.round(clamp(show.glass ?? show.alpha, 0, 1) * 255);
+        this._group.set_pivot_point(0, 0);
+        this._group.set_scale(sx, sy);
+        this._group.set_translation(b.x, b.y, 0);
+        this._group.opacity = Math.round(clamp(show.alpha, 0, 1) * 255);
         if (show.blur > 0.02) {
             this._blur.radius = Math.max(1, Math.round(show.blur * PT_TO_PX * BLUR_RADIUS_PER_SIGMA));
             this._blur.set_enabled(true);
@@ -530,7 +602,9 @@ export class VitreSearch {
                 this._apps.fitTo(Math.max(panelH, this._panel.to));
             }
             const target = Math.max(1, this._panel.ref);
-            this._panelClip.opacity = this._measure ? 0 : Math.round(255 * clamp((panelH / target - 0.15) / 0.45, 0, 1));
+            // full motion: the rows fade on their own springs; the Apps view and reduced motion keep the panel's reveal
+            const reveal = this._appsMode || !animationsAllowed() ? clamp((panelH / target - 0.15) / 0.45, 0, 1) : 1;
+            this._panelClip.opacity = this._measure ? 0 : Math.round(255 * reveal);
         } else {
             this._panelClip.visible = false;
         }
@@ -557,26 +631,19 @@ export class VitreSearch {
     // ---- filters ------------------------------------------------------------------------------
 
     get isSplit() {
-        const sp = this._splitState;
-        return sp.dir > 0 || (sp.dir === 0 && sp.pos >= SPLIT_MS);
+        return this._splitM.on;
     }
 
     showFilters(on = true) {
         if (this._mode === 'closed' || this._mode === 'closing')
             return;
-        const sp = this._splitState;
         if (on === this.isSplit)
             return;
-        if (!animationsAllowed()) {
-            sp.pos = on ? SPLIT_MS : 0;
-            sp.dir = 0;
-            this._ensureTicker();
-            this._tick(this._now);
-            return;
-        }
-        sp.from = sp.pos;
-        sp.t0 = this._now;
-        sp.dir = on ? 1 : -1;
+        const mode = motionMode();
+        if (mode === 'off')
+            this._splitM.settle(on);
+        else
+            this._splitM.set(on, mode === 'reduced');
         this._ensureTicker();
         this._tick(this._now);
     }
@@ -746,6 +813,7 @@ export class VitreSearch {
         if (this._appsMode) {
             this._ghost = false;
             this._list.destroy_all_children();
+            this._rows = [];
             this._list.visible = false;
             this._apps.actor.visible = true;
             this._apps.setQuery(this._entry.get_text());
@@ -794,7 +862,35 @@ export class VitreSearch {
         if (this._flat.length && this._selected < 0)
             this._selected = 0;
         this._syncSelection();
+        this._syncRows(keepGhost);
         this._setPanelTarget(target);
+    }
+
+    // the rows: the ones that are new pour in top to bottom, the ones that went fade (a ghost list fades as a whole)
+    _syncRows(ghost) {
+        const mode = motionMode();
+        const count = this._list.get_n_children();
+        const n = ghost ? 0 : count;
+        const now = this._now / 1000;
+        while (this._rows.length < count)
+            this._rows.push(new RowMotion());
+        this._rows.forEach((r, i) => (i < n ? r.arrive(now, i, mode) : r.leave(mode)));
+        this._applyRows();
+        if (this._rows.some(r => r.moving)) {
+            this._ensureTicker();
+            this._tick(this._now);
+        }
+    }
+
+    _applyRows() {
+        const kids = this._list.get_children();
+        this._rows.forEach((r, i) => {
+            const a = kids[i];
+            if (!a)
+                return;
+            a.opacity = Math.round(255 * clamp(r.o.x, 0, 1));
+            a.translation_y = r.y.x;
+        });
     }
 
     _makeRow(item) {
@@ -868,7 +964,7 @@ export class VitreSearch {
         if (!animationsAllowed() || this._mode === 'closed' || this._mode === 'closing') {
             p.h = target;
             p.to = target;
-            p.from = target;
+            this._panelM.snap(target);
             p.active = false;
             if (target === 0 && this._ghost) {
                 this._ghost = false;
@@ -880,10 +976,8 @@ export class VitreSearch {
             }
             return;
         }
-        p.from = p.h;
         p.to = target;
-        p.kind = target > p.h ? 'expand' : 'collapse';
-        p.t0 = this._now;
+        this._panelM.to(target, false);
         p.active = true;
         this._ensureTicker();
         this._tick(this._now);

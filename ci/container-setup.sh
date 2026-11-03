@@ -54,7 +54,16 @@ URL="$(sed -n 's/^MACTAHOE_ICONS_URL="\(.*\)"/\1/p' "$SRC/install.sh" | head -1 
 rm -rf /opt/mactahoe; mkdir -p /opt/mactahoe
 if [ -n "$REF" ] && [ -n "$URL" ]; then
   echo "== icon theme: $URL"
-  retry sh -c "curl -fsSL --connect-timeout 20 '$URL' | tar -xz -C /opt/mactahoe"
+  retry curl -fsSL --connect-timeout 20 -o /opt/mactahoe/archive.tar.gz "$URL"
+  # the same pinned digests install.sh checks: a pin that GitHub's real archive does not match fails CI here, not in a user's install
+  PIN="$(sed -n 's/^MACTAHOE_ICONS_SHA256="\([0-9a-f]\{64\}\)".*/\1/p' "$SRC/install.sh" | head -1)"
+  TARPIN="$(sed -n 's/^MACTAHOE_ICONS_TAR_SHA256="\([0-9a-f]\{64\}\)".*/\1/p' "$SRC/install.sh" | head -1)"
+  [ -n "$PIN" ] && [ -n "$TARPIN" ] || { echo "setup: install.sh has no pinned SHA-256 for the icon theme" >&2; exit 1; }
+  if [ "$(sha256sum /opt/mactahoe/archive.tar.gz | cut -d' ' -f1)" != "$PIN" ]; then
+    echo "setup: the archive's SHA-256 differs from the pin in install.sh; checking its decompressed content" >&2
+    [ "$(gzip -dc /opt/mactahoe/archive.tar.gz | sha256sum | cut -d' ' -f1)" = "$TARPIN" ] || { echo "setup: the icon theme archive matches neither pinned SHA-256" >&2; exit 1; }
+  fi
+  tar -xzf /opt/mactahoe/archive.tar.gz -C /opt/mactahoe --no-same-owner
   ln -s /opt/mactahoe/MacTahoe-icon-theme-"$REF" /opt/mactahoe/src
   chown -R vitre:vitre /opt/mactahoe
   [ -x /opt/mactahoe/src/install.sh ] || { echo "setup: the icon theme download has no install.sh" >&2; exit 1; }

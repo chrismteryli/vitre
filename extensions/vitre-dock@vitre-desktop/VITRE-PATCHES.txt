@@ -1,4 +1,5 @@
 Vitre Dock is Dhruva 4.7 (https://github.com/narkagni/dhruva, GPL-3.0, by NarkAgni) with changes for Vitre.
+These are modified versions of Dhruva's files. The files that carry a change say "Vitre" in a comment or name Vitre's spring engine.
 
 Why it is a fork: GNOME Shell checks per-user extensions against extensions.gnome.org once a day and replaces them with the published
 version. A patched copy under the name dhruva@narkagni was replaced by the stock Dhruva within a day. Vitre Dock has its own uuid
@@ -11,6 +12,24 @@ Changes (search the code for "Vitre"):
 - src/ui/dock/DockItemBuilder.js: with Stage on, a click on the Dock icon of the app on the stage brings its windows to the front
   instead of minimizing it. The icon hop while an app launches calls into Vitre's window motion.
 - src/ui/dock/DockRenderer.js: a re-render of the Dock while the pointer is on a window preview keeps the preview open.
+- The spring engine (0.3): the motion the Dock ran on GNOME's timelines or Clutter easing (the magnifier, auto-hide, folder and context
+  menus, the music pill, the Trash and icon click effects, Dock transitions) now runs on the same spring engine as the Vitre extensions,
+  src/liquid/liquid.js and src/liquid/liquidClock.js, so the Dock moves like the rest of Vitre. About 28 files changed for this; the
+  change in each is mostly the import of the engine and the replaced easing call.
+- Drag and drop motion (0.3): src/ui/DropMotion.js (new) and changes in src/ui/DragDrop.js and src/ui/ExternalDrop.js. Icons make room
+  around the pointer while something is carried over the Dock, a drop target swells, a drop is swallowed by its target, and an icon let
+  go elsewhere in the Dock glides home. With animations off or reduced motion on, Dhruva's instant behaviour stays.
+- Stacks: the Downloads folder (or any folder in stack-folder, and the folders you add to the Dock) shows its newest files as a pile
+  and opens as a fan or a scrolling grid (src/ui/stacks, src/ui/modules/StackModule.js, src/core/StackSource.js). The fan uses Vitre's
+  stretch spring; the grid opens through the folder menu's own show(), so Vitre Menus animates it like the other Dock menus. With
+  Downloads shown in the Dock too, the stack takes its place. Schema keys: show-stack, stack-folder, stack-view, stack-sort,
+  stack-fan-limit, stack-custom-folders.
+- Trash: shows full or empty with or without gvfs, takes files dragged from a stack or from Files (on Wayland the drag is read from the
+  shell's drag-and-drop selection while it is over the Trash), Empty Trash asks first, and the button says Trash. The Trash is always the
+  last item in the Dock (src/ui/modules/TrashModule.js, src/ui/context-menu/TrashActionsHandler.js, src/ui/dock/DockRenderer.js).
+- src/ui/modules/DockModules.js, SystemFoldersModule.js, src/ui/dock/DockUI.js, src/ui/context-menu/AppContextMenu.js,
+  src/prefs/ModulesPage.js and stylesheet.css carry the rest of the stacks and Trash change (a file dropped from a
+  stack on a Dock app opens in that app; the stack options in the Dock menu and in preferences).
 
 Identity changes: metadata.json, schemas/ (schema id and path), locale/ (gettext domain), src/core/DataPaths.js and
 src/ui/blur/BlurPanel.js (the extension's folder name). Internal actor and style class names such as DhruvaContainer are unchanged,

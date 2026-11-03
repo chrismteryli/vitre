@@ -15,8 +15,14 @@
  *     Switch User / Login Options);
  *   - a navy scrim over the (blurred) wallpaper that deepens a little when the prompt opens;
  *   - the small Vitre mark at the top;
- *   - the liquid-drip intro when the prompt opens: a bead buds from the mark, snaps free, falls into the password
- *     capsule with a cyan pulse and blooms into the unlock card (vitreMotion.js).
+ *   - the intro when the prompt opens (Motion Lab 2, session: lock): a bead of glass lets go of the top bar and falls
+ *     under gravity onto the card's centre; its impact squashes it and sends a ring out on the pour spring; 0.12 s later
+ *     it blooms into the unlock card and the avatar and name fade in (vitreMotion.js BeadStory);
+ *   - the unlock (Motion Lab 2, session: sign in / unlock): once the password is accepted (UnlockDialog.finish) the card
+ *     drains back into the bead, the bead rises into the top bar and is absorbed; then stock's unlock runs as before (the
+ *     lab fades the desktop in under the bead: GNOME keeps the windows hidden until its unlock leaves the lock session
+ *     mode, so the lock screen stays until then). A watchdog never holds the unlock longer than
+ *     UNLOCK_HOLD_MS. GDM (the sign-in screen before a session) and the boot are outside the session: not reached.
  */
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -31,16 +37,20 @@ import {InjectionManager} from 'resource:///org/gnome/shell/extensions/extension
 import {ScreenShield} from 'resource:///org/gnome/shell/ui/screenShield.js';
 import {UnlockDialog} from 'resource:///org/gnome/shell/ui/unlockDialog.js';
 
-import {clamp01, lerp} from './dripMotion.js';
-import {cardMoved, lockIntroContext, lockIntroFrame, retargetContext} from './vitreMotion.js';
+import {cardMoved, clamp01, lerp, BeadStory} from './vitreMotion.js';
+import {role} from './liquid.js';
+import {animate, stopAnimate} from './liquidClock.js';
 import {FrameClock, GlassSheet, boxAround, fault, motionAllowed, stageRect, wallMs} from './sessionDrip.js';
 import {GLASS_FINISH} from './glass.js';
 
 const MARK_SIZE = 56;
-const MARK_TOP_GAP = 26;            // below the panel
+const MARK_TOP_GAP = 24;            // below the panel (4 px grid)
 const GEOMETRY_TIMEOUT_MS = 900;    // the password entry must exist this soon after the prompt opens, else no intro
-const WATCHDOG_MS = 3000;           // the intro is forcibly ended (everything back to stock) after this
+const WATCHDOG_MS = 4500;           // the intro is forcibly ended (everything back to stock) after this (a fall from the bar
+                                    // down a tall screen takes about a second, the bloom another)
+export const UNLOCK_HOLD_MS = 2500; // the unlock story never holds stock's unlock longer than this
 const NOTIF_GAP = 16;               // prompt page: the card ends this far above the notifications box
+const MARK_DELAY_MS = 160;          // the mark starts to arrive this long after the dialog
 
 // The clear finish of the lock card: white 10 % tint over the (already blurred) lock background, as the CSS card
 export const LOCK_FINISH = {...GLASS_FINISH};
@@ -122,10 +132,13 @@ class LockIntro {
         if (!ap || !ap._entryArea)
             return null;
         const card = stageRect(d._promptBox);
-        const capsule = stageRect(ap._entryArea);
         const mark = stageRect(skin.mark);
-        if (!card || !capsule || !mark)
+        if (!card || !mark)
             return null;
+        // the password capsule sizes the ring; a prompt that asks no password (yet) has none on screen: a capsule-sized
+        // stand-in across the card's middle
+        const capsule = stageRect(ap._entryArea) ??
+            {x: card.x + card.w * 0.2, y: card.y + card.h / 2 - 22, w: card.w * 0.6, h: 44};
         if (Math.abs(d._promptBox.scale_x - 1) > 0.002 || Math.abs(d._promptBox.translation_y) > 0.5)
             return null;
         const rest = skin.restingStackShift();
@@ -145,28 +158,45 @@ class LockIntro {
                 // keep the default
             }
         }
+        // the top bar: the bead leaves it and goes back into it (the mark's top when the bar is not on screen)
+        let barY = mark.y;
+        const panel = Main.panel;
+        if (panel?.mapped) {
+            const [, py] = panel.get_transformed_position();
+            const [, ph] = panel.get_transformed_size();
+            if (Number.isFinite(py) && ph > 0)
+                barY = py + ph / 2;
+        }
+        const scale = Math.max(1, St.ThemeContext.get_for_stage(global.stage).scale_factor);
         return {
             mark: {cx: mark.x + mark.w / 2, cy: mark.y + mark.h / 2, r: mark.w / 2 * 0.94},
-            capsule, card: {...card, r: this._radius}, settleDy: dy,
+            capsule, card: {...card, r: this._radius}, settleDy: dy, barY, scale,
         };
+    }
+
+    // the bead's story in this geometry: it drops on the card's centre line onto the card's centre
+    _story(geom) {
+        const c = geom.card;
+        return {cx: c.x + c.w / 2, barY: geom.barY, land: c.y + c.h / 2, card: c, scale: geom.scale};
     }
 
     // Every frame: is the live (resting) geometry still the one the running context was built from? The mark is left
     // out on purpose (it springs +2.5 % at the snap, and the bead's start is long past). A move takes the new card /
     // capsule into the running context (timeline kept), the glass box and the ring with it.
     _resync() {
+        if (this._unlocking)
+            return;             // the card drains from where it was: the lock screen is going
         const geom = this._geometry();
         if (!geom)
             return;
         geom.mark = this._markGeom;
-        const next = lockIntroContext(geom, this.skin.motion);
-        const c = this.ctx;
-        if (!cardMoved(next.card, c.card, 0.5) && !cardMoved(next.landing, c.landing, 0.5))
+        const next = this._story(geom);
+        const c = this.ctx.geom;
+        if (!cardMoved(next.card, c.card, 0.5))
             return;
         const px = Math.max(Math.abs(next.card.x - c.card.x), Math.abs(next.card.y - c.card.y),
-            Math.abs(next.card.w - c.card.w), Math.abs(next.card.h - c.card.h),
-            Math.abs(next.landing.x - c.landing.x), Math.abs(next.landing.y - c.landing.y));
-        retargetContext(c, next);
+            Math.abs(next.card.w - c.card.w), Math.abs(next.card.h - c.card.h));
+        this.ctx.retarget(next);
         this.stats.resyncs++;
         this.stats.maxResyncPx = Math.max(this.stats.maxResyncPx, Math.round(px * 10) / 10);
         this._fitLayers(geom);
@@ -199,7 +229,8 @@ class LockIntro {
             this.stats.geometryWaitMs = Math.round(wallMs() - this._waitSince);
             this.stats.firstGeom = {card: {...geom.card}, capsule: {...geom.capsule}, settleDy: Math.round(geom.settleDy * 10) / 10};
             this._markGeom = geom.mark;
-            this.ctx = lockIntroContext(geom, skin.motion);
+            this.ctx = new BeadStory(this._story(geom));
+            this.ctx.drop();
             this._buildLayers(geom);
             this._t0 = ms;
             this.state = 'running';
@@ -207,19 +238,22 @@ class LockIntro {
             this._resync();
         }
         fault('lock-intro-frame');
+        if (this._t0 === null)
+            this._t0 = ms;          // the unlock's first frame
         const t = ms - this._t0;
-        const fr = lockIntroFrame(this.ctx, t);
+        const fr = this.ctx.advance(t);
         this.lastFrame = fr;
         this.stats.frames++;
         this.sheet.setShapes(fr.shapes, fr.k);
         this.sheet.setOpacity(this.measure === 'coverage' ? 1 : fr.fieldAlpha);
         const ap = d._authPrompt;
-        if (ap._userWell)
+        if (this._unlocking)
+            d._promptBox.opacity = Math.round(255 * fr.contentAlpha);       // the whole card's content leaves
+        else if (ap._userWell)
             ap._userWell.opacity = Math.round(255 * fr.contentAlpha);
-        if (!fr.cardHidden)
+        if (!fr.cardHidden && !this._unlocking)
             d._promptBox.remove_style_class_name('vitre-intro');
         this._applyRing(fr);
-        skin.mark?.set({scale_x: fr.markScale, scale_y: fr.markScale});
         if (this.log)
             this.log.push({t: Math.round(t * 10) / 10, phase: fr.phase, k: fr.k, fieldAlpha: fr.fieldAlpha, content: fr.contentAlpha,
                 cardHidden: fr.cardHidden, shapes: fr.shapes.map(s => [s.x, s.y, s.w, s.h, s.r].map(v => Math.round(v * 100) / 100))});
@@ -229,7 +263,9 @@ class LockIntro {
 
     _boxFor(geom) {
         const markRect = {x: geom.mark.cx - geom.mark.r, y: geom.mark.cy - geom.mark.r, w: geom.mark.r * 2, h: geom.mark.r * 2};
-        return boxAround([geom.card, markRect, geom.capsule], 36);
+        const s = this._story(geom);
+        const barRect = {x: s.cx - 16, y: s.barY - 16, w: 32, h: 32};         // the bead's way from and back into the bar
+        return boxAround([geom.card, markRect, geom.capsule, barRect], 36);
     }
 
     _buildLayers(geom) {
@@ -238,12 +274,15 @@ class LockIntro {
         this.ring = new St.Widget({style_class: 'vitre-lock-ring', reactive: false, opacity: 0, pivot_point: new Graphene.Point({x: 0.5, y: 0.5})});
         Shell.util_set_hidden_from_pick(this.ring, true);
         d.insert_child_below(this.ring, this.skin.layer);
-        this._placeRing(geom.capsule);
+        this._placeRing(geom);
     }
 
-    _placeRing(cap) {
+    // the ring goes out from where the bead lands (the card's centre), the password capsule's size
+    _placeRing(geom) {
+        const cap = geom.capsule;
+        const s = this._story(geom);
         const [px, py] = this.skin.dialog.get_transformed_position();
-        this.ring.set_position(cap.x - (px || 0), cap.y - (py || 0));
+        this.ring.set_position(s.cx - cap.w / 2 - (px || 0), s.land - cap.h / 2 - (py || 0));
         this.ring.set_size(cap.w, cap.h);
     }
 
@@ -256,7 +295,7 @@ class LockIntro {
                 this.sheet.setBox(box);
         }
         if (this.ring)
-            this._placeRing(geom.capsule);
+            this._placeRing(geom);
     }
 
     _applyRing(fr) {
@@ -294,6 +333,53 @@ class LockIntro {
             this._watchdogId = 0;
         }
         this.clock.stop();
+        // an unlock held for the story goes on now, whatever ended it
+        const done = this._unlockDone;
+        this._unlockDone = null;
+        this._unlocking = false;
+        if (done) {
+            try {
+                done();
+            } catch (e) {
+                console.error(`Vitre Session: unlock continuation: ${e.message}`);
+            }
+        }
+    }
+
+    // The unlock (Motion Lab 2): stock's finish is held until this ends. The card drains back into the bead, the bead rises
+    // into the top bar and is absorbed; then stock's unlock shows the desktop. onDone runs exactly once: at the end, on any
+    // abort, or from the watchdog (UNLOCK_HOLD_MS).
+    beginUnlock(onDone) {
+        const skin = this.skin;
+        const d = skin.dialog;
+        if (!motionAllowed() || skin.failed || !d._authPrompt || d._activePage !== d._promptBox)
+            return false;
+        if (this.active)
+            this.abort('unlock');
+        const geom = this._geometry();
+        if (!geom)
+            return false;
+        fault('lock-unlock-begin');
+        this.state = 'running';
+        this._unlocking = true;
+        this._unlockDone = onDone;
+        this.lastFrame = null;
+        this.stats = {frames: 0, abortReason: null, geometryWaitMs: 0, resyncs: 0, maxResyncPx: 0, firstGeom: null, unlock: true};
+        this._markGeom = geom.mark;
+        d._promptBox.add_style_class_name('vitre-intro');      // the field draws the card's glass from here on
+        this.ctx = new BeadStory(this._story(geom));
+        this.ctx.drain();
+        this._buildLayers(geom);
+        this._t0 = null;
+        // the lock screen around the card stays as it is: GNOME keeps the windows hidden until stock's unlock leaves the lock
+        // session mode, so fading it now would show black, not the desktop (the desktop then comes with stock's unlock)
+        this.clock.start();
+        this._watchdogId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, UNLOCK_HOLD_MS, () => {
+            this._watchdogId = 0;
+            this.abort('unlock-watchdog');
+            return GLib.SOURCE_REMOVE;
+        });
+        return true;
     }
 
     finish() {
@@ -420,8 +506,15 @@ export class LockSkin {
         this._onProgress();
         // the mark arrives with the dialog
         if (motionAllowed()) {
+            // it fades in (fade role) and grows to its size (bead), a moment after the dialog
             this.mark.set({opacity: 0, scale_x: 0.86, scale_y: 0.86});
-            this.mark.ease({opacity: 255, scale_x: 1, scale_y: 1, duration: 520, delay: 160, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+            const mark = this.mark;
+            this._markId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MARK_DELAY_MS, () => {
+                this._markId = 0;
+                if (this.mark === mark)
+                    animate(mark, {opacity: 255, scale_x: 1, scale_y: 1}, {p: role('bead')});
+                return GLib.SOURCE_REMOVE;
+            });
         }
         fault('lock-build-late');
         this._built = true;
@@ -540,6 +633,12 @@ export class LockSkin {
             GLib.Source.remove(this._prewarmId);
             this._prewarmId = 0;
         }
+        if (this._markId) {
+            GLib.Source.remove(this._markId);
+            this._markId = 0;
+        }
+        if (this.mark && !dialogGone)
+            stopAnimate(this.mark);
         this.intro.destroy();
         this._spare?.destroy();
         this._spare = null;
@@ -577,6 +676,8 @@ export class LockStyle {
             showPrompt: UnlockDialog.prototype._showPrompt,
             ensureOwn: Object.prototype.hasOwnProperty.call(ScreenShield.prototype, '_ensureUnlockDialog'),
             showPromptOwn: Object.prototype.hasOwnProperty.call(UnlockDialog.prototype, '_showPrompt'),
+            finish: UnlockDialog.prototype.finish,
+            finishOwn: Object.prototype.hasOwnProperty.call(UnlockDialog.prototype, 'finish'),
         };
         const style = this;
         this._im.overrideMethod(ScreenShield.prototype, '_ensureUnlockDialog', original => function (...args) {
@@ -592,6 +693,26 @@ export class LockStyle {
             if (wasClock && this._activePage === this._promptBox)
                 style._skins.get(this)?.onPromptShown();
             return result;
+        });
+        // the unlock: once the password is accepted, the card drains into the bead before stock's unlock goes on (held at most
+        // UNLOCK_HOLD_MS; any failure goes straight on with stock's)
+        this._im.overrideMethod(UnlockDialog.prototype, 'finish', original => function (onComplete, ...rest) {
+            let called = false;
+            const go = () => {
+                if (called)
+                    return;
+                called = true;
+                original.call(this, onComplete, ...rest);
+            };
+            let held = false;
+            try {
+                held = Boolean(style._skins.get(this)?.intro.beginUnlock(go));
+            } catch (e) {
+                console.error(`Vitre Session: unlock story skipped: ${e.message}`);
+                held = false;
+            }
+            if (!held)
+                go();
         });
         // a dialog that already exists (the extension was enabled while locked)
         const live = Main.screenShield?._dialog;
@@ -649,6 +770,8 @@ export class LockStyle {
                 delete ScreenShield.prototype._ensureUnlockDialog;
             if (!o.showPromptOwn)
                 delete UnlockDialog.prototype._showPrompt;
+            if (!o.finishOwn)
+                delete UnlockDialog.prototype.finish;
         }
         this._im = null;
     }
@@ -656,6 +779,7 @@ export class LockStyle {
     // restored exactly? (rig)
     restored() {
         const o = this._originals;
-        return Boolean(o) && ScreenShield.prototype._ensureUnlockDialog === o.ensure && UnlockDialog.prototype._showPrompt === o.showPrompt;
+        return Boolean(o) && ScreenShield.prototype._ensureUnlockDialog === o.ensure && UnlockDialog.prototype._showPrompt === o.showPrompt &&
+            UnlockDialog.prototype.finish === o.finish;
     }
 }

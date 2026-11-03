@@ -381,7 +381,53 @@
 
     <key name="show-trash" type="b">
       <default>false</default>
-      <summary>Show Recycle Bin</summary>
+      <summary>Show Trash</summary>
+    </key>
+
+    <!-- Vitre (B5): stacks -->
+    <key name="show-stack" type="b">
+      <default>true</default>
+      <summary>Show the Downloads stack</summary>
+      <description>A folder in the Dock that shows its newest files and opens as a fan or a grid. With the Downloads folder shown too, the stack takes its place.</description>
+    </key>
+
+    <key name="stack-folder" type="s">
+      <default>''</default>
+      <summary>Stack folder</summary>
+      <description>The folder the stack shows. Empty means the Downloads folder.</description>
+    </key>
+
+    <key name="stack-view" type="s">
+      <choices>
+        <choice value='auto'/>
+        <choice value='fan'/>
+        <choice value='grid'/>
+      </choices>
+      <default>'auto'</default>
+      <summary>How a stack opens</summary>
+      <description>fan: an arc of the newest files above the icon. grid: a panel with every file that scrolls. auto: a fan up to stack-fan-limit files, else a grid.</description>
+    </key>
+
+    <key name="stack-sort" type="s">
+      <choices>
+        <choice value='date-added'/>
+        <choice value='name'/>
+      </choices>
+      <default>'date-added'</default>
+      <summary>Stack order</summary>
+      <description>date-added: newest first. name: by name.</description>
+    </key>
+
+    <key name="stack-fan-limit" type="i">
+      <default>10</default>
+      <range min="3" max="15"/>
+      <summary>Files in a fan</summary>
+      <description>The most files a fan shows; with view auto a stack with more files opens as a grid.</description>
+    </key>
+
+    <key name="stack-custom-folders" type="b">
+      <default>true</default>
+      <summary>Folders added to the Dock open as stacks</summary>
     </key>
 
     <key name="show-desktop-button" type="b">

@@ -3,7 +3,8 @@
 #   1. shellcheck on every shell script (fails on errors only; warnings and notes are not looked at)
 #   2. JSON and extension metadata (ci/check-metadata.py)
 #   3. glib-compile-schemas --strict on every extension's schemas folder (dry run: nothing is written into the tree)
-#   4. a JavaScript syntax check of every extension .js/.mjs/.cjs file (the .js files are ES modules, as GJS loads them)
+#   4. a JavaScript syntax check of every extension and Vitre Settings .js/.mjs/.cjs file (the .js files are ES modules, as GJS loads them)
+#   5. the node unit tests in ci/*.test.mjs (the location privacy of Vitre Appearance)
 # Needs: shellcheck, glib-compile-schemas (libglib2.0-bin), node, python3. Usage: ci/static.sh [path-to-vitre-tree]
 set -uo pipefail
 [ $# -gt 0 ] && export VITRE_REPO="$1"
@@ -81,7 +82,7 @@ endgroup
 # ---- 4. JavaScript syntax ----------------------------------------------------------------------------------------------------------
 group "JavaScript syntax (node --check)"
 mkdir -p "$TMP/js" "$TMP/jsout"
-find extensions ci \( -name node_modules -o -name .git \) -prune -o -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) -print0 > "$TMP/js.list"
+find extensions apps ci \( -name node_modules -o -name .git \) -prune -o -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) -print0 > "$TMP/js.list"
 JS_COUNT="$(tr -cd '\0' < "$TMP/js.list" | wc -c)"
 # .js files are ES modules in GJS: node only treats .mjs that way, so each .js is checked through a copy named .mjs
 # (the copy is named by a counter and the real path is kept in a map for the error message)
@@ -109,6 +110,22 @@ else
   else
     pass "node --check: $JS_COUNT JavaScript files parse"
   fi
+fi
+endgroup
+
+# ---- 5. extension unit tests -------------------------------------------------------------------------------------------------------
+# Plain node tests with mocked Gio/GLib/GeoClue, no GNOME needed. ci/location-privacy.test.mjs: Vitre Appearance asks GeoClue for the
+# location only in sunset mode (manual and custom never do), and a pending request cannot come back after leaving that mode.
+group "extension unit tests (node --test)"
+if ls "$CI_DIR"/*.test.mjs >/dev/null 2>&1; then
+  if node --test "$CI_DIR"/*.test.mjs > "$TMP/unit.out" 2>&1; then
+    pass "node --test: $(sed -n -E 's/^(# |ℹ )pass //p' "$TMP/unit.out") passed"
+  else
+    tail -40 "$TMP/unit.out"
+    fail "node --test failed (listed above)"
+  fi
+else
+  fail "no unit tests found in ci/"
 fi
 endgroup
 

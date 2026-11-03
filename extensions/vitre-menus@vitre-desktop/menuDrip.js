@@ -4,7 +4,7 @@
  * Liquid Glass (live: enable-menu-glass, panel-menu-*) paints glass behind these menus and runs its own spring
  * (scale and opacity of menu.box) on every open-state change. While the drip owns a menu, that glass and that
  * spring must stay out of the way: the surface shows nothing until the drip hands it over, then Liquid Glass's
- * glass fades in under the field's (same shape, 40 ms) and the field goes. The coupling is two own-property
+ * glass fades in under the field's (same shape) and the field goes. The coupling is two own-property
  * overrides on that menu's Liquid Glass UIManager (`_startAnimation` is skipped while the drip owns the menu);
  * both are undone on disable, and a menu without a Liquid Glass manager is handled by the BoxPointer alone.
  */
@@ -372,10 +372,14 @@ export class ManagedMenu {
             this._muteKeys.enabled = false;
             this._muteInput.enabled = true;
             adapter.owns = true;
+            // input comes back once the content is half in (the hand-over to the menu's own glass can still be running)
+            controller.callbacks.onInteractive = () => {
+                this._muteInput.enabled = false;
+            };
             controller.callbacks.onOpened = () => {
                 this._muteInput.enabled = false;
             };
-            controller.open(animate & PopupAnimation.SLIDE ? 1 : DRIP.switchOpenSpeed);      // FADE alone: another pop-out is closing
+            controller.open(animate & PopupAnimation.SLIDE ? 1 : DRIP.switchOpenSpeed);      // FADE alone: another pop-out is closing (its glass flows over)
             return undefined;
         });
 
@@ -386,7 +390,7 @@ export class ManagedMenu {
                 animate = PopupAnimation.NONE;
             if (controller.phase !== 'closed') {
                 if (animate !== PopupAnimation.NONE && style.liquid && motionAllowed()) {
-                    // liquid: retract into the pill (0.7x when another top-bar pop-out is taking over: FADE only)
+                    // liquid: back into the pill; FADE only = another top-bar pop-out is taking over and takes this glass body sideways
                     const switching = !(animate & PopupAnimation.SLIDE);
                     this.remove_all_transitions();
                     this._muteInput.enabled = true;

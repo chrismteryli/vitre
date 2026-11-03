@@ -54,6 +54,7 @@ cmd_setup() {
 run_as_user() {
   local script="$1" extra=()
   if engine exec "$NAME" test -x /opt/mactahoe/src/install.sh; then extra=(-e VITRE_ICONS_SRC=/opt/mactahoe/src); fi
+  if engine exec "$NAME" test -s /opt/mactahoe/archive.tar.gz; then extra+=(-e VITRE_ICONS_ARCHIVE=/opt/mactahoe/archive.tar.gz); fi
   engine exec -u vitre -w /home/vitre "${extra[@]}" "$NAME" bash "/src/ci/$script"
 }
 

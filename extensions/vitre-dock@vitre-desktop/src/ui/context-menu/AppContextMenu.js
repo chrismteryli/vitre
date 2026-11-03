@@ -36,6 +36,7 @@ import { resetMagnification } from '../magnifier/MagnifierReset.js';
 import { setMagnifierPauseState } from '../magnifier/MagnifierState.js';
 import { deleteCustomFolderIcon } from '../folder-menu/FolderIconFiles.js';
 import { createIconMenuItem, createMenuItem, addSeparator } from './ContextMenuItems.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const DEFAULT_PANEL_WIDTH = 280;
@@ -282,12 +283,11 @@ export default class AppContextMenu {
                         if (targetBtn && isActorAlive(targetBtn)) {
                             targetBtn.remove_all_transitions();
                             targetBtn.set_pivot_point(0.5, 0.5);
-                            targetBtn.ease({
+                            liquidEase(targetBtn, {
                                 opacity: 0,
                                 scale_x: 0.1,
                                 scale_y: 0.1,
                                 duration: 150,
-                                mode: Clutter.AnimationMode.EASE_IN_CUBIC,
                                 onStopped: commitAdd
                             });
                         } else {
@@ -313,7 +313,8 @@ export default class AppContextMenu {
         }
 
         if (this.app.is_module && this.app.open) {
-            const openModuleLabel = _('Open %s').format(this.app.get_name());
+            // Vitre (B5): a stack opens its folder in Files from here (a click opens the stack itself)
+            const openModuleLabel = this.app._stack ? _('Open in Files') : _('Open %s').format(this.app.get_name());
             this.panel.add_child(createMenuItem(openModuleLabel, () => {
                 this.app.open();
                 this.hide();
@@ -321,7 +322,10 @@ export default class AppContextMenu {
             addSeparator(this.panel);
         }
 
-        if ((this.app.get_id ? this.app.get_id() : '') === 'dhruva-module-recycle-bin') {
+        if (this.app._stack) this._addStackOptions();
+
+        const moduleId = this.app.get_id ? this.app.get_id() : '';
+        if ((this.buttonActor && this.buttonActor._isTrash) || moduleId === 'dhruva-module-trash' || moduleId === 'dhruva-module-recycle-bin') {
             attachTrashActions(this);
         }
 
@@ -376,12 +380,11 @@ export default class AppContextMenu {
                 if (targetBtn && isActorAlive(targetBtn)) {
                     targetBtn.remove_all_transitions();
                     targetBtn.set_pivot_point(0.5, 0.5);
-                    targetBtn.ease({
+                    liquidEase(targetBtn, {
                         opacity: 0,
                         scale_x: 0.1,
                         scale_y: 0.1,
                         duration: 180,
-                        mode: Clutter.AnimationMode.EASE_IN_CUBIC,
                         onComplete: () => {
                             if (isActorAlive(targetBtn)) {
                                 const parent = targetBtn.get_parent ? targetBtn.get_parent() : null;
@@ -425,6 +428,35 @@ export default class AppContextMenu {
                 }
             }, false, this));
         }
+    }
+
+    // Vitre (B5): how a stack opens and sorts (the same keys the Vitre Settings app shows)
+    _addStackOptions() {
+        const settings = this.dockUI.settings;
+        const choice = (title, key, options) => {
+            if (!settings.settings_schema.has_key(key)) return;
+            this.panel.add_child(new St.Label({ text: title, style_class: 'context-menu-section-title' }));
+            const current = settings.get_string(key);
+            options.forEach(([value, label]) => {
+                const item = createIconMenuItem(label, () => {
+                    settings.set_string(key, value);
+                    this.hide();
+                }, false, this);
+                const box = item.get_child();
+                box.set_style('spacing: 8px;');
+                box.insert_child_at_index(new St.Icon({
+                    icon_name: 'object-select-symbolic',
+                    icon_size: 14,
+                    style_class: 'context-menu-check',
+                    opacity: value === current ? 255 : 0,
+                }), 0);
+                this.panel.add_child(item);
+            });
+        };
+        choice(_('Sort By'), 'stack-sort', [['date-added', _('Date Added')], ['name', _('Name')]]);
+        addSeparator(this.panel);
+        choice(_('View As'), 'stack-view', [['auto', _('Automatic')], ['fan', _('Fan')], ['grid', _('Grid')]]);
+        addSeparator(this.panel);
     }
 
     _addAppToIgnoreList(app) {
@@ -550,13 +582,13 @@ export default class AppContextMenu {
         else this.bgDrawingArea._arrowCenter = Math.round((btnY + btnH / 2) - posY);
         this.bgDrawingArea.queue_repaint();
 
-        this.panel.ease({ width: panelW, duration: 100, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+        liquidEase(this.panel, { width: panelW, duration: 100 });
 
         if (this._isFirstPosition !== false) {
             this.menuContainer.set_position(posX, posY);
             this._isFirstPosition = false;
         } else {
-            this.menuContainer.ease({ x: posX, y: posY, height: panelH, duration: 100, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+            liquidEase(this.menuContainer, { x: posX, y: posY, height: panelH, duration: 100 });
         }
 
         if (this._blurPanel) {
@@ -636,7 +668,7 @@ export default class AppContextMenu {
                 this._blurPanel.syncGeometry();
             }
 
-            this.menuContainer.ease({ opacity: 255, duration: 180, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+            liquidEase(this.menuContainer, { opacity: 255, duration: 180 });
 
             if (this._posTrackerId) {
                 this.timers.remove(this._posTrackerId);
@@ -707,12 +739,11 @@ export default class AppContextMenu {
 
             if (isActorAlive(this.menuContainer) && actor.get_stage()) {
                 this.menuContainer.remove_all_transitions();
-                this.menuContainer.ease({
+                liquidEase(this.menuContainer, {
                     opacity: 0,
                     scale_x: 0.95,
                     scale_y: 0.95,
                     duration: 120,
-                    mode: Clutter.AnimationMode.EASE_IN_QUAD,
                     onStopped: dispose
                 });
             } else {

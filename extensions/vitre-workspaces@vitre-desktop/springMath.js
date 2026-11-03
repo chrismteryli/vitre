@@ -5,23 +5,22 @@
 // milliseconds, velocities are progress per millisecond. A plan is a function of time only, so whatever drives it (a
 // Clutter transition, the tail after the switch has ended, a film running N times slower) draws the same curve.
 
-// ---- the Vitre stretch spring (vitre-menus dripMotion.js STRETCH, as Fullscreen Spaces uses it) ------------------------
+import {Plan, role, REDUCED, epsFor, EPS_OPACITY, rubber} from './liquid.js';
+
+// ---- the motion: the liquid engine's track role (liquid.js, feel A Viscous) ---------------------------------------------
+// v3 (liquid): one spring with state {x, v} on the track role (response 0.42 s, damping 0.90). A release starts at the
+// finger's position and speed, a key press starts from rest (or keeps the speed of the motion it interrupts), and the
+// spring rests (snaps) only when the remaining step is under a quarter pixel: no land blend, no flick stiffening, no
+// cap on a speed away from the target.
 export const SPRING = {
-    periodMs: 400,      // spring period ...
-    damping: 0.86,      // ... and damping ratio: a ~0.5 % overshoot that settles
-    landMs: 80,         // the last 80 ms ease exactly onto the target, so the hand-over to the real desktop has no step
-    tolEndPx: 3,        // the picture is done when it stays within this many px of the target ...
-    tolLogicPx: 12,     // ... and the switch itself (input, mutter) ends once it stays within this many px
-    minLogicMs: 120,    // never before this
-    maxMs: 1600,        // nothing runs longer than this
-    stiffFlick: 2.6,    // a fast flick stiffens the spring (omega >= this x |v0| / |distance|) so it cannot fling far past
-    awayMax: 0.0015,    // a release moving away from its target keeps at most this speed (progress / ms)
-    kbdPush: 0.003,     // a key press starts the motion at this speed instead of from rest (about 6 px per ms)
+    role: 'track',
+    tolLogicPx: 12,     // the switch itself (input, mutter) ends once the picture stays within this many px ...
+    minLogicMs: 120,    // ... never before this
+    rubberR: 0.16,      // past the first or last workspace a drag meets this resistance: it can never go further (workspaces)
 };
 
 // ---- reduced motion: an in-place cross-fade --------------------------------------------------------------------------
 export const FADE = {ms: 160};
-const SPRING_MIN_PERIOD_MS = 40;   // the stiffest a flick can make it
 
 export const clamp01 = v => Math.min(1, Math.max(0, v));
 export const smoothstep = (a, b, v) => {
@@ -29,98 +28,51 @@ export const smoothstep = (a, b, v) => {
     return s * s * (3 - 2 * s);
 };
 
-function springConsts(periodMs, damping) {
-    const w0 = 2 * Math.PI / periodMs;
-    const zw = damping * w0;
-    const wd = w0 * Math.sqrt(Math.max(1e-9, 1 - damping * damping));
-    return {w0, zw, wd};
-}
+export {rubber};
 
-// displacement from the target `t` ms after starting at displacement `a` with speed `u` (underdamped spring)
-export function springDisp(a, u, t, k) {
-    if (t <= 0)
-        return a;
-    const b = (u + k.zw * a) / k.wd;
-    return Math.exp(-k.zw * t) * (a * Math.cos(k.wd * t) + b * Math.sin(k.wd * t));
-}
-
-export function springVel(a, u, t, k) {
-    if (t <= 0)
-        return u;
-    const b = (u + k.zw * a) / k.wd;
-    return Math.exp(-k.zw * t) * ((b * k.wd - k.zw * a) * Math.cos(k.wd * t) - (a * k.wd + k.zw * b) * Math.sin(k.wd * t));
+// Plans: {from, to, v0, T, Tlogic, kind, at(t), vel(t)} with t in motion ms and velocities in progress per ms (the units
+// depthMotion and overviewScroll work in); the values come from the engine's spring (liquid.js Plan, stepped in seconds).
+function wrap(plan, from, to, v0, unitPx, kind, p) {
+    const T = plan.T * 1000;
+    const tolLogic = SPRING.tolLogicPx / unitPx;
+    let lastLogic = 0;
+    for (let t = 1; t <= T; t += 1) {
+        if (Math.abs(plan.at(t / 1000) - to) > tolLogic)
+            lastLogic = t;
+    }
+    const Tlogic = Math.min(T, Math.max(Math.min(SPRING.minLogicMs, T), lastLogic + 1));
+    return {from, to, v0, T, Tlogic, kind, role: kind === 'fade' ? 'reduced' : SPRING.role, response: p.r, damping: p.z,
+        at: t => plan.at(t / 1000), vel: t => plan.vel(t / 1000) / 1000};
 }
 
 /**
- * One spring motion from `from` (moving at `v0`) to `to`.
+ * One spring motion from `from` (moving at `v0`, progress per ms) to `to`.
  *
- * @param {object} p - {from, to, v0, unitPx (px per progress unit, for the tolerances), slow (unused: time is motion time)}
+ * @param {object} p - {from, to, v0, unitPx (px per progress unit: the rest tolerance is a quarter of one of them)}
  * @returns {object|null} {from, to, v0, T, Tlogic, kind, at(t), vel(t)}; null when the inputs make no sense
  */
-export function planSpring({from, to, v0 = 0, unitPx = 2020, spring = SPRING}) {
+export function planSpring({from, to, v0 = 0, unitPx = 2020}) {
     if (![from, to, v0, unitPx].every(Number.isFinite) || !(unitPx > 0))
         return null;
-    const a = from - to;                          // displacement from the target
-    let u = v0;
-    if (Math.abs(a) < 1e-9 && Math.abs(u) < 1e-9)
+    if (Math.abs(from - to) < 1e-9 && Math.abs(v0) < 1e-9)
         return {from, to, v0: 0, T: 0, Tlogic: 0, kind: 'spring', at: () => to, vel: () => 0};
-    // moving away from the target: keep a little of it (the motion turns), not a lurch the wrong way
-    if (a !== 0 && u * a > 0)
-        u = Math.sign(u) * Math.min(Math.abs(u), spring.awayMax);
-    // a fast flick toward the target stiffens the spring, same damping
-    let period = spring.periodMs;
-    if (a !== 0 && u * a < 0) {
-        const wNeed = spring.stiffFlick * Math.abs(u) / Math.abs(a);
-        const w0 = 2 * Math.PI / period;
-        if (wNeed > w0)
-            period = Math.max(SPRING_MIN_PERIOD_MS, 2 * Math.PI / wNeed);
-    }
-    const k = springConsts(period, spring.damping);
-    const tolEnd = spring.tolEndPx / unitPx;
-    const tolLogic = spring.tolLogicPx / unitPx;
-    let lastEnd = 0, lastLogic = 0;
-    for (let t = 0; t <= spring.maxMs; t += 1) {
-        const e = Math.abs(springDisp(a, u, t, k));
-        if (e > tolEnd)
-            lastEnd = t;
-        if (e > tolLogic)
-            lastLogic = t;
-    }
-    const T = Math.min(spring.maxMs, Math.max(spring.landMs, lastEnd + 1));
-    const Tlogic = Math.min(T, Math.max(Math.min(spring.minLogicMs, T), lastLogic + 1));
-    const landFrom = T - spring.landMs;
-    const at = t => {
-        if (t >= T)
-            return to;
-        const x = to + springDisp(a, u, t, k);
-        return x + (to - x) * smoothstep(landFrom, T, t);
-    };
-    const vel = t => {
-        if (t >= T)
-            return 0;
-        const x = to + springDisp(a, u, t, k);
-        const v = springVel(a, u, t, k);
-        const s = clamp01((t - landFrom) / spring.landMs);
-        const land = s * s * (3 - 2 * s);
-        const dLand = s > 0 && s < 1 ? 6 * s * (1 - s) / spring.landMs : 0;
-        return v * (1 - land) + (to - x) * dLand;
-    };
-    return {from, to, v0: u, T, Tlogic, kind: 'spring', periodMs: period, at, vel};
+    const p = role(SPRING.role);
+    const plan = new Plan({from, to, v0: v0 * 1000, p, eps: epsFor(unitPx)});
+    return wrap(plan, from, to, v0, unitPx, 'spring', p);
 }
 
-/** reduced motion: progress eases from `from` to `to` over FADE.ms (smoothstep), no overshoot */
-export function planFade({from, to, ms = FADE.ms}) {
-    if (![from, to, ms].every(Number.isFinite))
+/** reduced motion: progress goes from `from` to `to` on the 160 ms cross-fade spring (critically damped, no overshoot) */
+export function planFade({from, to}) {
+    if (![from, to].every(Number.isFinite))
         return null;
-    const T = Math.abs(from - to) < 1e-9 ? 0 : ms;
-    const at = t => t >= T ? to : from + (to - from) * smoothstep(0, T, t);
-    const vel = t => {
-        if (t <= 0 || t >= T)
-            return 0;
-        const s = t / T;
-        return (to - from) * 6 * s * (1 - s) / T;
-    };
-    return {from, to, v0: 0, T, Tlogic: T, kind: 'fade', at, vel};
+    if (Math.abs(from - to) < 1e-9)
+        return {from, to, v0: 0, T: 0, Tlogic: 0, kind: 'fade', at: () => to, vel: () => 0};
+    // a 0..1 cross-fade, mapped onto the progress
+    const u = new Plan({from: 0, to: 1, p: REDUCED, eps: EPS_OPACITY});
+    const T = u.T * 1000;
+    return {from, to, v0: 0, T, Tlogic: T, kind: 'fade', role: 'reduced',
+        at: t => t >= T ? to : from + (to - from) * u.at(t / 1000),
+        vel: t => t >= T ? 0 : (to - from) * u.vel(t / 1000) / 1000};
 }
 
 // ---- the look: a pure function of a card's screen offset u (in base distances; 0 = on screen) ------------------------
@@ -139,13 +91,16 @@ export function depthOf(u, look = LOOK) {
     return 1 - (1 - a) * (1 - a);
 }
 
-/** {x (px offset of the card's centre from the monitor's centre), scale, dim (0..1), edge (0..1), rim (0..1), side} */
-export function lookAt(u, extentPx, look = LOOK) {
-    const r = depthOf(u, look);
+/** {x (px offset of the card's centre from the monitor's centre), scale, dim (0..1), edge (0..1), rim (0..1), side}.
+ *  speed: the motion's speed in workspaces per second; a card steps back with speed as well as with distance (v3 liquid:
+ *  desktops sink with velocity), so a fast switch reads deeper than a slow one. 0 at rest: the look is unchanged there. */
+export function lookAt(u, extentPx, look = LOOK, speed = 0) {
+    const sp = Math.min(1, Math.abs(speed) / 3);
+    const r = Math.max(depthOf(u, look), sp * 0.7);
     const a = Math.abs(u);
     return {
         x: u * (extentPx + look.gapPx),
-        scale: 1 - look.sink * r,
+        scale: 1 - look.sink * r - 0.025 * sp,
         dim: look.dim * r,
         edge: look.edge * smoothstep(0, look.edgeIn, a),
         rim: look.rim * r,

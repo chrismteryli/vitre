@@ -22,9 +22,11 @@ import GLib from 'gi://GLib';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import { Settings } from '../../core/SettingsManager.js';
+import { stackReplacesDownloads, isLocalFolder } from './StackModule.js';
 
 
-export function buildSystemFoldersModule(dockUI, createBtn, toggleAppWindow) {
+// Vitre (B5): makeStack (when custom folders open as stacks) builds a stack button for a folder the user added
+export function buildSystemFoldersModule(dockUI, createBtn, toggleAppWindow, makeStack = null) {
     const systemModules = [];
     const settings = dockUI.settings;
 
@@ -42,7 +44,10 @@ export function buildSystemFoldersModule(dockUI, createBtn, toggleAppWindow) {
         }
     };
 
-    addHomeFolder('show-downloads', 'folder-download', GLib.UserDirectory.DIRECTORY_DOWNLOAD, _('Downloads'), 'Downloads');
+    // Vitre (B5): with the Downloads stack on, the stack is the Downloads item
+    if (!stackReplacesDownloads(settings)) {
+        addHomeFolder('show-downloads', 'folder-download', GLib.UserDirectory.DIRECTORY_DOWNLOAD, _('Downloads'), 'Downloads');
+    }
     addHomeFolder('show-documents', 'folder-documents', GLib.UserDirectory.DIRECTORY_DOCUMENTS, _('Documents'), 'Documents');
     addHomeFolder('show-pictures', 'folder-pictures', GLib.UserDirectory.DIRECTORY_PICTURES, _('Pictures'), 'Pictures');
     addHomeFolder('show-videos', 'folder-videos', GLib.UserDirectory.DIRECTORY_VIDEOS, _('Videos'), 'Videos');
@@ -81,12 +86,17 @@ export function buildSystemFoldersModule(dockUI, createBtn, toggleAppWindow) {
             ? fPath
             : Gio.File.new_for_path(fPath).get_uri();
 
-        const btn = createBtn(fIcon, fName, (b) => toggleAppWindow(uri, fPath, fName, b), fPath);
-        btn._customFolderIndex = idx;
-        btn._modType = `custom-${idx}`;
-
         const cleanName = fName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const customAppId = `dhruva-sys-custom-${idx}-${cleanName}`;
+        const localPath = fPath.startsWith('file://') ? Gio.File.new_for_uri(fPath).get_path() : fPath;
+        const asStack = Boolean(makeStack) && (!fPath.includes('://') || fPath.startsWith('file://'));
+        const namedIcon = f.icon && !/^(emoji:|\/|file:\/\/)/.test(f.icon) ? f.icon : null;
+
+        const btn = asStack && isLocalFolder(localPath)
+            ? makeStack({ key: customAppId, path: localPath, name: fName, icon: namedIcon })
+            : createBtn(fIcon, fName, (b) => toggleAppWindow(uri, fPath, fName, b), fPath);
+        btn._customFolderIndex = idx;
+        btn._modType = `custom-${idx}`;
 
         if (btn._delegate && btn._delegate.app) {
             btn._delegate.app.get_id = () => customAppId;

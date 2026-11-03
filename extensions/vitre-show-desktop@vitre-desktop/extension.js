@@ -28,8 +28,8 @@ export default class ShowDesktopExtension extends Extension {
             focusDesktop: () => global.display.focus_default_window(global.get_current_time()),
             focusWindow: win => Main.activateWindow(win),
             sameWorkspace: workspace => global.workspace_manager.get_active_workspace() === workspace,
-            reducedMotion: () => !St.Settings.get().enable_animations ||
-                St.Settings.get().reducedMotion === St.ReducedMotion.REDUCE,
+            // no motion at all: animations off (reduced motion cross-fades in the scene, liquid v3)
+            reducedMotion: () => !St.Settings.get().enable_animations,
             reportRecoveryFailure: () => console.warn('Show Desktop: a window could not be restored; toggle again to retry.'),
         });
         this._disposeController = this._operations.setDesktopController(this, () => this._session.toggle());

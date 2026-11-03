@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Vitre fullscreen motion (2026-10-22): entering and leaving fullscreen as one gesture.
 //
-// Entering fullscreen is one gesture: the window grows from its frame to the whole screen on the Vitre stretch spring
-// (vitre-menus dripMotion.js STRETCH: period 400 ms, damping 0.86), the desktop behind it steps back (its windows sink to
-// 95 % and the whole desktop dims) and the top bar, the Dock and the Stage strip slide off their edges. Leaving is the exact
-// reverse and lands the window on its frame.
+// Entering fullscreen is one gesture: the window is carried from its frame to the whole screen on the liquid.js glide spring
+// (position leads, size trails on glide x viscosity: Vitre Motion Lab 2), the desktop behind it steps back (its windows sink
+// to 95 % and the whole desktop dims) and the top bar, the Dock and the Stage strip slide off their edges on the pour exit
+// spring. Leaving is the reverse (the chrome comes back on pour) and lands the window on its frame.
 //
 // How: for the length of the motion a transition layer covers the window's monitor. It draws the desktop the window leaves
 // (live clones of the wallpaper and of that workspace's windows), the window (a live clone of it, and a picture of what it
@@ -34,24 +34,21 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const FS = {
-    responseMs: 400,    // the Vitre stretch spring: period (ms) ...
-    damping: 0.86,      // ... and damping ratio
-    lagMs: 34,          // the edge that moves least follows the edge that moves most by this much
-    settle: 0.004,      // an edge is done when it stays within this share of its travel ...
-    landMs: 80,         // ... and its last 80 ms ease exactly onto the target (no step when the real window takes over)
+    // the motion (Vitre Motion Lab 2): the window's position (x, y) on liquid.js 'glide' (it leads), its size (w, h) on glide
+    // trail (response x viscosity: carried, not scaled); the chrome slides off on the pour exit spring and back on pour; the
+    // desktop's dim, the shadow and the chrome's fade on the fade role; every spring rests under a quarter pixel
     sink: 0.95,         // the desktop's windows step back to this scale ...
     dim: 0.42,          // ... and the whole desktop dims by this much
     chromeGap: 12,      // the chrome slides this far past its screen edge
-    chromeOut: 0.8,     // ... and is gone (out and faded) at this depth
+    chromeOut: 0.8,     // ... and has faded out at this depth of the veil
     hold: 0.9,          // an app that has not drawn its new size yet: the window waits this far along
-    swapInMs: [45, 30], // once the app has drawn: its new content comes in under the picture of the old one ...
-    swapOutMs: [130, 100], // ... then the picture fades out ([leaving, entering]: an enlarged old picture goes sooner)
-    refadeMs: 140,      // pictures of older states (a change before) fade out over this long
+    swapIn: 0.95,       // once the app has drawn: its new content fades in under the picture of the old one, which fades out
+                        // (fade role, exit) once the new content is this far in; pictures of older states fade out at once
     shadowUntil: 0.4,   // the window's own shadow (rounded-window-corners) is gone at this depth
     waitMs: 1500,       // an app that never draws its new size is let go after this long (motion time)
     settleRealMs: 700,  // at most this long for the desktop under the layer to come to rest, then the layer goes anyway
     staticWaitMs: 450,  // reduced motion / animations off: the longest the current frame is held
-    fadeMs: 160,        // reduced motion: the cross-fade into the new state
+    // reduced motion: the cross-fade into the new state is the 160 ms spring (liquid.js REDUCED)
     watchdogMs: 4000,   // nothing of this runs longer (real time)
     shadowPad: 80,      // rounded-window-corners draws its shadow actor this far around the frame
     startTicks: 6,      // the first frames of a transition advance at most capMs each: the shell's own work right after
@@ -67,73 +64,78 @@ const NOCULL = 'vitre-fullscreen-nocull';
 const ENV_SLOW = Math.max(1, Number(GLib.getenv('VITRE_MOTION_SLOW')) || 1);
 const slowNow = () => Math.max(1, Number(globalThis.__vitreMotionSlow) || ENV_SLOW);
 
+import {Plan, role, REDUCED, EPS_PX, EPS_OPACITY} from './liquid.js';
+
 const BLACK = new Cogl.Color({red: 0, green: 0, blue: 0, alpha: 255});
+
+// Vitre Motion Lab 2: the window's corner radius follows its width, from the windowed radius (rounded-window-corners', 12 px
+// on screen) at its own frame to 0 at the full screen. While the layer is up the window is drawn without rounded-window-
+// corners' clip (a clone of its surfaces, below the actor that carries that effect) and through this mask: the frame of the
+// window inside its buffer, corners of rx, ry (buffer px, so they are round on screen whatever the scale), edges anti-
+// aliased over a pixel; the client's own shadow outside the frame is left out, as rounded-window-corners does.
+const CORNER_PX = 12;
+const CornerMask = GObject.registerClass({GTypeName: 'VitreFullscreenCornerMask'}, class CornerMask extends Clutter.ShaderEffect {
+    vfunc_get_static_snippet() {
+        return Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT,
+            'uniform vec4 bounds;\nuniform vec2 radius;\nuniform vec2 pixelStep;\n',
+            `vec2 p = cogl_tex_coord0_in.xy / pixelStep;
+            float a = 1.0;
+            if (p.x < bounds.x || p.x > bounds.z || p.y < bounds.y || p.y > bounds.w) {
+                a = 0.0;
+            } else if (radius.x > 0.5 && radius.y > 0.5) {
+                vec2 c = vec2(clamp(p.x, bounds.x + radius.x, bounds.z - radius.x), clamp(p.y, bounds.y + radius.y, bounds.w - radius.y));
+                float d = length((p - c) / radius);
+                a = clamp((1.0 - d) * min(radius.x, radius.y) + 0.5, 0.0, 1.0);
+            }
+            cogl_color_out *= a;`);
+    }
+
+    // F: the frame, B: the buffer (stage px, the clone is B large), r: the radius on screen, sx, sy: the clone's scale
+    update(F, B, r, sx, sy) {
+        const w = Math.max(1, B.w), h = Math.max(1, B.h);
+        this.set_uniform_float('bounds', 4, [F.x - B.x, F.y - B.y, F.x - B.x + F.w, F.y - B.y + F.h]);
+        this.set_uniform_float('radius', 2, [r / Math.max(1e-3, sx), r / Math.max(1e-3, sy)]);
+        this.set_uniform_float('pixelStep', 2, [1 / w, 1 / h]);
+        this.queue_repaint();
+    }
+});
 const RWC_EFFECT = 'Rounded Corners Effect';     // rounded-window-corners' effect name (its shadow follows it)
 
 const clamp01 = v => Math.min(1, Math.max(0, v));
+// a mapping of the veil onto 0..1 with soft ends (a look read off a spring, never a time curve)
 const smoothstep = (a, b, v) => {
     const s = clamp01((v - a) / (b - a));
     return s * s * (3 - 2 * s);
 };
 
-// ---- the spring (as vitre-window-open's snap motion) -------------------------------------------------------------------
+// ---- the spring (liquid.js Plans: the engine's spring as a function of motion time; as vitre-window-open's snap motion) --
 
-const W0 = 2 * Math.PI / FS.responseMs;      // rad per ms
-const ZW = FS.damping * W0;
-const WD = W0 * Math.sqrt(1 - FS.damping * FS.damping);
-
-// displacement from the target `tau` ms after a start at displacement `a` with speed `u` (units per ms) ...
-function springDisp(a, u, tau) {
-    if (tau <= 0)
-        return a;
-    const b = (u + ZW * a) / WD;
-    return Math.exp(-ZW * tau) * (a * Math.cos(WD * tau) + b * Math.sin(WD * tau));
+// one value on the spring: from `s` (at speed `u`, per ms) to `g` on params `p`, from t0 (ms)
+function makeEdge(s, g, u, t0, p = role('glide'), eps = EPS_PX) {
+    const plan = new Plan({from: s, to: g, v0: u * 1000, p, eps});
+    return {s, g, u, t0, plan, end: plan.T * 1000};
 }
 
-// ... and the speed then
-function springSpeed(a, u, tau) {
-    if (tau < 0)
-        return 0;
-    const b = (u + ZW * a) / WD;
-    return Math.exp(-ZW * tau) * ((b * WD - ZW * a) * Math.cos(WD * tau) - (a * WD + ZW * b) * Math.sin(WD * tau));
-}
-
-let _settleMs = 0;
-function settleMs() {
-    if (!_settleMs) {
-        let last = 0;
-        for (let t = 0; t <= 3000; t++) {
-            if (Math.abs(springDisp(1, 0, t)) > FS.settle)
-                last = t;
-        }
-        _settleMs = last + 1;
-    }
-    return _settleMs;
-}
-
-// one value on the spring: from `s` (at speed `u`) to `g`, starting `lag` ms after `t0`; exactly `g` from t0 + end on
-const makeEdge = (s, g, u, t0, lag) => ({s, g, u, t0, lag, end: lag + settleMs()});
-
-function edgeAt(e, t) {
-    const local = t - e.t0;
-    if (local >= e.end)
-        return e.g;
-    const x = e.g + springDisp(e.s - e.g, e.u, local - e.lag);
-    return x + (e.g - x) * smoothstep(e.end - FS.landMs, e.end, local);
-}
-
-function edgeSpeed(e, t) {
-    const local = t - e.t0;
-    const x = e.g + springDisp(e.s - e.g, e.u, local - e.lag);
-    const v = springSpeed(e.s - e.g, e.u, local - e.lag);
-    const a = e.end - FS.landMs;
-    const k = clamp01((local - a) / FS.landMs);
-    const land = k * k * (3 - 2 * k);
-    const dLand = k > 0 && k < 1 ? 6 * k * (1 - k) / FS.landMs : 0;
-    return v * (1 - land) + (e.g - x) * dLand;
-}
-
+const edgeAt = (e, t) => e.plan.at(Math.max(0, t - e.t0) / 1000);
+const edgeSpeed = (e, t) => e.plan.vel(Math.max(0, t - e.t0) / 1000) / 1000;
 const edgeDone = (e, t) => t - e.t0 >= e.end;
+
+// a fade (0..1) as a function of time: from a0 to `to` on params p, starting `wait` ms after t0
+function makeFade(a0, to, t0, p, wait = 0) {
+    return {t0, wait, a0, to, plan: new Plan({from: a0, to, p, eps: EPS_OPACITY})};
+}
+const fadeAt = (f, t) => t - f.t0 < f.wait ? f.a0 : f.plan.at((t - f.t0 - f.wait) / 1000);
+const fadeDone = (f, t) => t - f.t0 >= f.wait + f.plan.T * 1000;
+// ms until a fade reaches `v` (from its start), for a picture that waits until the new content is in
+function fadeTime(f, v) {
+    for (let ms = 0; ms <= f.plan.T * 1000; ms += 1) {
+        if (f.plan.at(ms / 1000) >= v)
+            return ms;
+    }
+    return f.plan.T * 1000;
+}
+// the desktop's veil (dim, shadow, chrome fade) toward `to` from where it is
+const veilTo = (e, to, now) => makeFade(e.veil ? fadeAt(e.veil, now) : 1 - to, to, now, role('fade', {exit: to === 0}));
 
 // ---- geometry helpers -------------------------------------------------------------------------------------------------
 
@@ -141,6 +143,8 @@ const rectOf = r => ({x: r.x, y: r.y, w: r.width, h: r.height});
 const edgesOf = r => [r.x, r.y, r.x + r.w, r.y + r.h];
 const fromEdges = ([l, t, r, b]) => ({x: l, y: t, w: Math.max(1, r - l), h: Math.max(1, b - t)});
 const near = (a, b, eps = 1) => Boolean(a && b) && edgesOf(a).every((v, i) => Math.abs(v - edgesOf(b)[i]) <= eps);
+// the moving rectangle's channels: position leads, size trails
+const chOf = r => [r.x, r.y, r.w, r.h];
 const lerpRect = (a, b, s) => fromEdges(edgesOf(a).map((v, i) => v + (edgesOf(b)[i] - v) * s));
 const alive = a => Boolean(a) && a.get_stage?.() !== null;
 const allocOf = a => ({x: a.x, y: a.y, w: a.width, h: a.height});
@@ -372,8 +376,11 @@ export class FullscreenMotion {
             e.mapB = allocOf(actor);
             this._picture(e, now, 'static');
         }
-        e.depth = makeEdge(d0, dir, 0, now, 0);
-        e.edges = edgesOf(e.from).map((v, i) => makeEdge(v, v, 0, now, 0));
+        e.depth = makeEdge(d0, dir, 0, now, role('glide'), 1e-4);
+        e.veil = makeFade(d0, dir, now, role('fade', {exit: dir === 0}));
+        e.edges = chOf(e.from).map(v => makeEdge(v, v, 0, now));
+        // the chrome (0 in place .. 1 off its edge): out on the pour exit spring, back on pour
+        e.bar = makeEdge(d0, dir, 0, now, role('pour', {exit: dir === 1}), 1e-4);
         e.target = e.from;
         this._aim(e, now);
         e.signals.push([actor, actor.connect('destroy', () => this._drop(actor, 'destroyed'))]);
@@ -410,7 +417,9 @@ export class FullscreenMotion {
             const R = this._rectAt(e, now);
             e.from = R;
             const d = edgeAt(e.depth, now);
-            e.depth = makeEdge(d, dir, edgeSpeed(e.depth, now), now, 0);
+            e.depth = makeEdge(d, dir, edgeSpeed(e.depth, now), now, role('glide'), 1e-4);
+            e.bar = makeEdge(edgeAt(e.bar, now), dir, edgeSpeed(e.bar, now), now, role('pour', {exit: dir === 1}), 1e-4);
+            e.veil = veilTo(e, dir, now);
         }
         e.layerFade = null;
         e.layer.opacity = 255;
@@ -483,7 +492,16 @@ export class FullscreenMotion {
             e.shadow = new Clutter.Clone({source: sh, opacity: 0});
             winLayer.add_child(e.shadow);
         }
-        e.live = new Clutter.Clone({source: e.actor});
+        // a window rounded-window-corners rounds when it is windowed gets the corner mask (CornerMask) while it moves: its
+        // surfaces are cloned below the actor that carries that effect (Wayland: the window actor itself)
+        const rounded = e.dir === 1 ? rwcOn : Boolean(memo?.round);
+        const surfaces = e.actor.get_first_child?.();
+        const masked = e.mode === 'motion' && rounded && surfaces && e.win.get_client_type?.() === Meta.WindowClientType.WAYLAND;
+        e.live = new Clutter.Clone({source: masked ? surfaces : e.actor});
+        if (masked) {
+            e.mask = new CornerMask();
+            e.live.add_effect_with_name('vitre-fullscreen-corners', e.mask);
+        }
         winLayer.add_child(e.live);
         // the chrome over everything (as on the real desktop): the top bar, the Dock, the Stage strip
         const chromeLayer = new Clutter.Actor({width: M.w, height: M.h});
@@ -499,7 +517,7 @@ export class FullscreenMotion {
             e.chrome.push({src: c.actor, clone, op: c.op, tx: c.tx ?? 0, ty: c.ty ?? 0, off, gone: null});
         }
         if (e.dir === 1) {
-            this._memo.set(e.win, {...this._memo.get(e.win) ?? {}, home: e.home, shadow: Boolean(e.shadow),
+            this._memo.set(e.win, {...this._memo.get(e.win) ?? {}, home: e.home, shadow: Boolean(e.shadow), round: rwcOn,
                 chrome: e.chrome.map(c => ({actor: c.src, r: {x: c.clone.x + M.x, y: c.clone.y + M.y, w: c.clone.width, h: c.clone.height},
                     op: c.op, tx: c.tx, ty: c.ty}))});
         }
@@ -591,10 +609,8 @@ export class FullscreenMotion {
             const resized = Math.abs(F.w - e.mapF.w) > 1 || Math.abs(F.h - e.mapF.h) > 1;
             const pictured = resized && this._picture(e, now);
             this._thaw(e);
-            if (pictured) {
-                e.swapAt = now;
-                e.swapInMs = FS.swapInMs[e.dir];
-            }
+            if (pictured)
+                this._swapIn(e, now);
         }
         // an in-between size (a change that was already overtaken by the next one): show it, but hold it again
         if (!near(F, this._final(e), 1.5))
@@ -621,31 +637,49 @@ export class FullscreenMotion {
             p.a0 = this._picAlpha(e, p, now);
             p.t0 = now;
             p.kind = 'old';
+            p.fade = null;
         }
         const actor = new St.Widget({content, width: B.w, height: B.h, reactive: false});
         e.winLayer.add_child(actor);
-        e.pics.push({actor, F: {...e.mapF}, B: {...B}, kind, t0: now, a0: 1, inMs: FS.swapInMs[e.dir], outMs: FS.swapOutMs[e.dir]});
+        e.pics.push({actor, F: {...e.mapF}, B: {...B}, kind, t0: now, a0: 1, fade: null});
         return true;
+    }
+
+    // the app has drawn: its new content fades in (fade role) under the newest picture, which fades out (fade exit) once the
+    // new content is SWAP_IN in
+    _swapIn(e, now) {
+        e.swapAt = now;
+        e.liveIn = makeFade(0, 1, now, role('fade'));
+        const wait = fadeTime(e.liveIn, FS.swapIn);
+        for (const p of e.pics) {
+            if (p.kind !== 'static' && !p.fade)
+                p.fade = makeFade(1, 0, now, role('fade', {exit: true}), wait);
+        }
     }
 
     _picAlpha(e, p, now) {
         if (p.kind === 'static')
             return 1;
-        if (p.kind === 'old')
-            return p.a0 * (1 - smoothstep(0, FS.refadeMs, now - p.t0));
-        return 1 - smoothstep(p.inMs, p.inMs + p.outMs, now - p.t0);
+        if (p.kind === 'old') {
+            p.fade ??= makeFade(p.a0, 0, p.t0, role('fade', {exit: true}));
+            return fadeDone(p.fade, now) ? 0 : fadeAt(p.fade, now);
+        }
+        if (!p.fade)
+            return 1;
+        return fadeDone(p.fade, now) ? 0 : fadeAt(p.fade, now);
     }
 
     _liveAlpha(e, now) {
         if (e.mode !== 'motion')
             return e.pics.length ? 0 : 1;
-        return e.swapAt === null ? 1 : smoothstep(0, e.swapInMs ?? FS.swapInMs[e.dir], now - e.swapAt);
+        return e.swapAt === null || !e.liveIn ? 1 : fadeAt(e.liveIn, now);
     }
 
     // ---- the motion ----------------------------------------------------------------------------------------------------
 
     _rectAt(e, now) {
-        let [l, t, r, b] = e.edges.map(edge => edgeAt(edge, now));
+        const [x, y, w, h] = e.edges.map(edge => edgeAt(edge, now));
+        let l = x, t = y, r = x + w, b = y + h;
         if (e.dir === 1 && near(e.target, e.M, 0.5)) {
             // growing to the screen: an edge stops at the screen's edge (no overshoot past it)
             l = Math.max(l, e.M.x);
@@ -668,19 +702,12 @@ export class FullscreenMotion {
         }
         if (!turned && near(target, e.target, 0.01))
             return;
-        const from = edgesOf(e.target === null ? e.from : this._rectAt(e, now));
-        const to = edgesOf(target);
-        if (turned || !e.edgesStarted) {
-            // a fresh start: the edge that travels least follows the one that travels most
-            const travel = from.map((v, i) => Math.abs(to[i] - v));
-            const most = Math.max(...travel);
-            e.edges = e.edges.map((edge, i) => makeEdge(edgeAt(edge, now), to[i], edgeSpeed(edge, now), now,
-                most > 0 ? FS.lagMs * (1 - travel[i] / most) : 0));
-            e.edgesStarted = true;
-        } else {
-            // the same move with a new end (the app has drawn its size, or chose another frame): keep place and speed
-            e.edges = e.edges.map((edge, i) => makeEdge(edgeAt(edge, now), to[i], edgeSpeed(edge, now), now, 0));
-        }
+        // position on glide, size on glide trail; a new end (a turn, the app has drawn its size, or chose another frame)
+        // keeps place and speed
+        const to = chOf(target);
+        const lead = role('glide'), trail = role('glide', {trail: true});
+        e.edges = e.edges.map((edge, i) => makeEdge(edgeAt(edge, now), to[i], edgeSpeed(edge, now), now, i < 2 ? lead : trail));
+        e.edgesStarted = true;
         e.target = target;
     }
 
@@ -697,18 +724,25 @@ export class FullscreenMotion {
         const motion = e.mode === 'motion';
         const R = motion ? this._rectAt(e, now) : e.staticR;
         const d = motion ? clamp01(edgeAt(e.depth, now)) : e.staticD;
+        const v = motion ? clamp01(fadeAt(e.veil, now)) : e.staticD;       // opacity and blur: the fade role
         // the desktop steps back
         const s = 1 - (1 - FS.sink) * d;
         e.wins.set_scale(s, s);
-        e.dim.opacity = Math.round(255 * FS.dim * d);
+        e.dim.opacity = Math.round(255 * FS.dim * v);
         // the window: the live window under the pictures of what it showed
         const F = e.frozen ? e.mapF : rectOf(e.win.get_frame_rect());
         const B = e.frozen ? e.mapB : allocOf(e.actor);
         this._place(e.live, F, B, R, M);
+        if (e.mask) {
+            // the corner radius lerps with the width: CORNER_PX at the windowed frame, 0 at the full screen
+            const home = e.home ?? F;
+            const u = clamp01((R.w - home.w) / Math.max(1, M.w - home.w));
+            e.mask.update(F, B, CORNER_PX * (1 - u), R.w / F.w, R.h / F.h);
+        }
         e.live.opacity = Math.round(255 * this._liveAlpha(e, now));
         e.pics = e.pics.filter(p => {
             const a = this._picAlpha(e, p, now);
-            if (a <= 0 && now - p.t0 > (p.inMs ?? 0)) {
+            if (a <= 0 && p.fade && fadeDone(p.fade, now)) {
                 p.actor.destroy();
                 return false;
             }
@@ -720,15 +754,16 @@ export class FullscreenMotion {
             const P = FS.shadowPad;
             e.shadow.set_position(R.x - M.x - P, R.y - M.y - P);
             e.shadow.set_size(R.w + 2 * P, R.h + 2 * P);
-            e.shadow.opacity = Math.round(255 * (1 - smoothstep(0, FS.shadowUntil, d)));
+            e.shadow.opacity = Math.round(255 * (1 - smoothstep(0, FS.shadowUntil, v)));
         }
-        // the chrome slides off its edges (and back)
-        const out = smoothstep(0, FS.chromeOut, d);
-        const fade = 1 - smoothstep(FS.chromeOut * 0.3, FS.chromeOut, d);
+        // the chrome slides off its edges on the pour exit spring (and back on pour)
+        const out = motion ? edgeAt(e.bar, now) : e.staticD;
+        const fade = 1 - smoothstep(FS.chromeOut * 0.3, FS.chromeOut, v);
         for (const c of e.chrome) {
             c.clone.translation_x = c.off[0] * out;
             c.clone.translation_y = c.off[1] * out;
-            const g = c.gone === null ? 1 : 1 - smoothstep(0, 120, GLib.get_monotonic_time() / 1000 - c.gone);
+            const g = c.gone === null ? 1 : (c.goneFade ??= makeFade(1, 0, c.gone, role('fade', {exit: true})),
+            fadeDone(c.goneFade, GLib.get_monotonic_time() / 1000 / slowNow()) ? 0 : fadeAt(c.goneFade, GLib.get_monotonic_time() / 1000 / slowNow()));
             c.clone.opacity = Math.round(c.op * fade * g);
         }
         if (e.trace)
@@ -744,7 +779,7 @@ export class FullscreenMotion {
             return false;
         if (e.pics.length || this._liveAlpha(e, now) < 1)
             return false;
-        return e.edges.every(edge => edgeDone(edge, now)) && edgeDone(e.depth, now);
+        return e.edges.every(edge => edgeDone(edge, now)) && edgeDone(e.depth, now) && edgeDone(e.bar, now) && fadeDone(e.veil, now);
     }
 
     // the real desktop under the layer shows what the layer shows (reduced motion and animations off only wait for the
@@ -776,13 +811,16 @@ export class FullscreenMotion {
             }
             if (!shows) {
                 // hidden on the real desktop for its own reasons (a Dock that hides itself): its picture fades away
-                if (c.gone === null)
-                    c.gone = nowMs;
-                if (nowMs - c.gone < 120 * slowNow())
+                if (c.gone === null) {
+                    c.gone = nowMs / slowNow();
+                    c.goneFade = null;
+                }
+                if (!c.goneFade || !fadeDone(c.goneFade, nowMs / slowNow()))
                     return false;
                 continue;
             }
             c.gone = null;
+            c.goneFade = null;
             if (src.get_paint_opacity() !== c.op || Math.abs(src.translation_x - c.tx) > 0.5 || Math.abs(src.translation_y - c.ty) > 0.5 ||
                 src.get_transition?.('opacity') || src.get_transition?.('translation-y') || src.get_transition?.('translation-x'))
                 return false;
@@ -835,12 +873,12 @@ export class FullscreenMotion {
                 if (e.mode === 'cut')
                     return this._finish(e, 'cut');
                 e.layerFade = now;
+                e.layerFadePlan = makeFade(1, 0, now, REDUCED);
             }
             return;
         }
-        const k = smoothstep(0, FS.fadeMs, now - e.layerFade);
-        e.layer.opacity = Math.round(255 * (1 - k));
-        if (k >= 1)
+        e.layer.opacity = Math.round(255 * fadeAt(e.layerFadePlan, now));
+        if (fadeDone(e.layerFadePlan, now))
             this._finish(e, 'faded');
     }
 

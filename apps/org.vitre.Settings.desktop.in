@@ -1,0 +1,24 @@
+[Desktop Entry]
+Type=Application
+Name=Vitre Settings
+GenericName=Desktop Settings
+Comment=Motion, Dock, windows, glass and look of the Vitre desktop
+Exec=@LAUNCHER@
+Icon=org.vitre.Settings
+Terminal=false
+StartupNotify=true
+Categories=GTK;GNOME;Settings;DesktopSettings;
+Keywords=Vitre;Dock;Motion;Animation;Glass;Wallpaper;Stage;Cursor;Theme;
+Actions=motion;dock;look;
+
+[Desktop Action motion]
+Name=Motion
+Exec=@LAUNCHER@ --page=motion
+
+[Desktop Action dock]
+Name=Dock
+Exec=@LAUNCHER@ --page=dock
+
+[Desktop Action look]
+Name=Look
+Exec=@LAUNCHER@ --page=look

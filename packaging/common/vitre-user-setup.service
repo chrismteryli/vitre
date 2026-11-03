@@ -1,0 +1,12 @@
+[Unit]
+Description=Vitre per-user setup (links the Vitre GTK stylesheets into the user's config once)
+Documentation=file:///usr/share/doc/vitre-session/README.Debian
+# Started by gnome-session@vitre.target only, so the Ubuntu session never runs it. It runs before the shell, so the links exist before
+# the first GTK application starts.
+Before=org.gnome.Shell@vitre.service
+ConditionPathExists=/usr/lib/vitre/vitre-user-setup
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/vitre/vitre-user-setup

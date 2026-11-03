@@ -26,6 +26,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {GlassLayer, GLASS_FINISH, MARGIN} from './glass.js';
 import {DripController, motionAllowed, op255} from './liquidDrip.js';
+import {role} from './liquid.js';
+import {animate, stopAnimate} from './liquidClock.js';
 import {DripStyle} from './dripStyle.js';
 import {ControlsAnchor, CC_GAP} from './controls.js';
 import {WindowDim} from './dim.js';
@@ -47,8 +49,6 @@ export const GEOM = {
     holdPad: 12,            // the capsule stays while the pointer is this close to it, or anywhere between it and the corner
 };
 export const BRIGHTNESS = 0.38;      // the glass's backdrop is dimmed to this (1 = the HUD's clear finish); see the header
-const FADE_IN_MS = 160;              // drip-style 'classic'
-const FADE_OUT_MS = 120;
 const CLICK_POLL_MS = 30;          // see _watchClicks
 const BUTTONS = Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.BUTTON2_MASK | Clutter.ModifierType.BUTTON3_MASK;
 
@@ -412,14 +412,13 @@ export class Capsule {
     }
 
     _fade(show) {
+        // drip-style 'classic': a fade on the fade role (leaving: its exit spring); reduced motion: the 160 ms cross-fade
         const root = this._actors.root;
         root.remove_all_transitions();
-        root.ease({
-            opacity: show ? 255 : 0,
-            duration: show ? FADE_IN_MS : FADE_OUT_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: () => {
-                if (!show && this._up && this._actors && root.opacity === 0)
+        animate(root, {opacity: show ? 255 : 0}, {
+            fade: role('fade', {exit: !show}),
+            onDone: finished => {
+                if (finished && !show && this._up && this._actors && root.opacity === 0)
                     this._hideNow();
             },
         });
@@ -435,6 +434,7 @@ export class Capsule {
         this._dim.undim(true);
         const a = this._actors;
         if (a) {
+            stopAnimate(a.root);
             a.root.remove_all_transitions();
             a.root.hide();
             a.root.opacity = 0;

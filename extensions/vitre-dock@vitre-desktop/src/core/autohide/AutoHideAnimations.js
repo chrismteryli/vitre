@@ -17,10 +17,10 @@
 */
 
 
-import Clutter from 'gi://Clutter';
 
 import { isActorAlive } from '../Utils.js';
 import { Settings } from '../SettingsManager.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const HIDE_OFFSET_BUFFER = 20;
@@ -62,12 +62,11 @@ export function animateShow(dockUI, onComplete) {
     dockUI.actor._isAutohiding = false;
     dockUI.actor.remove_all_transitions();
     dockUI.actor.show();
-    dockUI.actor.ease({
+    liquidEase(dockUI.actor, {
         translation_x: 0,
         translation_y: 0,
         opacity: 255,
         duration: getAnimDuration(),
-        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         onStopped: (_isFinished) => {
             dockUI.actor.opacity = 255;
             if (dockUI._dockBlur) {
@@ -90,12 +89,11 @@ export function animateHide(dockUI, onComplete) {
     }
 
     dockUI.actor.remove_all_transitions();
-    dockUI.actor.ease({
+    liquidEase(dockUI.actor, {
         translation_x: hideX,
         translation_y: hideY,
         opacity: 0,
         duration: getAnimDuration(),
-        mode: Clutter.AnimationMode.EASE_IN_QUAD,
         onStopped: (_isFinished) => {
             dockUI.actor.opacity = 0;
             if (dockUI._dockBlur) {

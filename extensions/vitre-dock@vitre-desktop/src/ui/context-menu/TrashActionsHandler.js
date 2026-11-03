@@ -26,23 +26,71 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 
 import { addSeparator } from './ContextMenuItems.js';
 import { setBoxVertical, isActorAlive } from '../../core/Utils.js';
+import { checkTrashFull, homeTrashDir } from '../modules/TrashModule.js';
 
 
 const TRASH_BATCH_SIZE = 10;
+const LOCAL_DELETE_STEP = 64;
+
+// Vitre (B5): without gvfs (trash:/// unavailable) the home trash folder is emptied directly: everything under
+// Trash/files, Trash/info and Trash/expunged, children before their folder, symlinks removed and never followed, and
+// nothing outside the home trash folder
+function emptyHomeTrash() {
+    const root = homeTrashDir();
+    const rootPath = root.get_path();
+    const todo = ['files', 'info', 'expunged'].map(name => ({ file: root.get_child(name), keep: true, listed: false }));
+    const attrs = 'standard::name,standard::type';
+    GLib.idle_add(GLib.PRIORITY_LOW, () => {
+        for (let n = 0; n < LOCAL_DELETE_STEP && todo.length > 0; n++) {
+            const top = todo[todo.length - 1];
+            if (!top.listed) {
+                top.listed = true;
+                let en = null;
+                try {
+                    en = top.file.enumerate_children(attrs, Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null);
+                } catch (_e) {
+                    en = null;
+                }
+                if (en) {
+                    let info;
+                    while ((info = en.next_file(null)) !== null) {
+                        const isDir = info.get_file_type() === Gio.FileType.DIRECTORY;
+                        todo.push({ file: top.file.get_child(info.get_name()), keep: false, listed: !isDir });
+                    }
+                    en.close(null);
+                }
+                continue;
+            }
+            todo.pop();
+            if (top.keep) continue;
+            const path = top.file.get_path();
+            if (!path || !path.startsWith(`${rootPath}/`)) continue;
+            try {
+                top.file.delete(null);
+            } catch (e) {
+                console.warn(`[Dhruva] could not delete ${path}: ${e.message}`);
+            }
+        }
+        return todo.length > 0 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
+    });
+}
 
 function emptyTrashAsync(cancellable = null) {
     const trashRoot = Gio.File.new_for_uri('trash:///');
     trashRoot.enumerate_children_async('standard::name', Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, cancellable, (file, res) => {
         try {
             const enumerator = file.enumerate_children_finish(res);
+            let listed = 0;
             const deleteNext = () => {
                 enumerator.next_files_async(TRASH_BATCH_SIZE, GLib.PRIORITY_DEFAULT, cancellable, (e, filesRes) => {
                     try {
                         const files = e.next_files_finish(filesRes);
                         if (!files || files.length === 0) {
                             enumerator.close_async(GLib.PRIORITY_DEFAULT, cancellable, () => {});
+                            if (!listed) emptyHomeTrash();
                             return;
                         }
+                        listed += files.length;
                         files.forEach(info => {
                             const child = trashRoot.get_child(info.get_name());
                             child.delete_async(GLib.PRIORITY_DEFAULT, cancellable, () => { });
@@ -50,12 +98,13 @@ function emptyTrashAsync(cancellable = null) {
                         deleteNext();
                     } catch (_err) {
                         enumerator.close_async(GLib.PRIORITY_DEFAULT, cancellable, () => {});
+                        if (!listed) emptyHomeTrash();
                     }
                 });
             };
             deleteNext();
-        } catch (err) {
-            console.error('[Dhruva] Failed to enumerate trash:', err);
+        } catch (_err) {
+            emptyHomeTrash();
         }
     });
 }
@@ -75,8 +124,8 @@ function confirmEmptyTrash() {
     }));
 
     const descLabel = new St.Label({
-        text: _('Are you sure you want to permanently delete all items from the Trash?\nThis action cannot be undone.'),
-        style: 'font-size: 15px; color: rgba(255, 255, 255, 0.75); text-align: center; margin-top: 4px;'
+        text: _('Everything in the Trash will be deleted for good. You can’t undo this.'),
+        style: 'font-size: 15px; color: rgba(255, 255, 255, 0.75); text-align: center; margin-top: 4px; width: 300px;'
     });
     descLabel.clutter_text.line_wrap = true;
     descLabel.clutter_text.justify = true;
@@ -95,7 +144,7 @@ export function attachTrashActions(contextMenu) {
         style_class: 'context-menu-action-btn'
     });
     const label = new St.Label({
-        text: _('Checking Trash...'),
+        text: _('Checking the Trash…'),
         style_class: 'context-menu-action-label',
         style: 'color: rgba(255,255,255,0.4);'
     });
@@ -127,39 +176,8 @@ export function attachTrashActions(contextMenu) {
         }
     };
 
-    const trashFile = Gio.File.new_for_uri('trash:///');
-
-    const checkFirstChild = () => {
-        trashFile.enumerate_children_async('standard::name', Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, cancellable, (file, res) => {
-            let enumerator;
-            try {
-                enumerator = file.enumerate_children_finish(res);
-            } catch (_e) {
-                showState(false);
-                return;
-            }
-            enumerator.next_files_async(1, GLib.PRIORITY_DEFAULT, cancellable, (e, filesRes) => {
-                let hasItems = false;
-                try {
-                    hasItems = e.next_files_finish(filesRes).length > 0;
-                } catch (_err) {
-                    hasItems = false;
-                }
-                enumerator.close_async(GLib.PRIORITY_DEFAULT, cancellable, () => {});
-                showState(hasItems);
-            });
-        });
-    };
-
-    trashFile.query_info_async('trash::item-count', Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, cancellable, (file, res) => {
-        let info;
-        try {
-            info = file.query_info_finish(res);
-        } catch (_e) {
-            if (!cancellable.is_cancelled()) checkFirstChild();
-            return;
-        }
-        if (info.has_attribute('trash::item-count')) showState(info.get_attribute_uint32('trash::item-count') > 0);
-        else checkFirstChild();
+    // Vitre (B5): the same check the Trash icon uses (trash:/// when gvfs answers, else the home trash folder)
+    checkTrashFull(cancellable, hasItems => {
+        if (!cancellable.is_cancelled()) showState(hasItems);
     });
 }

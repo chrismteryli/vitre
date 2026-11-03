@@ -1,0 +1,14 @@
+#!/bin/sh
+# Vitre session launcher (started by the display manager from /usr/share/wayland-sessions/vitre.desktop).
+#
+# DCONF_PROFILE=vitre makes every program of this login read the Vitre system defaults (/etc/dconf/profile/vitre) below the
+# user's own settings. gnome-session uploads its environment to the D-Bus activation environment and to the systemd user
+# manager, so GNOME Shell, the settings daemons and the apps started from them all inherit it. The Ubuntu session never goes
+# through this file, so it does not see these defaults.
+#
+# GNOME_SHELL_SESSION_MODE is set as well for tools that start gnome-shell by hand; the session itself starts the shell with
+# --mode=vitre (org.gnome.Shell@vitre.service).
+DCONF_PROFILE=vitre
+GNOME_SHELL_SESSION_MODE=vitre
+export DCONF_PROFILE GNOME_SHELL_SESSION_MODE
+exec /usr/bin/gnome-session --session=vitre "$@"

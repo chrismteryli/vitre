@@ -1,3 +1,4 @@
-/* A18: the upstream theme libadwaita override first (unchanged file), then the the reference design window chrome layer. */
-@import url("gtk-Dark.css");
+/* A18 + B6: the upstream theme libadwaita override for both styles with the live accent, then the reference design
+   window chrome layer (it has its own light and dark rules). */
+@import url("vitre-adw.css");
 @import url("a18-chrome.css");

@@ -2,17 +2,16 @@
  * top-centre under the Control Center icon, with the matching glyph and a level bar; the
  * top-bar icon is swapped for the glyph in a highlighted pill while it is up.
  *
- * Motion is the frame-measured the reference design.x beta recording (plans/A14-measurements.md 1a):
- *   enter : whole capsule opacity follows the measured presence table (50 % at +165 ms, 90 %
- *           at +335 ms, 98 % at +500 ms), content visible first, glass (blur, tint, rim)
- *           about 35 ms later, scale about the top-centre from 0.92 high / ~0.95 wide to 1.0,
- *           no overshoot, the top edge never moves
- *   dwell : 0.9 s after the last value change; a new value updates the fill and extends the
- *           dwell (no re-enter); a value that arrives during the exit turns the exit around
- *   exit  : 195 ms S-shaped fade (50 % at +83 ms) with the scale played back
- * The time source is a Clutter.Timeline (NOT slowed by St's slow-down factor, which Just
- * Perfection sets to 0.8): the reference's durations are used as measured. Animations off or reduced
- * motion: the capsule appears and disappears in one frame.
+ * Motion (liquid v3, liquid.js springs; drip-style liquid pours it out of the bar, see liquidDrip.js):
+ *   enter : classic: the capsule's presence on a Fade spring, its scale about the top-centre on a 'pour' spring from
+ *           0.92 high / 0.945 wide to 1.0 (the top edge never moves), the glass a little behind the content
+ *   dwell : 0.9 s after the last value change; a new value moves the fill (a 'bead' spring: it sloshes and settles),
+ *           jostles the settled capsule and extends the dwell (no re-enter); a value during the exit turns it around
+ *           from where it is, with its speed
+ *   exit  : presence on the fade exit spring, the scale to 0.92 / 0.95 on the pour exit spring (never bouncing)
+ * Springs are stepped by liquidClock.js's Ticker (the wall clock per frame, NOT slowed by St's slow-down factor, which Just
+ * Perfection sets to 0.8). Animations off: the capsule appears and disappears in one frame. Reduced motion: a 160 ms
+ * cross-fade in place.
  */
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -24,6 +23,8 @@ import {GlassLayer, MARGIN} from './glass.js';
 import {deriveGeometry} from './geometry.js';
 import {levelFraction} from './osd.js';
 import * as C from './curves.js';
+import {Spring, Fade, role, REDUCED, EPS_PX, EPS_OPACITY} from './liquid.js';
+import {Ticker, motionMode} from './liquidClock.js';
 import {DripController, motionAllowed as dripMotionAllowed} from './liquidDrip.js';
 import {DripStyle} from './dripStyle.js';
 import {HudDripAdapter} from './hudDrip.js';
@@ -32,23 +33,25 @@ const HIDDEN = 'hidden';
 const ENTERING = 'entering';
 const SHOWN = 'shown';
 const EXITING = 'exiting';
-const CARRY_MS = 100;   // a reversal blends from the scale it had to the table over this long
 // The old top-bar icons hand over to the pill while the capsule is below this presence (not measured:
 // the recording does not resolve the swap; a short hand-off avoids two glyphs ghosting over each other).
 export const INDICATOR_HANDOFF = 0.3;
-
-const lerp = (a, b, w) => a + (b - a) * w;
 
 export class MenubarHud {
     constructor() {
         this._state = HIDDEN;
         this._actors = null;
-        this._timeline = null;
         this._phase = null;
-        this._phaseT0 = 0;
         this._phaseT = 0;
-        this._carry = null;
         this._dwellId = 0;
+        // liquid.js springs: classic presence / scale / glass, the level (fill width, px) and the jostle (scale_x offset)
+        this._pres = new Fade(0, role('fade'), EPS_OPACITY);
+        this._gate = new Fade(0, role('fade'), EPS_OPACITY);
+        this._sx = new Spring(1, role('pour'), 1e-4);
+        this._sy = new Spring(1, role('pour'), 1e-4);
+        this._level = null;
+        this._jostle = new Spring(0, role('bead'), 1e-4);
+        this._ticker = new Ticker(dt => this._step(dt));
         this._unredirect = false;
         this._swap = null;
         this._geo = null;
@@ -88,9 +91,13 @@ export class MenubarHud {
         return Boolean(Main.panel?.statusArea?.quickSettings?.menu?.isOpen);
     }
 
+    // animations on (reduced motion included: it cross-fades in place)
     _motionAllowed() {
-        const settings = St.Settings.get();
-        return settings.enable_animations && settings.reducedMotion !== St.ReducedMotion.REDUCE;
+        return motionMode() !== 'off';
+    }
+
+    _reduced() {
+        return motionMode() === 'reduced';
     }
 
     // ---- actors ---------------------------------------------------------------------------
@@ -188,9 +195,15 @@ export class MenubarHud {
             pillGlyph.icon_name = content.iconName;
         const width = Math.round(levelFraction(content.level, content.maxLevel) * this._trackW);
         fill.remove_all_transitions();
-        if (animate && fill.visible && this._motionAllowed()) {
-            fill.ease({width, duration: C.LEVEL_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        if (animate && fill.visible && this._level && this._motionAllowed() && !this._reduced()) {
+            // the level sloshes to the new value (bead); the settled capsule's width is jostled the same way
+            const up = width >= this._level.to;
+            this._level.set(width, role('bead'));
+            if (this.state === SHOWN && !this._drip.busy)
+                this._jostle.kick((up ? 1 : -1) * C.JOSTLE_PX * 2 / Math.max(1, this._geo?.w ?? 300));
+            this._ticker.start();
         } else {
+            this._level = new Spring(width, role('bead'), EPS_PX);
             fill.width = width;
         }
         fill.visible = true;
@@ -237,21 +250,20 @@ export class MenubarHud {
                 this._applyFinal();
                 this._state = SHOWN;
             } else {
-                this._run('enter', 0, null);
+                this._run('enter', true);
             }
             return;
         }
         this._setContent(content, true);
         this._armDwell();
         if (this._state === EXITING) {
-            // turn the exit around at the current presence: no flash
-            const carry = {...this._scale};
+            // turn the exit around from where it is, with its speed: no flash
             if (instant) {
                 this._stopTimeline();
                 this._applyFinal();
                 this._state = SHOWN;
             } else {
-                this._run('enter', C.enterTimeForPresence(this._env), carry);
+                this._run('enter', false);
             }
         }
     }
@@ -277,8 +289,7 @@ export class MenubarHud {
         }
         if (this._state === EXITING)
             return;
-        const carry = this._state === ENTERING ? {...this._scale} : null;
-        this._run('exit', this._state === ENTERING ? C.exitTimeForPresence(this._env) : 0, carry);
+        this._run('exit', false);
     }
 
     destroy() {
@@ -324,59 +335,86 @@ export class MenubarHud {
     // ---- motion ---------------------------------------------------------------------------
 
     _stopTimeline() {
-        if (!this._timeline)
-            return;
-        this._timeline.stop();
-        this._timeline.disconnectObject(this);
-        this._timeline = null;
+        this._ticker?.stop();
+        this._phase = null;
     }
 
-    _run(phase, t0, carry) {
-        this._stopTimeline();
+    // classic enter / exit on springs. fresh: the capsule starts from its measured start pose (it was hidden)
+    _run(phase, fresh) {
         this._phase = phase;
-        this._phaseT0 = t0;
-        this._carry = carry;
         this._state = phase === 'enter' ? ENTERING : EXITING;
-        const total = phase === 'enter' ? C.ENTER_MS : C.EXIT_MS;
-        this._apply(phase, t0);
-        const timeline = new Clutter.Timeline({duration: Math.max(1, total - t0) + 50, actor: this._actors.root});
-        this._timeline = timeline;
-        timeline.connectObject('new-frame', () => {
-            const s = t0 + timeline.get_elapsed_time();
-            this._apply(phase, Math.min(s, total));
-            if (s < total)
-                return;
-            timeline.stop();
-            timeline.disconnectObject(this);
-            if (this._timeline === timeline)
-                this._timeline = null;
-            if (phase === 'enter') {
+        const reduced = this._reduced();
+        if (fresh) {
+            this._pres.snap(0);
+            this._gate.snap(0);
+            this._sx.snap(reduced ? 1 : C.ENTER_FROM.sx);
+            this._sy.snap(reduced ? 1 : C.ENTER_FROM.sy);
+        }
+        if (phase === 'enter') {
+            this._pres.set(1, reduced ? REDUCED : role('fade'));
+            if (reduced) {
+                this._gate.set(1, REDUCED);
+                this._sx.snap(1);
+                this._sy.snap(1);
+            } else {
+                this._sx.set(1, role('pour'));
+                this._sy.set(1, role('pour'));
+            }
+        } else {
+            this._pres.set(0, reduced ? REDUCED : role('fade', {exit: true}));
+            this._gate.set(1, role('fade'));
+            if (!reduced) {
+                this._sx.set(C.EXIT_TO.sx, role('pour', {exit: true}));
+                this._sy.set(C.EXIT_TO.sy, role('pour', {exit: true}));
+            }
+        }
+        this._paint(this._pres.x, {sx: this._sx.x, sy: this._sy.x}, this._gate.x);
+        this._ticker.start();
+    }
+
+    // one frame of every HUD spring; true while anything still moves
+    _step(dt) {
+        if (!this._actors)
+            return false;
+        let more = false;
+        if (this._phase) {
+            this._pres.step(dt);
+            this._sx.step(dt);
+            this._sy.step(dt);
+            if (this._phase === 'enter' && this._pres.x >= C.GLASS_FROM && this._gate.to !== 1)
+                this._gate.set(1, role('fade'));
+            this._gate.step(dt);
+            this._paint(this._pres.x, {sx: this._sx.x, sy: this._sy.x}, this._gate.x);
+            const rest = this._pres.rest && this._sx.rest && this._sy.rest && this._gate.rest;
+            if (this._phase === 'enter' && rest) {
                 this._applyFinal();
                 this._state = SHOWN;
-            } else {
+            } else if (this._phase === 'exit' && this._pres.rest && this._pres.x === 0) {
                 this._hideNow();
+            } else {
+                more = true;
             }
-        }, this);
-        timeline.start();
-    }
-
-    // One frame of the motion at phase time s (ms).
-    _apply(phase, s) {
-        const enter = phase === 'enter';
-        const env = enter ? C.enterPresence(s) : C.exitPresence(s);
-        let sc = enter ? C.enterScale(s) : C.exitScale(s);
-        if (this._carry) {
-            const w = Math.max(0, 1 - (s - this._phaseT0) / CARRY_MS);
-            sc = {sx: lerp(sc.sx, this._carry.sx, w), sy: lerp(sc.sy, this._carry.sy, w)};
         }
-        const gate = enter ? C.glassGate(s) : 1;
-        this._phaseT = s;
-        this._paint(env, sc, gate);
+        if (this._level && !this._level.rest) {
+            const x = this._level.step(dt);
+            this._actors.fill.width = Math.max(0, Math.min(x, this._trackW * 1.04));
+            more ||= !this._level.rest;
+        }
+        if (!this._jostle.rest) {
+            const j = this._jostle.step(dt);
+            if (!this._drip.busy && this._actors)
+                this._actors.root.scale_x = (this._phase ? this._sx.x : 1) * (1 + j);
+            more ||= !this._jostle.rest;
+        }
+        return more;
     }
 
     _applyFinal() {
         this._phase = null;
-        this._carry = null;
+        this._pres.snap(1);
+        this._gate.snap(1);
+        this._sx.snap(1);
+        this._sy.snap(1);
         this._paint(1, {sx: 1, sy: 1}, 1);
     }
 
@@ -397,7 +435,8 @@ export class MenubarHud {
     _hideNow() {
         this._clearDwell();
         this._phase = null;
-        this._carry = null;
+        this._pres.snap(0);
+        this._jostle.snap(0);
         this._state = HIDDEN;
         this._env = 0;
         if (!this._actors)

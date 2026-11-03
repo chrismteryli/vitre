@@ -33,6 +33,7 @@ import { isPointerWithinDockBounds } from './MagnifierMath.js';
 import { animateMinimize, animateRestore } from '../effects/WindowEffects.js';
 import { isActorAlive, setBoxVertical, getBoxVertical, hexToRgba } from '../../core/Utils.js';
 import { hideTooltip, isInsideTooltip, isPointerInDockTooltipBridge } from './MagnifierTooltip.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const ARROW_HEIGHT = 12;
@@ -59,13 +60,13 @@ export function createWindowControl(iconName, rgbColor, onClick, bindObj) {
 
     btn.connectObject('enter-event', () => {
         btn.set_style(`background-color: rgba(${rgbColor}, 0.75); border-radius: 999px; width: 20px; height: 20px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 10px rgba(0,0,0,0.45); transition-duration: 150ms;`);
-        btn.ease({ scale_x: 1.1, scale_y: 1.1, duration: 120 });
+        liquidEase(btn, { scale_x: 1.1, scale_y: 1.1, duration: 120 });
         return Clutter.EVENT_PROPAGATE;
     }, target);
 
     btn.connectObject('leave-event', () => {
         btn.set_style(`background-color: rgba(${rgbColor}, 0.40); border-radius: 999px; width: 20px; height: 20px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 2px 5px rgba(0,0,0,0.25); transition-duration: 150ms;`);
-        btn.ease({ scale_x: 1.0, scale_y: 1.0, duration: 120 });
+        liquidEase(btn, { scale_x: 1.0, scale_y: 1.0, duration: 120 });
         return Clutter.EVENT_PROPAGATE;
     }, target);
     return btn;
@@ -321,7 +322,7 @@ export function populateTooltipContent(dockActor, btn, appName, settings) {
                 if (win.delete) win.delete(global.get_current_time());
                 const parentBox = thumbContainer.get_parent();
 
-                thumbContainer.ease({
+                liquidEase(thumbContainer, {
                     scale_x: 0,
                     scale_y: 0,
                     opacity: 0,
@@ -352,16 +353,16 @@ export function populateTooltipContent(dockActor, btn, appName, settings) {
 
             thumbContainer.connectObject('enter-event', () => {
                 thumbBtn.set_style('border-radius: 10px; background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.6); transition-duration: 150ms; box-shadow: 0 4px 12px rgba(0,0,0,0.4);');
-                controlsBox.ease({ opacity: 255, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_BACK });
-                winTitleLbl.ease({ opacity: 0, duration: 150 });
+                liquidEase(controlsBox, { opacity: 255, duration: 200 });
+                liquidEase(winTitleLbl, { opacity: 0, duration: 150 });
                 if (dockActor._magPeekManager) dockActor._magPeekManager.startPeek(win);
                 return Clutter.EVENT_PROPAGATE;
             }, thumbContainer);
 
             thumbContainer.connectObject('leave-event', () => {
                 thumbBtn.set_style('border-radius: 8px; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); transition-duration: 150ms;');
-                controlsBox.ease({ opacity: 0, duration: 150, mode: Clutter.AnimationMode.EASE_IN_QUAD });
-                winTitleLbl.ease({ opacity: 255, duration: 150 });
+                liquidEase(controlsBox, { opacity: 0, duration: 150 });
+                liquidEase(winTitleLbl, { opacity: 255, duration: 150 });
                 if (dockActor._magPeekManager) dockActor._magPeekManager.stopPeek();
                 return Clutter.EVENT_PROPAGATE;
             }, thumbContainer);
@@ -506,7 +507,7 @@ export function populateTooltipContent(dockActor, btn, appName, settings) {
             dockActor._magTooltipBg._arrowCenter = Math.max(MIN_ARROW_PADDING, Math.min(iconCenterY - ty, th - MIN_ARROW_PADDING));
         }
 
-        dockActor._magTooltip.ease({ x: tx, y: ty, width: tw, height: th, duration: 100, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+        liquidEase(dockActor._magTooltip, { x: tx, y: ty, width: tw, height: th, duration: 100 });
         dockActor._magTooltipBg.queue_repaint();
 
         if (dockActor._magTooltipBlur) {

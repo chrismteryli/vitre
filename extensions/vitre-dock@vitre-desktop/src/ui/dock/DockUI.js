@@ -36,7 +36,8 @@ import MonitorManager from '../../core/MonitorManager.js';
 import PanelIntegrator from '../../core/PanelIntegrator.js';
 import { applyDynamicStyles } from './DockThemeResolver.js';
 import { TimeoutTracker } from '../../core/TimeoutTracker.js';
-import { refreshTrashState } from '../modules/TrashModule.js';
+import { refreshTrashState, homeTrashDir, destroyTrashDrop } from '../modules/TrashModule.js';
+import { destroyStacks } from '../modules/StackModule.js';
 import { cleanupTrashEffects } from '../effects/TrashEffect.js';
 import NotificationManager from '../../core/NotificationManager.js';
 import { cancelIconPicker } from '../folder-menu/FolderIconFiles.js';
@@ -47,6 +48,7 @@ import { applyOverviewDockMargin, clearOverviewDockMargin } from './OverviewMarg
 import { setupWindowEffects, teardownWindowEffects, animateLaunch } from '../effects/WindowEffects.js';
 import { renderDock, getIndicatorProps, syncOverflowWithPanel, syncRunningStates, cleanupDockRenderer } from './DockRenderer.js';
 import { debounce, setBoxVertical, isActorAlive, captureActorRect, clearIconColorCache } from '../../core/Utils.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const RENDER_DEBOUNCE_MS = 5;
@@ -569,6 +571,15 @@ export default class DockUI {
             this.queueRender('incremental', true);
         }, this);
 
+        // Vitre (B5): stacks
+        ['show-stack', 'stack-folder', 'stack-sort', 'stack-custom-folders'].forEach(key => {
+            if (!this.settings.settings_schema.has_key(key)) return;
+            this.settings.connectObject(`changed::${key}`, () => {
+                if (this._activeFolderMenu && this._activeFolderMenu._stackKey) this._activeFolderMenu.hide();
+                this.queueRender('full', true);
+            }, this);
+        });
+
         this._iconThemeSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
         this._iconThemeSettings.connectObject('changed::icon-theme', () => {
             if (clearIconColorCache) clearIconColorCache();
@@ -633,6 +644,21 @@ export default class DockUI {
             this._trashMonitor.cancel();
             this._trashMonitor = null;
         }
+        if (this._trashLocalMonitor) {
+            this._trashLocalMonitor.disconnectObject(this);
+            this._trashLocalMonitor.cancel();
+            this._trashLocalMonitor = null;
+        }
+    }
+
+    // Vitre (B5): the home trash folder is watched too, so the Trash shows full or empty without gvfs
+    _watchLocalTrash(onChange) {
+        try {
+            this._trashLocalMonitor = homeTrashDir().get_child('files').monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, null);
+            this._trashLocalMonitor.connectObject('changed', onChange, this);
+        } catch (_e) {
+            this._trashLocalMonitor = null;
+        }
     }
 
     _syncTrashMonitor(delayMs = 150, retriesLeft = 4) {
@@ -644,6 +670,15 @@ export default class DockUI {
             this._trashInitId = 0;
             if (!Settings.showTrash || !isActorAlive(this.actor)) return GLib.SOURCE_REMOVE;
 
+            const queueRefresh = () => {
+                if (this._trashRefreshId) return;
+                this._trashRefreshId = this.registry.addTimeout(GLib.PRIORITY_DEFAULT, 80, () => {
+                    this._trashRefreshId = null;
+                    refreshTrashState(this, true);
+                    return GLib.SOURCE_REMOVE;
+                });
+            };
+            if (!this._trashLocalMonitor) this._watchLocalTrash(queueRefresh);
             try {
                 const trashDir = Gio.File.new_for_uri('trash:///');
                 this._trashMonitor = trashDir.monitor_directory(Gio.FileMonitorFlags.WATCH_MOUNTS, null);
@@ -653,14 +688,7 @@ export default class DockUI {
                         this._syncTrashMonitor(1000, 4);
                         return;
                     }
-
-                    if (this._trashRefreshId) return;
-                    this._trashRefreshId = this.registry.addTimeout(GLib.PRIORITY_DEFAULT, 80, () => {
-                        this._trashRefreshId = null;
-                        requestAttention(this, actor => actor._isTrash);
-                        refreshTrashState(this);
-                        return GLib.SOURCE_REMOVE;
-                    });
+                    queueRefresh();
                 }, this);
             } catch (_e) {
                 this._trashMonitor = null;
@@ -741,19 +769,17 @@ export default class DockUI {
         this._updateLayout();
         this._applyOverviewLeftPosition();
 
-        this.actor.ease({
+        liquidEase(this.actor, {
             opacity: 255,
             duration: OVERVIEW_FADE_IN_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
     }
 
     _fadeOutForOverview() {
         this.actor.remove_all_transitions();
-        this.actor.ease({
+        liquidEase(this.actor, {
             opacity: 0,
             duration: OVERVIEW_FADE_OUT_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
     }
 
@@ -1151,7 +1177,7 @@ export default class DockUI {
                         this._originalPosForOverview = Settings.dockPosition || this.dockPosition;
                     }
                     if (this._isOverviewActive) {
-                        this.actor.ease({ opacity: 255, duration: OVERVIEW_FADE_IN_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+                        liquidEase(this.actor, { opacity: 255, duration: OVERVIEW_FADE_IN_MS });
                     } else {
                         this._holdStruts();
                         this._fadeOutForOverview();
@@ -1382,9 +1408,13 @@ export default class DockUI {
             this._activeContextMenu = null;
         }
         if (this._activeFolderMenu) {
-            this._activeFolderMenu.hide();
+            // Vitre (B5): a stack popup goes at once (nothing of the Dock may outlive disable)
+            if (this._activeFolderMenu.destroyNow) this._activeFolderMenu.destroyNow();
+            else this._activeFolderMenu.hide();
             this._activeFolderMenu = null;
         }
+        destroyStacks(this);
+        destroyTrashDrop(this);
         if (this._overflowMenu) {
             this._overflowMenu.destroy();
             this._overflowMenu = null;

@@ -18,12 +18,12 @@
 
 
 import GLib from 'gi://GLib';
-import Clutter from 'gi://Clutter';
 
 import { isActorAlive } from '../../core/Utils.js';
 import { TimeoutTracker } from '../../core/TimeoutTracker.js';
 import { applyRealtimeFrame } from './MagnifierFrameEngine.js';
 import { getDockButtons, isPointerWithinDockBounds } from './MagnifierMath.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const DRAG_TICK_INTERVAL_MS = 16;
@@ -52,13 +52,12 @@ export function startDragLoop(dockActor, isVertical, settings) {
         if (!isInsideDock) {
             if (!dragWasOutside) {
                 getDockButtons(dockActor).forEach(btn => {
-                    btn.ease({
+                    liquidEase(btn, {
                         scale_x: 1.0,
                         scale_y: 1.0,
                         translation_x: 0,
                         translation_y: 0,
                         duration: RESET_DURATION_MS,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     });
                 });
                 if (dockActor.bgActor && !dockActor._isFullWidth) {
@@ -66,13 +65,12 @@ export function startDragLoop(dockActor, isVertical, settings) {
                     const baseY = dockActor.bgActor._baseY !== undefined ? dockActor.bgActor._baseY : dockActor.bgActor.y;
                     const baseW = dockActor.bgActor._baseW || dockActor.bgActor.width;
                     const baseH = dockActor.bgActor._baseH || dockActor.bgActor.height;
-                    dockActor.bgActor.ease({
+                    liquidEase(dockActor.bgActor, {
                         x: baseX,
                         y: baseY,
                         width: baseW,
                         height: baseH,
                         duration: RESET_DURATION_MS,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     });
                 }
                 dragWasOutside = true;

@@ -21,6 +21,7 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
 import { setBoxVertical } from '../../core/Utils.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const CONTROL_BTN_SIZE = 20;
@@ -85,13 +86,13 @@ export function createWindowControl(iconName, rgbColor, onClick, bindObject = nu
 
     btn.connectObject('enter-event', () => {
         btn.set_style(`background-color: rgba(${rgbColor}, 0.75); border-radius: 999px; width: ${CONTROL_BTN_SIZE}px; height: ${CONTROL_BTN_SIZE}px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 10px rgba(0,0,0,0.45); transition-duration: 150ms;`);
-        btn.ease({ scale_x: 1.1, scale_y: 1.1, duration: 120 });
+        liquidEase(btn, { scale_x: 1.1, scale_y: 1.1, duration: 120 });
         return Clutter.EVENT_PROPAGATE;
     }, target);
 
     btn.connectObject('leave-event', () => {
         btn.set_style(`background-color: rgba(${rgbColor}, 0.40); border-radius: 999px; width: ${CONTROL_BTN_SIZE}px; height: ${CONTROL_BTN_SIZE}px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 2px 5px rgba(0,0,0,0.25); transition-duration: 150ms;`);
-        btn.ease({ scale_x: 1.0, scale_y: 1.0, duration: 120 });
+        liquidEase(btn, { scale_x: 1.0, scale_y: 1.0, duration: 120 });
         return Clutter.EVENT_PROPAGATE;
     }, target);
 

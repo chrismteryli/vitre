@@ -17,9 +17,9 @@
 */
 
 
-import Clutter from 'gi://Clutter';
 
 import { Settings } from '../../core/SettingsManager.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const HIDE_ANIMATION_MS = 180;
@@ -57,10 +57,9 @@ export function hideTooltip(dockActor) {
 
     if (dockActor._magTooltip && dockActor._magTooltip.visible) {
         dockActor._magTooltip.remove_all_transitions();
-        dockActor._magTooltip.ease({
+        liquidEase(dockActor._magTooltip, {
             opacity: 0,
             duration: HIDE_ANIMATION_MS,
-            mode: Clutter.AnimationMode.EASE_IN_QUAD,
             onComplete: () => {
                 if (dockActor._magTooltip) dockActor._magTooltip.hide();
             }

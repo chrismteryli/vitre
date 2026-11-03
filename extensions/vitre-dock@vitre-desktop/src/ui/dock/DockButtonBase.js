@@ -22,6 +22,7 @@ import Clutter from 'gi://Clutter';
 
 import { Settings } from '../../core/SettingsManager.js';
 import { hexToRgba, setBoxVertical, isActorAlive } from '../../core/Utils.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const DEFAULT_HOVER_DURATION_MS = 200;
@@ -38,7 +39,7 @@ export function setHoverBgLength(hoverBg, isVerticalDock, length) {
     const prop = isVerticalDock ? 'height' : 'width';
     hoverBg.remove_transition(prop);
     if (Settings.hoverAnimation) {
-        hoverBg.ease({ [prop]: length, duration: DEFAULT_HOVER_DURATION_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC });
+        liquidEase(hoverBg, { [prop]: length, duration: DEFAULT_HOVER_DURATION_MS });
     } else {
         hoverBg[prop] = length;
     }
@@ -79,10 +80,10 @@ export function syncDynamicIndicator(dotBox, indProps, isVerticalDock, isFocused
         dot.remove_all_transitions();
         if (isVerticalDock) {
             dot.width = indProps.dw;
-            dot.ease({ height: length, duration: INDICATOR_EASE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC });
+            liquidEase(dot, { height: length, duration: INDICATOR_EASE_MS });
         } else {
             dot.height = indProps.dh;
-            dot.ease({ width: length, duration: INDICATOR_EASE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC });
+            liquidEase(dot, { width: length, duration: INDICATOR_EASE_MS });
         }
     });
 }

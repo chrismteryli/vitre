@@ -26,6 +26,7 @@ import { Settings } from '../../core/SettingsManager.js';
 import { createWindowControl } from './ContextMenuItems.js';
 import { setBoxVertical, isActorAlive } from '../../core/Utils.js';
 import { animateMinimize, animateRestore } from '../effects/WindowEffects.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const THUMB_SPACING = 12;
@@ -103,7 +104,7 @@ function createThumbnailCard(menu, win, customSize, thumbScroll, onWindowClosed)
         const thumbBox = card.get_parent();
         const remaining = thumbBox ? thumbBox.get_children().length - 1 : 0;
 
-        card.ease({
+        liquidEase(card, {
             scale_x: 0,
             scale_y: 0,
             opacity: 0,
@@ -145,16 +146,16 @@ function createThumbnailCard(menu, win, customSize, thumbScroll, onWindowClosed)
     card.add_child(controlsBin);
 
     card.connectObject('enter-event', () => {
-        controlsBox.ease({ opacity: 255, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_BACK });
-        titleLbl.ease({ opacity: 0, duration: 150 });
+        liquidEase(controlsBox, { opacity: 255, duration: 200 });
+        liquidEase(titleLbl, { opacity: 0, duration: 150 });
         thumbBtn.set_style('border-radius: 10px; background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.6); transition-duration: 150ms;');
         if (menu.peekManager) menu.peekManager.startPeek(win);
         return Clutter.EVENT_PROPAGATE;
     }, menu);
 
     card.connectObject('leave-event', () => {
-        controlsBox.ease({ opacity: 0, duration: 150, mode: Clutter.AnimationMode.EASE_IN_QUAD });
-        titleLbl.ease({ opacity: 255, duration: 150 });
+        liquidEase(controlsBox, { opacity: 0, duration: 150 });
+        liquidEase(titleLbl, { opacity: 255, duration: 150 });
         thumbBtn.set_style('border-radius: 10px; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); transition-duration: 150ms;');
         if (menu.peekManager) menu.peekManager.stopPeek();
         return Clutter.EVENT_PROPAGATE;

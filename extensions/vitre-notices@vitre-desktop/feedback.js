@@ -7,23 +7,19 @@
  * Retune the feel here and nowhere else. This file is byte-identical in control-center and
  * notification-center (like glass.js); each extension only reads the constants it uses.
  *
- * Time base: Clutter.Timeline (NOT slowed by St's slow_down_factor, which Just Perfection sets to
- * 0.8), so the reference's measured timings are played as measured. Animations off / reduced motion:
- * every transition is instant.
+ * Motion (liquid v3): every value moves on a liquid.js spring (liquidClock.js Ticker, wall clock per frame, NOT slowed by
+ * St's slow_down_factor): fades and cross-fades on the fade role (never past the target), the press and the knob/lens morph
+ * on the bead role (the glass gives a little and settles), the notification stack on the pour role. No durations.
+ * Animations off: every change is instant. Reduced motion: fades cross over on the 160 ms spring, travel is instant.
  */
-import Clutter from 'gi://Clutter';
-import St from 'gi://St';
+import {Spring, Fade, role, REDUCED, EPS_OPACITY} from './liquid.js';
+import {Ticker, motionMode} from './liquidClock.js';
 
 export const FB = {
     // ---- MEASURED (the reference design reference 26 recordings, 60 fps, plan A13 section 1) ----------------------
     knobDiameter: 12,        // slider hover knob: 3x the 4 px track (the reference ~10-11 pt -> 12 px)
     lensWidthRatio: 1.6,     // pressed lens width / knob width
     lensHeightRatio: 1.15,   // pressed lens height / knob height ("same or slightly taller": 1.0-1.15)
-    morphMs: 50,             // knob <-> lens morph (the reference 2-3 frames = 40-60 ms)
-    hoverInMs: 25,           // knob + tile chevron appear (the reference: within ~2 frames)
-    hoverOutMs: 60,          // knob + tile chevron fade out (the reference: 3-4 frames = 50-70 ms)
-    pillChevronInMs: 50,     // pill chevron fades in (the reference ~3 frames)
-    pillChevronOutMs: 60,    // pill chevron fades out (the reference: "fade out on leave", not timed: same as the knob)
     tileChevronRight: 14,    // 12.5 pt x 1.15 from the tile's right edge
     tileChevronCenterY: 19,  // aligned with the 11 pt title line (title top 11 px + half a line)
     pillChevronRight: 14,    // ~12 pt x 1.15 from the pill's right end
@@ -38,25 +34,6 @@ export const FB = {
     pressScale: 1.04,        // pressed shape scales to this about its centre
     pressGrowCapPx: 3,       // ...but never grows more than this per side (a 381 px card at 1.04 would clip)
     pressTintBoost: 0.08,    // glass tint +8 % (white glow +8 % on shapes without glass)
-    pressInMs: 80,           // press: ease-out
-    releaseMs: 180,          // release: critically damped spring (no overshoot)
-    stateMs: 150,            // on/off crossfade of the disc fill and the glyph colour
-    xFadeMs: 120,            // notification close/options buttons fade in/out on card hover
-    stackMs: 300,            // notification stack expand / collapse (NC slide curve shape, no overshoot)
-};
-
-// Critically damped spring: displacement fraction left after t (in units of 1/omega). The curve
-// is normalised so it ends exactly at 1 at SPRING_T (residual 0.5 % before normalising).
-const SPRING_T = 7.5;
-const springEnd = 1 - (1 + SPRING_T) * Math.exp(-SPRING_T);
-
-export const MODES = {
-    linear: p => p,
-    easeOut: p => 1 - Math.pow(1 - p, 3),
-    spring: p => {
-        const t = p * SPRING_T;
-        return Math.min(1, (1 - (1 + t) * Math.exp(-t)) / springEnd);
-    },
 };
 
 // Test seam (rig only, null in a real session): when set, every Tween reports (label, value, kind)
@@ -64,19 +41,30 @@ export const MODES = {
 // from the frame callbacks themselves instead of from painted frames.
 export const probe = {fn: null};
 
+// animations on (reduced motion counts: fades still cross over, on the 160 ms spring)
 export function animationsOn() {
-    const settings = St.Settings.get();
-    return settings.enable_animations && settings.reducedMotion !== St.ReducedMotion.REDUCE;
+    return motionMode() !== 'off';
 }
 
-/* A number that animates to a target and reports every value to `apply`. Interruptible: a new
- * target starts from the current value (no jump). `actor` supplies the frame clock. */
+// what a Tween moves on: 'fade' (opacity, cross-fades), 'bead' (press, morph), 'pour' (a stack opening), 'exit' (closing)
+const KIND = {
+    fade: () => role('fade'),
+    bead: () => role('bead'),
+    pour: () => role('pour'),
+    exit: () => role('pour', {exit: true}),       // something going away (a stack collapsing): never bouncing
+};
+
+/* A number that moves to a target on a liquid.js spring and reports every value to `apply`. Interruptible: a new target
+ * retargets the spring (it keeps its speed). `actor` must be on the stage for it to move (else the value is set at once). */
 export class Tween {
     constructor(actor, apply, initial = 0, label = '') {
         this._actor = actor;
         this._apply = apply;
-        this._tl = null;
         this.label = label;
+        this._s = null;
+        this._onDone = null;
+        this._t = 0;
+        this._ticker = new Ticker(dt => this._step(dt));
         this.value = initial;
     }
 
@@ -85,16 +73,13 @@ export class Tween {
     }
 
     get running() {
-        return this._tl !== null;
+        return this._ticker.running;
     }
 
     stop() {
-        const tl = this._tl;
-        if (!tl)
-            return;
-        this._tl = null;
-        tl.stop();
-        tl.disconnectObject(this);
+        this._ticker.stop();
+        this._s = null;
+        this._onDone = null;
     }
 
     set(value) {
@@ -104,40 +89,50 @@ export class Tween {
         this._apply(value);
     }
 
-    // mode: a name from MODES or a function p -> progress. onDone runs when the target is reached (also
-    // when it is applied at once); an interrupted tween never calls it.
-    to(target, ms, mode = 'easeOut', onDone = null) {
-        const from = this.value;
-        this.stop();
-        if (target === from) {
+    // kind: 'fade' | 'bead' | 'pour' | 'exit'. onDone runs when the spring rests on the target (also when it is applied at once); an
+    // interrupted move never calls it.
+    to(target, kind = 'bead', onDone = null) {
+        const mode = motionMode();
+        const fade = kind === 'fade';
+        if (target === this.value && !this._s) {
             this._apply(target);
             onDone?.();
             return;
         }
-        if (ms <= 0 || !animationsOn() || !this._actor.get_stage() || !this._actor.mapped) {
+        if (mode === 'off' || (mode === 'reduced' && !fade) || !this._actor.get_stage() || !this._actor.mapped) {
             this.set(target);
             onDone?.();
             return;
         }
-        const f = typeof mode === 'function' ? mode : (MODES[mode] ?? MODES.linear);
-        const tl = new Clutter.Timeline({duration: ms, actor: this._actor});
-        this._tl = tl;
-        this._emit(from, 'start');
-        tl.connectObject('new-frame', () => {
-            if (this._tl !== tl)
-                return;
-            const p = Math.min(1, tl.get_elapsed_time() / ms);
-            this.value = p >= 1 ? target : from + (target - from) * f(p);
-            this._emit(this.value, 'frame', tl.get_elapsed_time());
-            this._apply(this.value);
-            if (p >= 1) {
-                this._tl = null;
-                tl.stop();
-                tl.disconnectObject(this);
-                onDone?.();
-            }
-        }, this);
-        tl.start();
+        const p = mode === 'reduced' ? REDUCED : (KIND[kind] ?? KIND.bead)();
+        if (!this._s || this._s.fade !== fade) {
+            const v = this._s?.v ?? 0;
+            this._s = fade ? new Fade(this.value, p, EPS_OPACITY) : new Spring(this.value, p, 1e-3);
+            this._s.v = v;
+            this._s.fade = fade;
+            this._t = 0;
+            this._emit(this.value, 'start');
+        }
+        this._s.set(target, p);
+        this._onDone = onDone;
+        this._ticker.start();
+    }
+
+    _step(dt) {
+        const s = this._s;
+        if (!s)
+            return false;
+        this._t += dt;
+        this.value = s.step(dt);
+        this._emit(this.value, 'frame', this._t * 1000);
+        this._apply(this.value);
+        if (!s.rest)
+            return true;
+        this._s = null;
+        const done = this._onDone;
+        this._onDone = null;
+        done?.();
+        return false;
     }
 
     destroy() {
@@ -151,8 +146,8 @@ export function pressGrow(width, height) {
     return Math.min(FB.pressScale - 1, 2 * FB.pressGrowCapPx / big);
 }
 
-/* The press response of one pressable shape: p goes 0 -> 1 on press (80 ms ease-out) and back to 0 on
- * release (180 ms critically damped spring). `apply(p)` does the visuals (scale, tint). */
+/* The press response of one pressable shape: p goes 0 -> 1 on press and back to 0 on release, on the bead spring (the glass
+ * gives under the finger and springs back). `apply(p)` does the visuals (scale, tint). */
 export class PressResponse {
     constructor(actor, apply, label = 'press') {
         this.tween = new Tween(actor, apply, 0, label);
@@ -163,11 +158,11 @@ export class PressResponse {
     }
 
     press() {
-        this.tween.to(1, FB.pressInMs, 'easeOut');
+        this.tween.to(1, 'bead');
     }
 
     release() {
-        this.tween.to(0, FB.releaseMs, 'spring');
+        this.tween.to(0, 'bead');
     }
 
     destroy() {
@@ -187,12 +182,20 @@ export function bindPress(button, response) {
     return () => button.disconnectObject(response);
 }
 
-/* Scale `actors` about their centres. */
+/* Scale `actors` about their centres (a press). An actor that also carries a factor of its own (actor._vitreTile = [x, y]:
+ * the Control Center tiles' arrival and squash, tiles.js) is scaled by the product. */
 export function setScale(actors, scale) {
     for (const actor of actors) {
-        actor.scale_x = scale;
-        actor.scale_y = scale;
+        actor._vitrePress = scale;
+        composeScale(actor);
     }
+}
+
+export function composeScale(actor) {
+    const p = actor._vitrePress ?? 1;
+    const t = actor._vitreTile;
+    actor.scale_x = p * (t ? t[0] : 1);
+    actor.scale_y = p * (t ? t[1] : 1);
 }
 
 export function centrePivot(actors) {

@@ -1,0 +1,79 @@
+#!/bin/sh
+# vitre-user-setup: per-user setup of the Vitre session. Runs at the start of every Vitre login (never in the Ubuntu session) as the
+# systemd user unit vitre-user-setup.service, and does its work once.
+#
+# GTK 4 (libadwaita) and GTK 3 read one stylesheet that can only live in the user's own config folder (~/.config/gtk-4.0/gtk.css and
+# ~/.config/gtk-3.0/gtk.css). The Vitre files are installed read-only in /usr/share/vitre; this script links them into the config
+# folders. It never replaces or edits something that is already there, so a user's own gtk.css always wins.
+#
+#   vitre-user-setup            link the Vitre files that are not there yet (does nothing once the marker matches the package version)
+#   vitre-user-setup --force    ignore the marker and look again (still never overwrites)
+#   vitre-user-setup --remove   remove the links this script made (links that point into /usr/share/vitre only) and the marker
+#
+# Test it without touching a real account:  HOME=/some/empty/folder XDG_CONFIG_HOME= XDG_STATE_HOME= vitre-user-setup
+# VITRE_SHARE overrides /usr/share/vitre (used by the package tests).
+set -eu
+
+SHARE="${VITRE_SHARE:-/usr/share/vitre}"
+HOME_DIR="${HOME:?HOME is not set}"
+CONF="${XDG_CONFIG_HOME:-$HOME_DIR/.config}"
+STATE="${XDG_STATE_HOME:-$HOME_DIR/.local/state}/vitre"
+MARKER="$STATE/user-setup"
+MODE=run
+case "${1:-}" in
+  "") ;;
+  --force) MODE=force ;;
+  --remove) MODE=remove ;;
+  *) echo "usage: vitre-user-setup [--force|--remove]" >&2; exit 2 ;;
+esac
+
+VERSION="$(cat "$SHARE/VERSION" 2>/dev/null || echo unknown)"
+
+if [ "$MODE" = remove ]; then
+  for v in gtk-4.0 gtk-3.0; do
+    [ -d "$SHARE/$v" ] || continue
+    for src in "$SHARE/$v"/*; do
+      dst="$CONF/$v/$(basename "$src")"
+      if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+        rm -f "$dst"
+        echo "removed $dst"
+      fi
+    done
+  done
+  rm -f "$MARKER"
+  exit 0
+fi
+
+if [ "$MODE" = run ] && [ -f "$MARKER" ] && [ "$(sed -n 1p "$MARKER")" = "$VERSION" ]; then
+  exit 0
+fi
+
+linked=0
+kept=""
+for v in gtk-4.0 gtk-3.0; do
+  [ -d "$SHARE/$v" ] || continue
+  mkdir -p "$CONF/$v"
+  for src in "$SHARE/$v"/*; do
+    [ -e "$src" ] || continue
+    dst="$CONF/$v/$(basename "$src")"
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+      # something is already there (the user's own file, an earlier link, or a copy from the per-user installer): leave it alone
+      if [ "$(readlink "$dst" 2>/dev/null || true)" != "$src" ]; then
+        kept="$kept $v/$(basename "$src")"
+      fi
+      continue
+    fi
+    ln -s "$src" "$dst"
+    linked=$((linked + 1))
+  done
+done
+
+mkdir -p "$STATE"
+{
+  echo "$VERSION"
+  echo "linked $linked"
+  [ -z "$kept" ] || echo "kept (already there):$kept"
+} > "$MARKER"
+echo "vitre-user-setup: linked $linked file(s) into $CONF"
+[ -z "$kept" ] || echo "vitre-user-setup: left alone (already there):$kept"
+exit 0

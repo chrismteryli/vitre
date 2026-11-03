@@ -48,7 +48,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as WorkspaceAnimation from 'resource:///org/gnome/shell/ui/workspaceAnimation.js';
 
-import {planSpring, planFade, lookAt, estimateReleaseVelocity, SPRING} from './springMath.js';
+import {planSpring, planFade, lookAt, estimateReleaseVelocity, rubber, SPRING} from './springMath.js';
 
 const LOG = '[vitre-workspaces]';
 const STAGE_UUID = 'vitre-stage@vitre-desktop';
@@ -233,8 +233,19 @@ export class DepthMotion {
         this._override(MonitorGroup.prototype, 'updateSwipeForMonitor', original => function (progress, monitorGroup) {
             const att = self._atts.get(this);
             if (att)
-                att.excess = 0;             // under the fingers GNOME's progress is the picture
+                att.excess = 0;             // under the fingers GNOME's progress is the picture ...
             const result = original.call(this, progress, monitorGroup);
+            try {
+                // ... except past the first or last workspace: the rubber band (liquid.js rubber), which never stops and
+                // never goes further than SPRING.rubberR of a workspace
+                const over = Main.wm._workspaceAnimation?._swipeTracker?._vitreOver ?? 0;
+                if (att && over !== 0 && att.mode !== 'reduce') {
+                    att.excess = rubber(over, SPRING.rubberR);
+                    self._apply(att);
+                }
+            } catch (e) {
+                self._fail('rubber', e);
+            }
             try {
                 self._sample(this);
             } catch (e) {
@@ -243,6 +254,7 @@ export class DepthMotion {
             return result;
         });
 
+        this._installRubber();
         this._connect(global.display, 'grab-op-begin', (_d, win, op) => {
             if (win && (op & ~MOVE_FLAGS) === 1)
                 this._drag = win;
@@ -306,6 +318,48 @@ export class DepthMotion {
             else
                 delete proto[name];
         });
+    }
+
+    // The workspace swipe tracker clamps the finger's progress to the snap points; past the first or last workspace the part it
+    // drops is kept here (tracker._vitreOver, progress units), so the picture can stretch past the end and spring home on release.
+    _installRubber() {
+        const tracker = Main.wm._workspaceAnimation?._swipeTracker;
+        if (!tracker || typeof tracker._updateGesture !== 'function' || !Array.isArray(tracker._snapPoints))
+            return;
+        const SCROLLING = 1;
+        this._override(tracker, '_updateGesture', original => function (delta, distance) {
+            if (this._state !== SCROLLING || !(distance > 0) || !Number.isFinite(delta))
+                return original.call(this, delta, distance);
+            const pts = this._snapPoints;
+            const over = this._vitreOver ?? 0;
+            let d = delta;
+            if (over !== 0) {
+                const next = over + d / distance;
+                if (Math.sign(next) === Math.sign(over)) {
+                    // still past the end: the tracker's own progress stays on the end, the stretch changes
+                    this._vitreOver = next;
+                    this.emit('update', this._progress);
+                    return undefined;
+                }
+                this._vitreOver = 0;
+                d = next * distance;           // the rest of the move goes back inside
+            }
+            const raw = this._progress + d / distance;
+            const result = original.call(this, d, distance);
+            const lost = raw - this._progress;
+            const atEnd = pts.length > 0 && (Math.abs(this._progress - pts[0]) < 1e-9 || Math.abs(this._progress - pts[pts.length - 1]) < 1e-9);
+            if (atEnd && Math.abs(lost) > 1e-9 && ((lost < 0 && this._progress === pts[0]) || (lost > 0 && this._progress === pts[pts.length - 1]))) {
+                this._vitreOver = lost;
+                this.emit('update', this._progress);
+            }
+            return result;
+        });
+        const reset = () => {
+            tracker._vitreOver = 0;
+        };
+        this._connect(tracker, 'begin', reset);
+        this._connect(tracker, 'end', reset);
+        this._restores.push(() => delete tracker._vitreOver);
     }
 
     _connect(obj, name, fn) {
@@ -552,6 +606,9 @@ export class DepthMotion {
     _apply(att) {
         if (att.forgotten)
             return;
+        // desktops sink with the spring's speed (progress per second; 0 under the fingers and at rest)
+        const run = att.run;
+        const speed = run && !run.done && !run.cancelled && run.t < run.plan.T ? Math.abs(run.plan.vel(run.t)) * 1000 : 0;
         for (const card of att.cards) {
             const g = card.group;
             const off = this._offset(att, g) + att.sign * att.excess * att.base;
@@ -566,7 +623,7 @@ export class DepthMotion {
                 setVisible(g, home || presence > 0);
                 continue;
             }
-            const L = lookAt(u, att.extent);
+            const L = lookAt(u, att.extent, undefined, speed);
             const t = L.x - this._offset(att, g);
             const inView = Math.abs(u) < STYLE.hideBeyond;
             setTrans(g, att.vertical ? 0 : t, att.vertical ? t : 0);
@@ -681,25 +738,26 @@ export class DepthMotion {
         if (!att || att.tail || mode === 'off' || !(params?.duration > 0) || !mg.mapped || !Number.isFinite(target))
             return false;
         const sd = att.controller._switchData;
-        let from = mg.progress;
+        // a release starts where the picture is drawn: past the first or last workspace that includes the rubber band
+        let from = mg.progress + (sd?.gestureActivated ? att.excess : 0);
         let v0 = 0;
         let kind;
-        const dir = Math.sign(target - from);
         if (sd?.gestureActivated) {
             kind = 'release';
             v0 = this._releaseVelocity(att);
             this.stats.releases++;
         } else if (att.carry) {
+            // a key pressed while the picture still moves: it goes on from where it is drawn, with the speed it has (retargeting
+            // keeps velocity: a reversal turns, a second press in the same direction carries on)
             kind = 'carry';
             from = att.carry.pos;
-            const d = Math.sign(target - from);
-            const v = att.carry.vel;
-            v0 = v * d >= 0 ? d * Math.max(Math.abs(v), SPRING.kbdPush) : v;
+            v0 = att.carry.vel;
         } else {
             kind = 'key';
-            v0 = dir * SPRING.kbdPush;
+            v0 = 0;
             this.stats.keys++;
         }
+
         att.carry = null;
         att.samples = [];
         const plan = att.mode === 'reduce' ? planFade({from, to: target}) : planSpring({from, to: target, v0, unitPx: att.base});
@@ -741,7 +799,7 @@ export class DepthMotion {
         transition.connect('stopped', (_t, finished) => this._guard('stopped', () => this._runStopped(run, finished)));
         att.run = run;
         this.last = {kind, mode: att.mode, from: plan.from, to: plan.to, v0: plan.v0, T: plan.T, Tlogic: plan.Tlogic,
-            period: plan.periodMs ?? null, monitor: mg.index, slow, at: Math.round(GLib.get_monotonic_time() / 1000)};
+            period: plan.response ?? null, role: plan.role ?? null, monitor: mg.index, slow, at: Math.round(GLib.get_monotonic_time() / 1000)};
     }
 
     _scheduleLogic(run) {
@@ -799,7 +857,7 @@ export class DepthMotion {
         if (!att)
             return;
         const time = this._eventTime();
-        const p = mg.progress;
+        const p = mg.progress + (att.excess || 0);
         const s = att.samples;
         const last = s[s.length - 1];
         if (last && time - last.time > 100)

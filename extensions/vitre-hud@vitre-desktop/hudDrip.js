@@ -3,10 +3,11 @@
  * the Control Center icon while the capsule is up (hud.js, A15 geometry). The capsule's own glass layer is
  * hidden during the drip and takes over from the field when the capsule has settled. */
 import {op255} from './liquidDrip.js';
-import {smoothstep} from './dripMotion.js';
+import {Fade, role, EPS_OPACITY} from './liquid.js';
 import {GLASS_FINISH} from './glass.js';
 
-const PILL_SHOW_MS = 40;   // the replacement pill and the old icons cross over during the first ms of the drip
+const PILL_HOME = 0.25;     // closing: the pill hands back to the top-bar icons once the glass is this close to home
+
 
 export class HudDripAdapter {
     constructor(hud) {
@@ -15,6 +16,8 @@ export class HudDripAdapter {
         this.handoffMs = 0;
         this.immediate = true;      // the capsule's geometry is derived from the bar, known at open()
         this._held = false;
+        this._pill = new Fade(0, role('fade'), EPS_OPACITY);    // the replacement pill and the old icons cross over (a Fade spring)
+        this._pillT = null;
     }
 
     _content() {
@@ -50,6 +53,9 @@ export class HudDripAdapter {
         if (!a)
             return;
         this._held = true;
+        // the pill carries on from what it shows now (a close that starts from rest finds it fully in)
+        this._pill.snap(this._hud._swap?.on ? a.pill.opacity / 255 : 0);
+        this._pillT = null;
         a.root.remove_all_transitions();
         a.root.opacity = 255;
         a.root.set_scale(1, 1);
@@ -67,13 +73,19 @@ export class HudDripAdapter {
             c.opacity = op255(content);
     }
 
-    // per frame: the replacement pill and the old top-bar icons cross over at the start, back at the end
-    frame(_fr, tau) {
+    // per frame: the replacement pill and the old top-bar icons cross over on a Fade spring: in as the glass leaves the bar,
+    // out as it comes home (the pour's openness falls under PILL_HOME)
+    frame(fr, tau, phase) {
         const hud = this._hud;
         const a = hud._actors;
         if (!a || !hud._swap)
             return;
-        const p = smoothstep(0, PILL_SHOW_MS, tau);
+        const now = tau / 1000;
+        const dt = this._pillT === null || now < this._pillT ? 0 : now - this._pillT;
+        this._pillT = now;
+        this._pill.set(phase === 'closing' && (fr.openness ?? 1) < PILL_HOME ? 0 : 1);
+        this._pill.step(dt);
+        const p = this._pill.x;
         a.pill.opacity = hud._swap.on ? op255(p) : 0;
         if (hud._swap.indicators)
             hud._swap.indicators.opacity = Math.round(hud._swap.indicatorsOp * (1 - p));
@@ -82,6 +94,7 @@ export class HudDripAdapter {
     end() {
         const a = this._hud._actors;
         this._held = false;
+        this._pillT = null;
         if (!a)
             return;
         a.root.opacity = 255;

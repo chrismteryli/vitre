@@ -1,0 +1,43 @@
+/* Vitre Appearance (B6): the accent colour on the Vitre surfaces whose highlight was a fixed white plate. Everything
+ * else in the shell (Control Center toggles and sliders, switches, focus rings, text selection) already takes
+ * -st-accent-color from the Vitre-Glass theme. -st-accent-color follows org.gnome.desktop.interface accent-color live.
+ * Selectors carry one more class or id than the rules they replace, so they win whatever order the stylesheets load in.
+ * When Vitre Shell core (A2) merges vitre-search and vitre-switcher, these rules move into its stylesheet. */
+
+/* Search: the selected result row is filled with the accent, as on the reference design */
+#vitresearch-root .sp-row:selected,
+#vitresearch-root .sp-row:focus,
+#vitresearch-root .sp-row.selected {
+  background-color: st-transparentize(-st-accent-color, 0.08);
+  color: -st-accent-fg-color;
+}
+
+#vitresearch-root .sp-row:selected .sp-row-title,
+#vitresearch-root .sp-row:selected .sp-row-sub,
+#vitresearch-root .sp-row:selected .sp-row-kind,
+#vitresearch-root .sp-row.selected .sp-row-title,
+#vitresearch-root .sp-row.selected .sp-row-sub,
+#vitresearch-root .sp-row.selected .sp-row-kind {
+  color: -st-accent-fg-color;
+}
+
+/* Search, apps view: the selected app gets an accent-tinted glass plate */
+#vitresearch-root .sp-app:selected {
+  background-color: st-transparentize(-st-accent-color, 0.45);
+}
+
+/* App and window switcher: the plate under the chosen app is accent-tinted glass */
+.sg-switcher-list .sg-plate:selected,
+.sg-switcher-list .sg-item:selected.sg-plate {
+  background-color: st-transparentize(-st-accent-color, 0.45);
+}
+
+/* Light style: the Control Center modules are clear glass with white content, made for the dark wallpaper. Over the light
+ * picture of the pair they get a smoky tint, so the white glyphs and labels keep their contrast (the shell has one,
+ * dark, style today). Specificity: one class more than vitre-controls' base module rule, which uses !important. */
+.vitre-style-light .cc-menu.cc-menu.cc-menu.cc-menu .cc-module {
+  background-color: rgba(28, 28, 32, 0.55) !important;
+}
+.vitre-style-light .cc-menu.cc-menu.cc-menu.cc-menu .cc-module:hover {
+  background-color: rgba(28, 28, 32, 0.60) !important;
+}

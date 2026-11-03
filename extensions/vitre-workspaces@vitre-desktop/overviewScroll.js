@@ -8,9 +8,9 @@
 // Those handlers were bound when the shell started, before any extension loads, so they cannot be hooked; every one of them
 // calls ease() on that one adjustment. This module gives that adjustment its own ease(): GNOME's ease still runs (the same
 // target, the same callbacks, the same ownership of the transition, so GNOME's bookkeeping is untouched), but for that call
-// the transition it builds is a ScrollTransition, whose value follows the spring of the desktop switch (springMath.js, the
-// Vitre stretch: period 400 ms, damping 0.86):
-//   - a key starts with the desktop's small push, so it moves on the first frame;
+// the transition it builds is a ScrollTransition, whose value follows the spring of the desktop switch (springMath.js: the
+// liquid engine's track role, liquid.js):
+//   - a key starts the spring from rest;
 //   - a swipe's release starts at the fingers' speed (sampled while they move, the release estimator of Gesture History);
 //   - a key pressed while the scroll still moves goes on from where the picture is, at its speed (GNOME stops and restarts
 //     its ease there: two eases per key, one per view, each cancelling the last).
@@ -29,7 +29,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {planSpring, estimateReleaseVelocity, SPRING} from './springMath.js';
+import {planSpring, estimateReleaseVelocity} from './springMath.js';
 
 const LOG = '[vitre-workspaces]';
 const CARRY_MS = 40;            // an ease within this long after the last spring was stopped carries its speed on
@@ -200,7 +200,6 @@ export class OverviewScroll {
         if (motionMode() !== 'depth' || !(params?.duration > 0) || !Number.isFinite(target) || !adj.get_actor?.()?.mapped)
             return null;
         const from = adj.value;
-        const dir = Math.sign(target - from);
         // where it was going and how fast: the spring running now, or one stopped a moment ago (GNOME stops it right before
         // it eases again)
         let vel = null;
@@ -215,11 +214,10 @@ export class OverviewScroll {
             v0 = this._releaseVelocity();
         } else if (vel !== null && Number.isFinite(vel)) {
             kind = 'carry';
-            const d = dir || Math.sign(vel);
-            v0 = vel * d >= 0 ? d * Math.max(Math.abs(vel), SPRING.kbdPush) : vel;
+            v0 = vel;           // retargeting keeps velocity: a reversal turns, a second press carries on
         } else {
             kind = 'key';
-            v0 = dir * SPRING.kbdPush;
+            v0 = 0;             // a key starts the track spring from rest
         }
         this._samples = [];
         const unitPx = Math.max(1, this._display?.width || global.screen_width || 1920);
@@ -274,7 +272,7 @@ export class OverviewScroll {
         this._run = run;
         this.stats[plan.kind === 'release' ? 'releases' : plan.kind === 'carry' ? 'carries' : 'keys']++;
         this.last = {kind: plan.kind, from: plan.from, to: plan.to, v0: plan.v0, T: plan.T, Tlogic: plan.Tlogic,
-            period: plan.periodMs ?? null, slow: slowNow(), at: Math.round(nowMs())};
+            period: plan.response ?? null, role: plan.role ?? null, slow: slowNow(), at: Math.round(nowMs())};
         return true;
     }
 

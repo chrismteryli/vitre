@@ -22,3 +22,5 @@ vitre-swipe@vitre-desktop
 vitre-switcher@vitre-desktop
 vitre-corner@vitre-desktop
 vitre-workspaces@vitre-desktop
+vitre-appearance@vitre-desktop
+vitre-tray@vitre-desktop

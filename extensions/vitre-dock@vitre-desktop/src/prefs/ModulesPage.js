@@ -190,7 +190,18 @@ export function buildModulesPage(prefs, window, settings) {
     addSwitchRow(placesGroup, settings, 'show-videos', _('Videos'));
     addSwitchRow(placesGroup, settings, 'show-music', _('Music'));
     addSwitchRow(placesGroup, settings, 'show-mounts', _('USB &amp; Other Drives'), _('Appear while they are connected'));
-    addSwitchRow(placesGroup, settings, 'show-trash', _('Recycle Bin'));
+    addSwitchRow(placesGroup, settings, 'show-trash', _('Trash'), _('Drop files on it to move them to the trash'));
+
+    // Vitre (B5): stacks
+    const stacksGroup = addGroup(page, _('Stacks'), _('A folder in the Dock that shows its newest files and opens as a fan or a grid'));
+    addSwitchRow(stacksGroup, settings, 'show-stack', _('Downloads Stack'), _('Shows the Downloads folder as a stack'));
+    addSegmentedRow(stacksGroup, settings, 'stack-view', _('Open As'), null,
+        [{ name: _('Automatic'), value: 'auto' }, { name: _('Fan'), value: 'fan' }, { name: _('Grid'), value: 'grid' }]);
+    addSegmentedRow(stacksGroup, settings, 'stack-sort', _('Sort By'), null,
+        [{ name: _('Date Added'), value: 'date-added' }, { name: _('Name'), value: 'name' }]);
+    addSliderRow(stacksGroup, settings, 'stack-fan-limit', _('Files in the Fan'), _('Automatic opens a grid when there are more'),
+        { lower: 3, upper: 15, step: 1 }, v => `${Math.round(v)}`);
+    addSwitchRow(stacksGroup, settings, 'stack-custom-folders', _('Your Folders as Stacks'), _('The folders you add below open as stacks too'));
 
     const customFoldersGroup = addGroup(page, _('Your Folders'), _('Any folder you like, with its own name and icon'));
 

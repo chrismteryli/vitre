@@ -24,6 +24,9 @@ import Clutter from 'gi://Clutter';
 import { isActorAlive } from './Utils.js';
 import { Settings } from './SettingsManager.js';
 import { TimeoutTracker } from './TimeoutTracker.js';
+import {ease as springEase} from '../liquid/liquidClock.js';
+// liquid v3: this file's motion is a surface leaving its source: the 'pour' role (liquid.js); opacity on the fade role
+const liquidEase = (actor, params) => springEase(actor, params, {role: 'pour'});
 
 
 const DEFAULT_PEEK_SPEED = 1000;
@@ -70,10 +73,9 @@ export default class PeekManager {
         if (this._currentTarget === targetWin) {
             if (isActorAlive(this.bigPreviewContainer) && this.bigPreviewContainer.opacity < 255) {
                 this.bigPreviewContainer.remove_all_transitions();
-                this.bigPreviewContainer.ease({
+                liquidEase(this.bigPreviewContainer, {
                     opacity: 255,
-                    duration: 180,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                    duration: 180
                 });
             }
             return;
@@ -95,7 +97,7 @@ export default class PeekManager {
         this._peekTimer = this.timers.addTimeout(GLib.PRIORITY_DEFAULT, 0, () => {
             this._peekTimer = null;
             this._isPeeking = true;
-            this._ghostWindows(28, this._getPeekSpeed() * 0.52, Clutter.AnimationMode.EASE_IN_OUT_SINE);
+            this._ghostWindows(28, this._getPeekSpeed() * 0.52);
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -115,7 +117,7 @@ export default class PeekManager {
 
             if (this._isPeeking) {
                 this._isPeeking = false;
-                this._ghostWindows(255, this._getPeekSpeed() * 0.38, Clutter.AnimationMode.EASE_OUT_SINE);
+                this._ghostWindows(255, this._getPeekSpeed() * 0.38);
             }
 
             return GLib.SOURCE_REMOVE;
@@ -127,13 +129,12 @@ export default class PeekManager {
         return val > 0 ? val : DEFAULT_PEEK_SPEED;
     }
 
-    _ghostWindows(targetOpacity, duration, mode) {
+    _ghostWindows(targetOpacity, duration) {
         global.get_window_actors().forEach(wa => {
             if (!wa.get_meta_window()) return;
-            wa.ease({
+            liquidEase(wa, {
                 opacity: targetOpacity,
                 duration,
-                mode
             });
         });
     }
@@ -192,12 +193,11 @@ export default class PeekManager {
         this.bigPreviewContainer.remove_all_transitions();
 
         if (alreadyVisible) {
-            this.bigPreviewContainer.ease({
+            liquidEase(this.bigPreviewContainer, {
                 opacity: 0,
                 scale_x: 0.97,
                 scale_y: 0.97,
                 duration: 160,
-                mode: Clutter.AnimationMode.EASE_IN_QUAD,
                 onComplete: () => {
                     if (!this._currentTarget || this._pendingWrapBin !== wrapBin) {
                         if (isActorAlive(wrapBin)) {
@@ -216,13 +216,12 @@ export default class PeekManager {
                     this.bigPreviewContainer.set_position(targetX, targetY + 10);
                     this.bigPreviewContainer.set_scale(0.96, 0.96);
 
-                    this.bigPreviewContainer.ease({
+                    liquidEase(this.bigPreviewContainer, {
                         opacity: 255,
                         scale_x: 1.0,
                         scale_y: 1.0,
                         y: targetY,
-                        duration: this._getPeekSpeed(),
-                        mode: Clutter.AnimationMode.EASE_OUT_QUINT
+                        duration: this._getPeekSpeed()
                     });
                 }
             });
@@ -236,13 +235,12 @@ export default class PeekManager {
             this.bigPreviewContainer.set_scale(0.94, 0.94);
             this.bigPreviewContainer.opacity = 0;
 
-            this.bigPreviewContainer.ease({
+            liquidEase(this.bigPreviewContainer, {
                 opacity: 255,
                 scale_x: 1.0,
                 scale_y: 1.0,
                 y: targetY,
-                duration: this._getPeekSpeed(),
-                mode: Clutter.AnimationMode.EASE_OUT_QUINT
+                duration: this._getPeekSpeed()
             });
         }
     }
@@ -250,12 +248,11 @@ export default class PeekManager {
     _hideBigPreview() {
         if (!isActorAlive(this.bigPreviewContainer)) return;
         this.bigPreviewContainer.remove_all_transitions();
-        this.bigPreviewContainer.ease({
+        liquidEase(this.bigPreviewContainer, {
             opacity: 0,
             scale_x: 0.96,
             scale_y: 0.96,
-            duration: this._getPeekSpeed() * 0.38,
-            mode: Clutter.AnimationMode.EASE_IN_QUINT
+            duration: this._getPeekSpeed() * 0.38
         });
     }
 
@@ -272,7 +269,7 @@ export default class PeekManager {
         this.timers.destroy();
 
         if (this._isPeeking) {
-            this._ghostWindows(255, 200, Clutter.AnimationMode.EASE_OUT_QUAD);
+            this._ghostWindows(255, 200);
             this._isPeeking = false;
         }
 

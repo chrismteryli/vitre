@@ -28,6 +28,9 @@ import { BlurPanel } from '../blur/BlurPanel.js';
 import { CrispLabel } from '../modules/music/CrispLabel.js';
 import { isActorAlive, setBoxVertical } from '../../core/Utils.js';
 import { resolvePopupBubbleColors } from '../dock/DockThemeResolver.js';
+import {ease as springEase} from '../../liquid/liquidClock.js';
+// liquid v3: this file's motion is a surface leaving its source: the 'pour' role (liquid.js); opacity on the fade role
+const liquidEase = (actor, params) => springEase(actor, params, {role: 'pour'});
 
 
 const COLUMNS = 9;
@@ -153,12 +156,11 @@ export class EmojiPicker {
 
         this._applyBlur();
 
-        this._card.ease({
+        liquidEase(this._card, {
             opacity: 255,
             scale_x: 1.0,
             scale_y: 1.0,
             duration: OPEN_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
             onComplete: () => {
                 if (this._blur) this._blur.syncGeometry();
             }
@@ -175,12 +177,11 @@ export class EmojiPicker {
         }
 
         if (isActorAlive(this._card)) {
-            this._card.ease({
+            liquidEase(this._card, {
                 opacity: 0,
                 scale_x: 0.97,
                 scale_y: 0.97,
                 duration: CLOSE_MS,
-                mode: Clutter.AnimationMode.EASE_IN_QUAD,
                 onStopped: () => this.destroy()
             });
         } else {

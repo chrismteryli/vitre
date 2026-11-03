@@ -1,0 +1,55 @@
+# pacman install script of vitre-session
+
+# /etc/dconf/profile/vitre reads the machine-wide "local" and "site" databases above the Vitre defaults, so that an administrator's
+# settings win over Vitre's. dconf prints a warning in every program of the session when a database named in the profile does not
+# exist. Create an empty folder with a note for each one that is missing (the folder AND the database: an existing database of the
+# administrator is never touched); "dconf update" then compiles it into an empty database.
+_vitre_admin_dbs() {
+  local db=/etc/dconf/db name
+  for name in local site; do
+    if [ ! -e "$db/$name" ] && [ ! -e "$db/$name.d" ]; then
+      mkdir -p "$db/$name.d"
+      cat > "$db/$name.d/README.vitre" <<NOTE
+# This folder was created empty by the vitre-session package. /etc/dconf/profile/vitre reads the "$name" database above the Vitre
+# defaults, so machine-wide settings put here win over Vitre's: add keyfiles to this folder and run "dconf update".
+# When vitre-session is removed, this folder is removed again only if this note is still the only thing in it.
+NOTE
+    fi
+  done
+}
+
+# compiles /etc/dconf/db/*.d, among them the Vitre defaults (vitre.d) into the database "vitre". Only sessions that start with
+# DCONF_PROFILE=vitre (the Vitre session, through /usr/bin/vitre-session) read it.
+_vitre_dconf_update() {
+  if command -v dconf >/dev/null 2>&1; then
+    dconf update || :
+  else
+    echo "vitre-session: dconf is not installed; run 'dconf update' once it is" >&2
+  fi
+}
+
+post_install() {
+  _vitre_admin_dbs
+  _vitre_dconf_update
+  echo "vitre-session: sign out, click the gear icon on the login screen and pick Vitre."
+  echo "vitre-session: if you used Vitre's per-user install before, run its uninstall.sh first (see /usr/share/doc/vitre-session/README)."
+}
+
+post_upgrade() {
+  _vitre_admin_dbs
+  _vitre_dconf_update
+}
+
+post_remove() {
+  local name d
+  rm -f /etc/dconf/db/vitre
+  # the empty admin databases post_install made, only while its note is still the only file in the folder
+  for name in local site; do
+    d="/etc/dconf/db/$name.d"
+    if [ -f "$d/README.vitre" ] && [ "$(ls -A "$d")" = "README.vitre" ]; then
+      rm -f "$d/README.vitre"
+      rmdir "$d" || :
+      rm -f "/etc/dconf/db/$name"
+    fi
+  done
+}

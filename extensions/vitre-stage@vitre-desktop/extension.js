@@ -37,6 +37,8 @@ import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewContro
 import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 import {WorkspaceLayout} from 'resource:///org/gnome/shell/ui/workspace.js';
 import {getOperations} from './windowOperations.js';
+import {Spring, Fade, role, feel, REDUCED, EPS_PX, EPS_OPACITY} from './liquid.js';
+import {Ticker, motionMode, slowFactor, ease as liquidEase, stopAnimate} from './liquidClock.js';
 import {OverviewDrag, gridWorkspace} from './overviewDrag.js';
 import {QuickToggle, SystemIndicator} from 'resource:///org/gnome/shell/ui/quickSettings.js';
 
@@ -66,57 +68,109 @@ const LOOK = {
     farRatio: 0.91,     // far-edge height / near-edge height
 };
 
-// Motion. A16: the swap follows the the reference design numbers in A16-measurements.md in milliseconds, as they
-// come out at the shell's calibrated animation speed here (Just Perfection `animation` 5 = slow-down
-// factor 0.8, see SPEED_REF): at that speed a swap takes exactly the the reference design times, any other speed
-// setting or the developer slow-down scales them like every other shell animation, and reduced
-// motion makes them 0.
+// The strip at the bottom (2026-10-27; setting strip-position, default 'bottom'). The parked piles sit in one row in the Dock's band,
+// split left and right of the Dock with a gap to it, about as tall as the Dock's icons, so the band stays one height and no
+// column is reserved (the Dock's own strut is the band). Order: the most recent pile nearest the Dock, alternating sides,
+// left first (both sides grow evenly, the newest pile is always next to the Dock, and left first reads in the order the
+// old left strip did). Each thumbnail hinges about its edge nearest the Dock (the rail's keystone, mirrored on the left
+// side), piles fan away from the Dock, the badge sits at the bottom inner corner. More piles than fit: the row compacts
+// toward the Dock (piles overlap, the nearer one on top; hover lifts them) instead of shrinking. The Dock's resting size
+// is what counts: when it magnifies or shows a preview the strip stays where it is.
+// Design pass (2026-10-28): the band reads as one
+// bar of three pieces, [left group] [Dock] [right group]. Each side group sits on a glass plate the Dock's own height and
+// glass (Dhruva's BlurPanel when it can be had, else its capsule's style), a clear gap from the capsule; inside it the
+// thumbnails are one height (a little taller than the Dock's icons, centred on the capsule), spaced like the Dock spaces
+// its icons, hinged gently, with the badge inside the thumbnail's bottom inner corner. When the capsule grows (the Dock
+// magnifies) the groups move out with its edges, so nothing ever overlaps it.
+const BAND_BADGE_INSET = 4;     // px inside the thumbnail's inner edge
+const BAND_BADGE_BELOW = 0.3;   // of the badge below the thumbnail's bottom edge
+const BAND = {
+    capGap: 0.25,       // the gap between the Dock's capsule and a plate, in icon sizes (12 px at 48 px icons)
+    pileGap: 0.25,      // the gap between two piles on a plate, in icon sizes
+    margin: 12,         // px kept free at the screen's edge
+    maxAspect: 2.0,     // a very wide window's thumbnail is at most this many times as wide as it is tall
+    thumb: 1.2,         // thumbnail height / the Dock's icon size ...
+    thumbPad: 6,        // ... at least this far inside the capsule's height, top and bottom
+    badge: 0.36,        // the badge / thumbnail height
+    tilt: 0.45,         // the hinge at rest, of the rail's (far edge 0.96 as tall instead of 0.91: a restrained turn)
+    layerX: 0.10,       // a pile's layers step out by this much of the thumbnail height (and do not rise: one baseline)
+    liftRise: 0.08,     // a hovered pile rises this much of its height as it lifts
+    minH: 24,           // the thumbnail height never goes below this (a tiny Dock)
+    // Polish 2026-11-01 (the audit: "narrow next to wide"): every parked window gets the same cell, so the row reads as one
+    // shelf. The cell is the thumbnail height tall and `cell` times as wide (16:10, the shape most windows have); the window's
+    // picture is fitted inside it and centred, the badge sits at the cell's bottom inner corner, so it is in the same place
+    // in every cell. Where the picture does not fill its cell, the cell shows as clear glass (tokens G1, radius r-s 8).
+    cell: 1.6,
+    radius: 8,          // the band's thumbnails and cells (token r-s)
+};
+
+// Motion (Vitre Motion Lab 2): every flight, press and slide is a liquid.js spring (see _startFlight, pressKick, springTo).
+// A swap is one continuous move: the stage window flies into the clicked slot while the clicked window flies out of it.
+// Each picture is four edge springs on glide (the edge facing the way it travels leads, the far edge trails on glide x
+// viscosity), turned about its near (left) edge with perspective (the incoming one flattens early on glide, the outgoing
+// one turns late on glide trail). This table keeps those numbers and the few waits that are not motion (the edge dwell).
 const SWAP = {
-    inMs: 320,          // one incoming window: ease-out sine (the reference design fit 280 ms; Vitre: a little longer, it starts AT the thumbnail)
-    inMsGroup: 420,     // two or more windows arrive as a stack
     p0: 0,              // Vitre: the first painted frame IS the thumbnail (the reference design clip: 12.7 % along, a recorder artefact that read as the window popping in)
-    outGeomMs: 50,      // outgoing window: shrink + slide + keystone ...
-    outFadeDelay: 20,   // ... it stays opaque for the first frames (A16-measurements 1a: 51 % area at
-    outFadeMs: 50,      // ... +0, 39 % at +17), then fades out, gone in 67-83 ms
-    outP0: 0.58,        // the first painted frame of the ghost already has 58 % of the shrink and slide
-    outScale: 0.62,
-    outSlide: 0.153,    // of the work-area width, toward the strip
-    outKeystone: 0.85,  // strip-side edge height ends at 1 - this of the far edge (the reference design: 0.19)
-    outTiltP0: 0.41,    // keystone already shown in the ghost's first frame (the reference design edge ratio 1.54 = 41 % of the way);
-                        // it then turns on its own ease-in-out over outGeomMs (the reference design.76 at +17 ms, 5.3 at +33 ms)
-    inKeystone: 0.24,   // incoming window: far edge is this much shorter per unit of tilt (the reference design.82 at +33 ms,
-                        // 0.89 at +117 ms, flat by +200 ms; the rail thumbnails keep LOOK.farRatio)
-    parkMs: 340,        // a stage window flying into the strip (shrinks with keystone); the old stage uses it too on a swap
-    clickMs: [70, 120], // the 'click into place' at the end of a flight: out and back in
-    clickIn: 1.012,     // the stage window settles with a 1.2 % overshoot
-    clickItem: 1.05,    // the thumbnail that lands in the strip presses 5 % and comes back
-    landDelay: 55,      // the old stage's thumbnail appears in the clicked slot after its ghost is gone
-    landMs: 175,
-    landFrom: 1.3,
+    railTilt: 0.27,     // the hinge: radians about the near edge at the rail; its perspective is set so that a rail thumbnail's far
+                        // edge ends LOOK.farRatio as tall (the lab's PERSP 250 at its 96 px thumbnail): today's keystone at rest,
+                        // stronger on a larger picture that still carries some tilt
+    landPx: 6,          // a picture flying into its slot has landed once all four edges are this close ...
+    landKick: 0.5,      // ... then the strip catches it: a kick of landKick x (0.6 + volume) on its scale, on the bead's trailing
+                        // spring, that settles (the lab's 1.4 on bead peaked at 3.8 % in 59 ms: a snap at thumbnail size;
+                        // this peaks at 2.0 % in 90 ms: a catch)
+    lift: 0.07,         // a rail thumbnail under the pointer lifts 7 % on the bead spring ...
+    liftTilt: 0.4,      // ... and its tilt eases by 40 %
+    clickIn: 1.012,     // the stage window settles with a 1.2 % press (a bead kick, pressKick)
+    clickItem: 1.05,    // a thumbnail put back in the strip (a drag let go over it) presses 5 % and comes back
     dragFullPx: 120,    // a strip item dragged this far from where it was is the full-size window
     revealDwellMs: 320, // pointer at the left edge this long before the covered strip slides in
-    revealMs: 267,
     revealTilt: 2.5,    // thumbnail tilt while the strip slides in, relaxing to 1
 };
-// Rail motion, in the reference design milliseconds like SWAP: they go through realMs(), so at this machine's calibrated
-// animation speed (SPEED_REF) a reflow takes 250 / 300 / 200 ms (it ran 200 / 240 / 160 ms before).
-const CAST_RESPONSE = 250;      // rail reflow (A2: 250 ms ease-out)
-const STRIP_RESPONSE = 300;
-const GROW_RESPONSE = 200;      // a pile appearing or leaving without a flight
-const GROW_FROM = 0.9;
-
-// How far an interrupted flight may keep going the way it went before it turns toward its new target
-// (the peak of a Hermite segment's backward lobe is vn * 0.148 * delta).
-const COAST = {x: 40, y: 40, scale_x: 0.05, scale_y: 0.05, scale_z: 0.2};
-
-// The slow-down factor this machine's animations are calibrated at (Just Perfection animation 5).
-const SPEED_REF = 0.8;
-
-// the reference design milliseconds -> what to hand to Clutter, which multiplies it by the slow-down factor.
-function realMs(ms) {
-    return motionEnabled() ? ms / SPEED_REF : 0;
+// A flight's feel (design pass 2026-10-28, "a swap feels like one calm pour"): the glide spring a tenth slower and damped to
+// 0.9, so a picture settles into its slot instead of passing it and coming back (glide's 0.82 overshot a 900 px drop into
+// the band by 10 px), the trailing edges on viscosity 1.25 (glide's 1.5 read as a lag at these distances, not a stretch).
+const FLIGHT = {slow: 1.1, z: 0.9, visc: 1.25};
+function flightParams() {
+    const g = role('glide');
+    const lead = {r: g.r * FLIGHT.slow, z: Math.max(g.z, FLIGHT.z)};
+    return {lead, trail: {r: lead.r * FLIGHT.visc, z: lead.z}};
 }
 
+// Rail motion: liquid.js springs (springTo: the rail reflow on 'bead', the strip on 'pour').
+const GROW_FROM = 0.9;          // a pile appearing or leaving without a flight grows from / shrinks to this
+const INERT_WAIT_MS = 1500;
+const ARRIVED_OPACITY = 204;    // a pile growing in takes clicks once it is this opaque (80 %)     // the old stage's thumbnail takes clicks again at the latest this long after a swap
+
+// A flight whose frames stopped coming (a stalled compositor) still lands after this long.
+const FLIGHT_WATCHDOG_MS = 3000;
+
+// A press that clicks into place (liquid v3): a bead spring kicked so that it peaks `amount` past its rest and settles back
+// on its own (no out-and-back keyframes). BEAD_PEAK: the peak of a bead spring kicked from rest with a unit speed.
+const BEAD_PEAK = (() => {
+    const s = new Spring(0, role('bead'), 1e-9).kick(1);
+    let m = 0;
+    for (let i = 0; i < 2000; i++)
+        m = Math.max(m, s.step(0.001));
+    return m;
+})();
+
+function pressKick(actor, amount, base, isCurrent, onEnd) {
+    // it rests within a quarter pixel of the actor's size
+    const size = Math.max(1, actor.width * base.sx, actor.height * base.sy);
+    const s = new Spring(0, role('bead'), EPS_PX / size).kick((amount - 1) / BEAD_PEAK);
+    const ticker = new Ticker(dt => {
+        if (!isCurrent() || actor.is_finalized?.())
+            return false;
+        const k = 1 + s.step(dt);
+        actor.set_scale(base.sx * k, base.sy * k);
+        if (!s.rest)
+            return true;
+        onEnd();
+        return false;
+    });
+    ticker.start();
+    return ticker;
+}
 
 // Stages survive a screen lock: GNOME disables user-mode extensions while
 // locked, and the module (not the manager) lives on until unlock.
@@ -124,21 +178,15 @@ let lockedState = null;
 
 // --- springs ---------------------------------------------------------------
 
-// Use compositor-native easing for ordinary motion. Only interrupted window
-// flights supply a velocity-aware curve, so the replacement starts moving at
-// the same speed as the image that was on screen.
+// Full motion: animations on and no reduced motion (reduced motion cross-fades in place, see _startFlight).
 function motionEnabled() {
     const settings = St.Settings.get();
     return settings.enable_animations && settings.reduced_motion !== St.ReducedMotion.REDUCE;
 }
 
-function springTo(actor, props, {response, onComplete} = {}) {
-    actor.ease({
-        ...props,
-        duration: realMs(response),
-        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-        onComplete,
-    });
+// liquid v3: rail reflows and the strip move on liquid.js springs (the role names the motion; no durations)
+function springTo(actor, props, {role: roleName = 'bead', onComplete} = {}) {
+    liquidEase(actor, {...props, onComplete}, {role: roleName});
 }
 
 // --- window snapshots and the rail look ------------------------------------
@@ -171,7 +219,9 @@ function takeSnapshot(win, withContent = false) {
 // Pixel sizes of the rail, from the primary work area (all A2 numbers live in LOOK).
 let currentLook = null;
 
-function computeLook(area) {
+function computeLook(area, band = null) {
+    if (band)
+        return bandLook(area, band);
     const W = area.width, H = area.height;
     const thumbW = Math.round(LOOK.thumbW * W);
     const margin = Math.round(LOOK.margin * W);
@@ -185,6 +235,25 @@ function computeLook(area) {
         // the column's reach for overlap and reveal: the layers of a pile peek out to the LEFT, so the pile
         // fan does not widen it (A2: 12 % of a thumbnail of padding)
         stripWidth: Math.round(2 * margin + thumbW * 1.12),
+        pileUnit: thumbW, bottom: false, tilt: 1,
+    };
+}
+
+// The strip at the bottom: thumbnails band.thumbH tall (a wide window's up to BAND.maxAspect times as wide); piles, badge and
+// shadow sized from that height as the rail's are from its width. H is twice the distance from the band's top to the Dock's
+// middle (H / 2, the tilt's vanishing height, is the Dock's middle); no column is reserved (stripWidth 0).
+function bandLook(area, band) {
+    const h = band.thumbH;
+    const unit = Math.round(h * 1.45);       // the rail's thumbnail is about 1.45 times as wide as it is tall
+    return {
+        // (thumbW is the cell's width: thumbSize fits every picture inside the cell, wide ones by width, tall ones by height)
+        W: area.width, H: 2 * (band.cy - band.y), thumbW: Math.round(h * BAND.cell), margin: BAND.margin,
+        thumbHMax: h, gap: band.pileGap, cell: {w: Math.round(h * BAND.cell), h},
+        iconSize: Math.round(BAND.badge * h),
+        radius: BAND.radius,
+        shadow: {dy: LOOK.shadowY * unit, blur: LOOK.shadowBlur * unit, alpha: LOOK.shadowAlpha},
+        stripWidth: 0, pileUnit: unit, bottom: true, band,
+        tilt: BAND.tilt, layerX: Math.round(BAND.layerX * h),
     };
 }
 
@@ -238,17 +307,30 @@ function quadMatrix(w, h, quad) {
 // vanishing height: the far edge is farRatio times as tall and its centre moves toward
 // the vanishing height by (1 - ratio) of its distance. tilt 0..1 interpolates from flat.
 // w, h: on-screen size of the flat thumbnail; centerY: screen y of its centre. `strength` scales how
-// much shorter the far edge is (flights of an incoming window turn harder than the rail, A16).
+// much shorter the far edge is.
 function tiltQuad(w, h, tilt, centerY, vanishY, strength = 1) {
-    if (tilt < 0) {
-        // A16 swap-out: the strip-side (left) edge recedes instead, much more strongly (the
-        // outgoing window turns into the strip). tilt -1 leaves it 1 - outKeystone as tall.
-        const left = Math.max(0.02, 1 + SWAP.outKeystone * tilt);
-        return [[0, h / 2 - left * h / 2], [w, 0], [w, h], [0, h / 2 + left * h / 2]];
-    }
-    const ratio = 1 - (1 - LOOK.farRatio) * strength * tilt;
+    return ratioQuad(w, h, 1 - (1 - LOOK.farRatio) * strength * tilt, centerY, vanishY);
+}
+
+// the quad of a picture whose far edge is `ratio` as tall as its near edge
+function ratioQuad(w, h, ratio, centerY, vanishY) {
     const shift = (1 - ratio) * (vanishY - centerY);
     return [[0, 0], [w, h / 2 + shift - ratio * h / 2], [w, h / 2 + shift + ratio * h / 2], [0, h]];
+}
+
+// The strip at the bottom: a thumbnail left of the Dock hinges about its right edge (the edge nearest the Dock), so its quad
+// is the rail's quad mirrored left to right (w: the picture's width on screen)
+function mirrorQuad(quad, w) {
+    const [p0, p1, p2, p3] = quad.map(([x, y]) => [w - x, y]);
+    return [p1, p0, p3, p2];
+}
+
+// Vitre Motion Lab 2: the hinge with perspective. A picture `w` wide turned by tilt x railTilt about its near edge, seen from
+// a fixed distance: its far edge recedes by its depth, w sin(angle). The distance is the one at which a picture railW wide
+// at the rail's tilt has a far edge LOOK.farRatio as tall, so the rail end of a flight is exactly the rail's keystone.
+function hingeRatio(w, tilt, railW) {
+    const persp = railW * Math.sin(SWAP.railTilt) * LOOK.farRatio / (1 - LOOK.farRatio);
+    return persp / (persp + Math.max(0, w) * Math.sin(SWAP.railTilt * Math.max(0, tilt)));
 }
 
 // St cannot compute values in CSS, so radius and shadow are set per actor. `factor`
@@ -387,7 +469,8 @@ function flyActor(win, snap, look, vanishY, {real = false} = {}) {
     if (!real)
         fly._shadowRail = layer(previewStyle(look), frame.width / rail.w);
     fly._shadowFull = layer(WINDOW_SHADOW);
-    fly._geo = {w: frame.width, h: frame.height, vy: vanishY, s0: rail.w / frame.width, real, strength: 1};
+    // railW: the hinge's perspective (hingeRatio); a flight sets it to the width of its own rail end
+    fly._geo = {w: frame.width, h: frame.height, vy: vanishY, s0: rail.w / frame.width, real, railW: rail.w};
     // a flight can outlive its picture (the fly layer goes with the shell): nothing may read or destroy it after this
     fly.connect('destroy', () => {
         fly._stageGone = true;
@@ -406,9 +489,9 @@ function syncFlyTilt(fly) {
     // Clutter ignores translation_x/y on an actor that has a custom transform (it replaces scale, rotation
     // and translation alike), so the translation the flights and the pickup move by is folded into the quad.
     const tx = fly.translation_x, ty = fly.translation_y;
+    const quad = ratioQuad(g.w * sx, g.h * sy, hingeRatio(g.w * sx, tilt, g.railW), fly.y + ty + g.h * sy / 2, g.vy);
     fly.set_transform(quadMatrix(g.w, g.h,
-        tiltQuad(g.w * sx, g.h * sy, tilt, fly.y + ty + g.h * sy / 2, g.vy, g.strength)
-            .map(([x, y]) => [x + tx, y + ty])));
+        (g.mirror ? mirrorQuad(quad, g.w * sx) : quad).map(([x, y]) => [x + tx, y + ty])));
     if (fly._shadowRail) {
         // 0 at the size of the rail's thumbnail, 1 at the size of the window; a picture turned into a wedge
         // (tilt < 0) loses the broad one at once
@@ -474,8 +557,8 @@ function stageTiltPreview(child, railRect, width, height, state) {
         return;
     }
     const tilt = (railRect.tilt ?? 1) * (1 - Math.min(1, Math.max(0, state)));
-    child.set_transform(quadMatrix(width, height,
-        tiltQuad(width, height, tilt, railRect.y + railRect.height / 2, railRect.vanishY)));
+    const quad = tiltQuad(width, height, tilt, railRect.y + railRect.height / 2, railRect.vanishY);
+    child.set_transform(quadMatrix(width, height, railRect.mirror ? mirrorQuad(quad, width) : quad));
     child._stageTilted = true;
 }
 
@@ -686,7 +769,8 @@ class CastItem extends St.Button {
     _init(group, entries, look) {
         super._init({
             style_class: 'stage-manager-item', reactive: true, can_focus: true,
-            track_hover: false, button_mask: St.ButtonMask.PRIMARY,
+            // hover only lifts the thumbnail (Vitre Motion Lab 2); the stylesheet has no :hover look
+            track_hover: true, button_mask: St.ButtonMask.PRIMARY,
         });
         this.group = group;
         this.destroyed = false;
@@ -696,6 +780,9 @@ class CastItem extends St.Button {
         this._apps = [];
         this._iconSize = 0;
         this.slots = new Map();
+        // 'rail' (the left column), or the side of the Dock in the bottom band: 'L' (it hinges about its right edge, the one
+        // nearest the Dock; its layers fan out to the left) or 'R' (hinges about its left edge, layers fan out to the right)
+        this._side = 'rail';
         this._pile = new Clutter.Actor();
         this.set_child(this._pile);
         this.set_pivot_point(0.5, 0.5);
@@ -711,18 +798,54 @@ class CastItem extends St.Button {
         });
         // The tilt depends on the item's height on screen, so it follows a reflow.
         this.connect('notify::y', () => this.syncTilt());
+        // lift and press (Vitre Motion Lab 2): bead springs on the item's scale about its front thumbnail's near edge
+        this._lift = new Spring(0, role('bead'), 1e-4);
+        this._press = new Spring(0, role('bead'), 1e-4);
+        this._motion = null;
+        this.connect('notify::hover', () => this._syncLift());
         this.update(entries, look);
     }
 
-    // Item-local box of the thumbnail in `slot` (0 = front) for a window with this frame.
+    get _mirror() {
+        return this._side === 'L';
+    }
+
+    // the side of the Dock this pile sits on (the bottom band) or 'rail'; the caller updates the item after a change
+    setSide(side) {
+        this._side = side;
+    }
+
+    // item-local x of the front thumbnail's edge nearest the Dock (the rail's: its left edge), where it hinges
+    _nearX() {
+        const front = this._front ?? {w: 0};
+        return this._side === 'R' ? 0 : this._side === 'L' ? this._fan + front.w : this._fan;
+    }
+
+    // Item-local box of the thumbnail in `slot` (0 = front) for a window with this frame. Layers behind the front one sit
+    // further from the Dock (the rail's: further left) and higher.
     _layer(slot, frame) {
         const look = this._look, front = this._front;
+        if (look.cell) {
+            const cell = this._cell(slot);
+            const size = thumbSize(look, frame);
+            return {x: cell.x + Math.round((cell.w - size.w) / 2), y: cell.y + Math.round((cell.h - size.h) / 2), w: size.w, h: size.h};
+        }
         const size = slot === 0 ? thumbSize(look, frame) : thumbSize(look, frame, front.h);
-        return {
-            x: this._fan - Math.round(look.thumbW * LOOK.pileX * slot),
-            y: this._rise - Math.round(look.thumbW * LOOK.pileY * slot),
-            w: size.w, h: size.h,
-        };
+        const unit = look.pileUnit ?? look.thumbW;
+        // (the band: layers step straight out from the Dock, on the front one's baseline; the rail's also rise)
+        const out = look.bottom ? look.layerX * slot : Math.round(unit * LOOK.pileX * slot);
+        const rise = look.bottom ? 0 : Math.round(unit * LOOK.pileY * slot);
+        // a layer of the right side keeps its edge nearest the Dock where the front one has it, and fans out to the right
+        const x = this._side === 'R' ? out : this._side === 'L' ? this._fan + front.w - size.w - out : this._fan - out;
+        return {x, y: this._rise - rise + (look.bottom ? front.h - size.h : 0), w: size.w, h: size.h};
+    }
+
+    // the band: item-local box of the cell in `slot` (0 = front); layers step straight out from the Dock on one baseline
+    _cell(slot) {
+        const {w, h} = this._look.cell;
+        const out = this._look.layerX * slot;
+        const x = this._side === 'R' ? out : this._fan - out;
+        return {x, y: this._rise, w, h};
     }
 
     update(entries, look = this._look) {
@@ -733,14 +856,17 @@ class CastItem extends St.Button {
         for (const [win, preview] of this._previews) {
             if (!desired.has(win)) {
                 preview.actor.destroy();
+                preview.card?.destroy();
                 this._previews.delete(win);
             }
         }
         this.slots = new Map(shown.map(([win], slot) => [win, slot]));
-        this._front = shown.length ? thumbSize(look, shown[0][1].frame) :
-            {w: look.thumbW, h: Math.round(look.thumbW * 0.66)};
-        this._fan = Math.round(look.thumbW * LOOK.pileX * (PILE_MAX - 1));
-        this._rise = Math.round(look.thumbW * LOOK.pileY * (PILE_MAX - 1));
+        const unit = look.pileUnit ?? look.thumbW;
+        this._front = look.cell ? {...look.cell} : shown.length ? thumbSize(look, shown[0][1].frame) :
+            look.bottom ? {w: Math.round(look.thumbHMax * 1.45), h: look.thumbHMax} : {w: look.thumbW, h: Math.round(look.thumbW * 0.66)};
+        // (the band: room for the layers this pile has, so a single window's plate is not padded for absent ones)
+        this._fan = look.bottom ? look.layerX * Math.max(0, shown.length - 1) : Math.round(unit * LOOK.pileX * (PILE_MAX - 1));
+        this._rise = look.bottom ? 0 : Math.round(unit * LOOK.pileY * (PILE_MAX - 1));
         // Back windows are painted first.
         for (let slot = shown.length - 1; slot >= 0; slot--) {
             const [win, snap] = shown[slot];
@@ -749,6 +875,7 @@ class CastItem extends St.Button {
             if (preview && (preview.snap !== snap || preview.look !== look || preview.w !== geo.w ||
                 preview.h !== geo.h)) {
                 preview.actor.destroy();
+                preview.card?.destroy();
                 preview = null;
             }
             if (!preview) {
@@ -760,17 +887,34 @@ class CastItem extends St.Button {
             }
             preview.actor._hit.reactive = !this._railHidden && !this._inert;
             preview.actor.set_position(geo.x, geo.y);
+            if (look.cell) {
+                const cell = this._cell(slot);
+                if (!preview.card) {
+                    preview.card = new St.Widget({style_class: 'stage-band-cell', reactive: false,
+                        style: `border-radius: ${look.radius}px;`, opacity: 0});
+                    preview.card.add_effect(new SmoothEdges());
+                    this._pile.add_child(preview.card);
+                }
+                preview.card.set_position(cell.x, cell.y);
+                preview.card.set_size(cell.w, cell.h);
+                preview.cardBox = cell;
+            }
             preview.opacity = LOOK.pileOpacity[Math.min(slot, LOOK.pileOpacity.length - 1)];
             this._syncPreviewOpacity(preview);
+            if (preview.card)
+                this._pile.set_child_above_sibling(preview.card, null);
             this._pile.set_child_above_sibling(preview.actor, null);
         }
         const iconSize = look.iconSize;
-        const overhang = Math.ceil(LOOK.iconBelow * iconSize);
-        const width = this._fan + look.thumbW;
+        // (the band's badge sits inside its thumbnail's bottom inner corner, a little below its edge, on the plate)
+        const below = look.bottom ? BAND_BADGE_BELOW : LOOK.iconBelow;
+        const overhang = Math.ceil(below * iconSize);
+        // (the rail's items are all one thumbnail wide; in the band each is as wide as its front thumbnail)
+        const width = this._fan + (look.bottom ? this._front.w : look.thumbW);
         const height = this._rise + this._front.h + overhang;
         if (!shown.length && !this._empty) {
             this._empty = new St.Widget({style_class: 'stage-manager-thumb-empty',
-                width: this._front.w, height: this._front.h, x: this._fan, y: this._rise});
+                width: this._front.w, height: this._front.h, x: this._side === 'R' ? 0 : this._fan, y: this._rise});
             this._pile.add_child(this._empty);
         } else if (shown.length && this._empty) {
             this._empty.destroy();
@@ -790,10 +934,15 @@ class CastItem extends St.Button {
             this._iconSize = iconSize;
             this._syncIcons();
         }
-        // The badge hangs off the front thumbnail's bottom-left corner.
+        // The badge hangs off the front thumbnail's bottom-left corner (in the band: its bottom inner corner, the one nearest
+        // the Dock).
         for (const [i, icon] of this._icons.entries()) {
-            icon.set_position(this._fan + LOOK.iconX * iconSize + i * iconSize * 0.65,
-                this._rise + this._front.h + LOOK.iconBelow * iconSize - iconSize);
+            // the band: inside the corner nearest the Dock, never past the thumbnail's edge (nothing of it over a neighbour)
+            const inset = look.bottom ? BAND_BADGE_INSET : -LOOK.iconX * iconSize;
+            const x = this._mirror
+                ? this._fan + this._front.w - iconSize - inset - i * iconSize * 0.65
+                : this._nearX() + (look.bottom ? inset : LOOK.iconX * iconSize) + i * iconSize * 0.65;
+            icon.set_position(x, this._rise + this._front.h + below * iconSize - iconSize);
             this._pile.set_child_above_sibling(icon, null);
         }
         this.set_size(width, height);
@@ -808,8 +957,16 @@ class CastItem extends St.Button {
             return;
         for (const preview of this._previews.values()) {
             const {actor, w, h} = preview;
-            const m = quadMatrix(w, h, tiltQuad(w, h, this._tiltBoost ?? 1, this.y + actor.y + h / 2, look.H / 2));
+            const boost = (look.tilt ?? 1) * (this._tiltBoost ?? 1) * (1 - SWAP.liftTilt * Math.max(0, this._lift?.x ?? 0));
+            const quad = tiltQuad(w, h, boost, this.y + actor.y + h / 2, look.H / 2);
+            const m = quadMatrix(w, h, this._mirror ? mirrorQuad(quad, w) : quad);
             actor.set_transform(globalThis.__stagePileHook?.matrix?.(preview.win, this.slots.get(preview.win) ?? 0, m, w, h) ?? m);   // [swipe-depth hook 4+5/5]
+            // the band's cell turns with the same hinge (its own box, about the cell's edge nearest the Dock)
+            const c = preview.cardBox;
+            if (preview.card && c) {
+                const cq = tiltQuad(c.w, c.h, boost, this.y + c.y + c.h / 2, look.H / 2);
+                preview.card.set_transform(quadMatrix(c.w, c.h, this._mirror ? mirrorQuad(cq, c.w) : cq));
+            }
         }
     }
 
@@ -817,36 +974,126 @@ class CastItem extends St.Button {
     setTiltBoost(boost) {
         if ((this._tiltBoost ?? 1) === boost)
             return;
+        // (a hover lift eases what is set here by SWAP.liftTilt, see syncTilt)
         this._tiltBoost = boost;
         this.syncTilt();
     }
 
-    // The old stage's thumbnail once its ghost is gone: appears in the clicked slot, larger
-    // than its final size, and settles (A16 item 1). Only the first window of a pile starts it.
-    land() {
-        if (this._landed || this.destroyed)
-            return;
-        this._landed = true;
-        this.growIn({land: true});
-    }
-
-    // Vitre: a thumbnail that has just flown into its slot presses in and comes back, as if it clicked into place.
-    settle() {
+    // Vitre: a thumbnail that has just come into its slot presses in and comes back, as if it clicked into place. `press`: the
+    // bead spring a flight started when it landed (Vitre Motion Lab 2): the item carries it on with its place and speed;
+    // without it (a drag let go over the strip) a kick of its own.
+    settle(press = null) {
         if (this.destroyed || !motionEnabled() || this._growing)
             return;
-        const [out, back] = SWAP.clickMs;
         this.remove_transition('scale-x');
         this.remove_transition('scale-y');
-        this.ease({scale_x: SWAP.clickItem, scale_y: SWAP.clickItem, duration: realMs(out), mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onStopped: () => {
-                if (this.destroyed)
-                    return;
-                this.ease({scale_x: 1, scale_y: 1, duration: realMs(back), mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
-            }});
+        stopAnimate(this);
+        // (a press handed over keeps its spring: the landing's softer one)
+        this._press.set(0, press?.p ?? role('bead'));
+        this._press.snap(press?.x ?? 0);
+        this._press.kick(press ? press.v : (SWAP.clickItem - 1) / BEAD_PEAK);
+        this._runMotion();
     }
 
-    _syncPreviewOpacity(preview) {
+    _syncLift() {
+        const lifted = this.hover && !this._inert && !this._railHidden && !this.leaving && !this._growing && motionEnabled();
+        // a pile in a compacted row of the bottom band comes to the top while it is lifted, and goes back after
+        if (this._side !== 'rail' && lifted !== Boolean(this._liftedOnTop)) {
+            this._liftedOnTop = lifted;
+            if (lifted)
+                this.get_parent()?.set_child_above_sibling(this, null);
+            else
+                this.manager?._restackBand?.();
+        }
+        this._lift.set(lifted ? 1 : 0, role('bead'));
+        if (!this._lift.rest)
+            this._runMotion();
+    }
+
+    // one ticker for lift and press; the scale is about the front thumbnail's near edge, at its vertical centre (the hinge)
+    _runMotion() {
+        if (this.destroyed)
+            return;
+        if (!this._motion) {
+            const front = this._front ?? {h: this.height};
+            this.set_pivot_point(this.width ? this._nearX() / this.width : 0.5,
+                this.height ? (this._rise + front.h / 2) / this.height : 0.5);
+            this._motion = new Ticker(dt => {
+                if (this.destroyed)
+                    return false;
+                this._lift.step(dt);
+                this._press.step(dt);
+                const k = 1 + SWAP.lift * this._lift.x + this._press.x;
+                this.set_scale(k, k);
+                // (the band: a hovered pile also rises off its plate)
+                if (this._side !== 'rail')
+                    this.translation_y = -BAND.liftRise * (this._front?.h ?? 0) * this._lift.x;
+                this.syncTilt();
+                if (!this._lift.rest || !this._press.rest)
+                    return true;
+                this._endMotion();
+                return false;
+            });
+        }
+        this._motion.start();
+    }
+
+    // the lift and the press stop where they are and the item is back to its plain scale and pivot (something else moves it)
+    _endMotion(reset = false) {
+        if (reset) {
+            this._lift.snap(0);
+            this._press.snap(0);
+        }
+        const t = this._motion;
+        this._motion = null;
+        t?.stop();
+        if (this.destroyed)
+            return;
+        if (this._lift.x === 0 && this._press.x === 0) {
+            this.translation_y = 0;
+            this.set_pivot_point(0.5, 0.5);
+            if (reset || (this.scale_x !== 1 && !this._growing))
+                this.set_scale(1, 1);
+            this.syncTilt();
+        }
+    }
+
+    // the clicked pile goes to the stage: its badge stays where it was and fades out (fade exit) instead of vanishing with it
+    releaseBadge(layer) {
+        if (this.destroyed || !layer || !motionEnabled())
+            return;
+        for (const icon of this._icons) {
+            if (icon.opacity === 0 || !icon.get_parent())
+                continue;
+            const [x, y] = icon.get_transformed_position();
+            icon.get_parent().remove_child(icon);
+            layer.add_child(icon);
+            icon.set_position(x, y);
+            liquidEase(icon, {opacity: 0, onStopped: () => icon.destroy()});
+        }
+        this._icons = [];
+        this._apps = [];
+    }
+
+    // the window flying into the front slot has landed (Vitre Motion Lab 2): the badge comes back on the fade spring now
+    badgeLanded() {
+        if (this.destroyed)
+            return;
+        this._badgeLanded = true;
+        this._syncIcons(true);
+    }
+
+    _syncPreviewOpacity(preview, fadeIn = false) {
         preview.actor.opacity = (preview.hidden || this._railHidden) ? 0 : preview.opacity;
+        const card = preview.card;
+        if (card) {
+            const target = (preview.hidden || this._railHidden) ? 0 : preview.opacity;
+            stopAnimate(card);
+            if (fadeIn && target > card.opacity && motionEnabled())
+                liquidEase(card, {opacity: target}, {role: 'fade'});
+            else
+                card.opacity = target;
+        }
     }
 
     setFlightHidden(win, hidden) {
@@ -855,9 +1102,11 @@ class CastItem extends St.Button {
         const preview = this._previews.get(win);
         if (preview) {
             preview.hidden = hidden;
-            this._syncPreviewOpacity(preview);
-            if (this.slots.get(win) === 0)
+            this._syncPreviewOpacity(preview, !hidden);
+            if (this.slots.get(win) === 0) {
+                this._badgeLanded = false;
                 this._syncIcons(!hidden);
+            }
         }
     }
 
@@ -865,12 +1114,12 @@ class CastItem extends St.Button {
     // and it follows the overview's fade (setBadgeOpacity).
     _syncIcons(fadeIn = false) {
         const front = [...this.slots].find(([, slot]) => slot === 0)?.[0];
-        const waiting = Boolean(front && this._previews.get(front)?.hidden);
+        const waiting = Boolean(front && this._previews.get(front)?.hidden) && !this._badgeLanded;
         const target = waiting ? 0 : (this._badgeOpacity ?? 255);
         for (const icon of this._icons) {
             icon.remove_all_transitions();
             if (fadeIn && motionEnabled() && icon.opacity < target) {
-                icon.ease({opacity: target, duration: 150, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+                liquidEase(icon, {opacity: target});
             } else {
                 icon.opacity = target;
             }
@@ -898,6 +1147,7 @@ class CastItem extends St.Button {
         this.reactive = on;
         for (const preview of this._previews.values())
             preview.actor._hit.reactive = on;
+        this._syncLift();
     }
 
     setInert(inert) {
@@ -925,10 +1175,8 @@ class CastItem extends St.Button {
             freezePreview(preview.actor, fresh.get(win) ?? preview.snap);
     }
 
-    // A pile that appears without a flight, or leaves without one. `land` is the A16 variant
-    // for the old stage's thumbnail: it appears in the clicked slot a moment after its ghost
-    // has gone, larger than its final size, and settles (inert until it has).
-    growIn({land = false} = {}) {
+    // A pile that appears without a flight, or leaves without one.
+    growIn() {
         if (this.destroyed)
             return;
         if (!motionEnabled()) {
@@ -937,28 +1185,37 @@ class CastItem extends St.Button {
         }
         this._growing = true;
         this.remove_all_transitions();
-        const from = land ? SWAP.landFrom : GROW_FROM;
-        this.set_scale(from, from);
+        this._endMotion(true);
+        this.set_scale(GROW_FROM, GROW_FROM);
         this.opacity = 0;
-        this.ease({
+        liquidEase(this, {
             scale_x: 1, scale_y: 1, opacity: 255,
-            duration: realMs(land ? SWAP.landMs : GROW_RESPONSE),
-            delay: land ? realMs(SWAP.landDelay) : 0,
-            mode: land ? Clutter.AnimationMode.EASE_OUT_SINE : Clutter.AnimationMode.EASE_OUT_CUBIC,
             onComplete: () => {
                 this._growing = false;
                 this.setInert(false);
             },
         });
+        // it takes clicks again once it is there to the eye (as a pour hands input back once its content is half in), not only
+        // when its springs have come to rest
+        const watch = new Ticker(() => {
+            if (this.destroyed || !this._growing)
+                return false;
+            if (this.opacity >= ARRIVED_OPACITY) {
+                this.setInert(false);
+                return false;
+            }
+            return true;
+        });
+        watch.start();
     }
 
     leave() {
         this.leaving = true;
         this._syncReactive();
         this.remove_all_transitions();
-        this.ease({
-            scale_x: GROW_FROM, scale_y: GROW_FROM, opacity: 0, duration: realMs(GROW_RESPONSE),
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+        this._endMotion(true);
+        liquidEase(this, {
+            scale_x: GROW_FROM, scale_y: GROW_FROM, opacity: 0,
             onComplete: () => this.destroy(),
         });
     }
@@ -971,15 +1228,15 @@ class CastItem extends St.Button {
         const geo = this._layer(slot, frame);
         if (this._previews.has(win) && !settled) {
             const [x, y] = this.get_transformed_position();
-            return {x: x + geo.x, y: y + geo.y, width: geo.w, height: geo.h, tilt: 1,
-                opacity: this.slotOpacity(win)};
+            return {x: x + geo.x, y: y + geo.y, width: geo.w, height: geo.h, tilt: this._look.tilt ?? 1,
+                opacity: this.slotOpacity(win), mirror: this._mirror};
         }
         const strip = this.get_parent();
         return {
             x: (strip?.x ?? 0) + (strip?.targetTranslationX ?? strip?.translation_x ?? 0) +
                 (this.targetX ?? this.x) + geo.x,
-            y: (strip?.y ?? 0) + (this.targetY ?? this.y) + geo.y,
-            width: geo.w, height: geo.h, tilt: 1, opacity: this.slotOpacity(win),
+            y: (strip?.y ?? 0) + (strip?.targetTranslationY ?? strip?.translation_y ?? 0) + (this.targetY ?? this.y) + geo.y,
+            width: geo.w, height: geo.h, tilt: this._look.tilt ?? 1, opacity: this.slotOpacity(win), mirror: this._mirror,
         };
     }
 
@@ -1052,7 +1309,32 @@ class StageManager {
             this._stripGone = true;
         });
         this._strip.targetTranslationX = 0;
+        this._strip.targetTranslationY = 0;
         Main.layoutManager.addChrome(this._strip, {affectsStruts: false, trackFullscreen: true});
+        // the band's glass plates (one per side group), under the strip; they go where the strip goes (hidden, sliding, travelling)
+        this._plateLayer = new Clutter.Actor({name: 'stageManagerPlates', reactive: false});
+        this._plateLayer.connect('destroy', () => {
+            this._plateLayer._stageGone = true;
+        });
+        Main.layoutManager.uiGroup.add_child(this._plateLayer);
+        this._plates = {};
+        const followStrip = () => {
+            if (this._plateLayer && !this._plateLayer._stageGone && !this._stripGone) {
+                this._plateLayer.set_translation(this._strip.translation_x, this._strip.translation_y, 0);
+                this._plateLayer.opacity = this._strip.opacity;
+            }
+        };
+        this._strip.connectObject('notify::translation-x', followStrip, 'notify::translation-y', followStrip,
+            'notify::opacity', followStrip, this);
+        // the strip at the bottom follows the Dock's resting place (and the setting); see _computeBand
+        this._band = null;
+        this._dock = null;
+        this._dockRest = null;
+        this._settings.connectObject('changed::strip-position', () => this._relayout(), this);
+        Main.layoutManager.uiGroup.connectObject('child-added', (_g, child) => {
+            if (child?.get_name?.() === 'DhruvaContainer')
+                this._queueDock();
+        }, this);
         // A3: the workspace the strip belongs to, and the strip travel state
         this._wsIndex = global.workspace_manager.get_active_workspace_index();
         this._stripGhost = null;
@@ -1061,7 +1343,8 @@ class StageManager {
         // Vitre: the strip's column is reserved like a dock's, so a maximized or tiled window sits beside the strip
         // instead of under it (the reference design Vitre Stage does the same). Without it every maximized window covered the strip
         // and the strip stayed hidden behind it. A fullscreen window drops the reservation (trackFullscreen).
-        this._reserveWidth = this._look.stripWidth;
+        // (the strip at the bottom reserves nothing: the Dock's band is reserved by the Dock; see _relayout)
+        this._reserveWidth = this._settings.get_string('strip-position') === 'left' ? this._look.stripWidth : 0;
         this._reserve = new St.Widget({name: 'stageManagerReserve', reactive: false, width: this._look.stripWidth});
         Main.layoutManager.addChrome(this._reserve, {affectsStruts: true, trackFullscreen: true});
         this._placeReserve();
@@ -1071,7 +1354,8 @@ class StageManager {
         Main.layoutManager.addChrome(this._edge, {affectsStruts: false, trackFullscreen: true});
         this._edge.connect('enter-event', () => this._edgeEntered());
         this._edge.connect('leave-event', () => this._edgeLeft());
-        this._strip.connectObject('notify::translation-x', () => this._syncRevealTilt(), this);
+        this._strip.connectObject('notify::translation-x', () => this._syncRevealTilt(),
+            'notify::translation-y', () => this._syncRevealTilt(), this);
 
         // The pointer zone of a strip that is revealed over a window (A16 item 9): transparent,
         // as wide as the strip, reactive only while the strip is out.
@@ -1190,6 +1474,14 @@ class StageManager {
         global.window_manager?.disconnectObject(this);
         global.workspace_manager.disconnectObject(this);
         Main.overview.disconnectObject(this);
+        this._settings?.disconnectObject(this);
+        Main.layoutManager.uiGroup.disconnectObject(this);
+        for (const a of [this._dock, this._dock?.bgActor, this._dock?.boxActor].filter(Boolean)) {
+            try {
+                a.disconnectObject(this);
+            } catch (_e) { /* the Dock went first */ }
+        }
+        this._dock = null;
         this._removeOverviewHooks();
         Main.layoutManager.disconnectObject(this);
         for (const win of this._tracked) {
@@ -1238,6 +1530,10 @@ class StageManager {
         }
         this._edge.destroy();
         this._zone.destroy();
+        this._dropPlates();
+        if (this._plateLayer && !this._plateLayer._stageGone)
+            this._plateLayer.destroy();
+        this._plateLayer = null;
         if (!this._stripGone)
             this._strip.destroy();
         this._ours.clear();
@@ -1326,8 +1622,7 @@ class StageManager {
         const item = this._groupOf(win, false)?.item;
         if (!snap || !item || item.destroyed)
             return null;
-        const area = this._workArea();
-        const vanishY = area.y + area.height / 2;
+        const vanishY = this._vanishY();
         if (item.slots.has(win))
             return {...item.slotRect(win, snap.frame, true), opacity: item.slotOpacity(win), vanishY};
         // A window beyond PILE_MAX sits under the back window of its pile.
@@ -1342,6 +1637,9 @@ class StageManager {
         const on = this._continuity && this._overviewOpen;
         for (const item of this._strip.get_children())
             item.setOverviewMode(on);
+        // (the plates step aside with the thumbnails, unless the rail stays painted in the overview)
+        if (this._plateLayer && !this._plateLayer._stageGone)
+            this._plateLayer.visible = !(on && !globalThis.__stagePileHook?.keepRail);
     }
 
     // App badges fade with the overview state: gone at 1, back as a swipe reverses.
@@ -1455,26 +1753,11 @@ class StageManager {
                 this._inFlight.delete(token.actor);
             return {snap: token.snap, pose: null, speeds: {}, direction: token.direction, kind: token.kind};
         }
-        const elapsed = Math.max(0, token.timeline?.get_elapsed_time() ??
-            (GLib.get_monotonic_time() - token.started) / 1000);
+        // the springs' own speeds (per ms): the next flight starts with them
+        token.ticker?.stop();
         const speeds = {};
-        for (const [key, value] of Object.entries(token.motion)) {
-            if (key === 'opacity')
-                continue;
-            // each property has its own duration since A16 (the swap-out ghost fades slower than it moves)
-            const d = value.duration;
-            const u = d ? Math.min(1, elapsed / d) : 1;
-            if (!d)
-                speeds[key] = 0;
-            else if (value.profile === 'sine')
-                speeds[key] = value.delta * Math.PI / 2 / d * Math.cos(Math.PI / 2 * u);
-            else if (value.profile === 'cubic')
-                speeds[key] = value.delta * 3 * (1 - u) * (1 - u) / d;
-            else if (value.profile === 'inout')
-                speeds[key] = value.delta * Math.PI / 2 / d * Math.sin(Math.PI * u);
-            else
-                speeds[key] = (value.delta * (6 * u - 6 * u * u) + value.velocity * d * (1 - 4 * u + 3 * u * u)) / d;
-        }
+        for (const [key, sp] of Object.entries(token.springs ?? {}))
+            speeds[key] = sp.v / 1000;
         // (an interrupted flight moves by translation, see _startFlight)
         const pose = {x: token.fly.x + token.fly.translation_x, y: token.fly.y + token.fly.translation_y,
             width: token.snap.frame.width * token.fly.scale_x,
@@ -1496,7 +1779,7 @@ class StageManager {
             actor.opacity = 255;
         const settled = this._groupOf(win, false)?.item;
         settled?.setFlightHidden(win, false);
-        if (previous?.kind === 'swap-out')
+        if (previous?.kind === 'park-swap')
             settled?.setInert(false);
         // Be tolerant of a legacy in-flight record during a reserved handoff.
         const legacy = actor && this._inFlight.get(actor);
@@ -1922,8 +2205,8 @@ class StageManager {
         if (this._tornDown())
             return;
         // A3: the strip travels with its workspace. The old strip's items leave in a ghost layer that slides
-        // out with the old workspace; the new strip slides in with the new one (GNOME's own 250 ms
-        // ease-out-cubic, so it stays in step with the windows). A three-finger swipe has already moved the
+        // out with the old workspace; the new strip slides in with the new one (both on the 'track' spring, as the
+        // workspace switch itself). A three-finger swipe has already moved the
         // windows when the workspace activates, so there the strips cross-fade with a short slide instead.
         const idx = global.workspace_manager.get_active_workspace_index();
         const prev = this._wsIndex ?? idx;
@@ -1969,7 +2252,7 @@ class StageManager {
                 this._stripGhost = null;
         });
         this._strip.get_parent().insert_child_above(ghost, this._strip);
-        ghost.set_position(this._strip.x + this._strip.translation_x, this._strip.y);
+        ghost.set_position(this._strip.x + this._strip.translation_x, this._strip.y + this._strip.translation_y);
         ghost.set_size(this._strip.width, this._strip.height);
         for (const item of items) {
             item.remove_all_transitions();
@@ -1981,40 +2264,64 @@ class StageManager {
         return ghost;
     }
 
+    // the strip travels with its workspace (liquid v3): the old strip (its ghost) and the new one on the 'track' spring, the
+    // fade-through on the fade role
     _runStripTravel(plan, ghost, dir) {
         const W = Main.layoutManager.primaryMonitor?.width ?? 1920;
         const slide = plan === 'slide';
-        const dur = slide ? 250 : 180;   // GNOME's WINDOW_ANIMATION_TIME; ease() and the timeline both scale it
-        const mode = Clutter.AnimationMode.EASE_OUT_CUBIC;
         if (ghost) {
-            ghost.ease(slide ? {x: ghost.x + dir * W, duration: dur, mode, onStopped: () => this._dropGhost(ghost)}
-                : {opacity: 0, duration: 120, mode, onStopped: () => this._dropGhost(ghost)});
+            liquidEase(ghost, slide ? {x: ghost.x + dir * W, onStopped: () => this._dropGhost(ghost)}
+                : {opacity: 0, onStopped: () => this._dropGhost(ghost)}, {role: 'track'});
         }
         const from = slide ? -dir * W : -dir * 40;
-        const tl = new Clutter.Timeline({actor: this._strip, duration: Math.max(1, Math.round(dur * St.Settings.get().slow_down_factor))});
-        tl.set_progress_mode(mode);
-        const apply = p => {
+        const p = new Spring(0, role('track'), 1 / Math.max(1, Math.abs(from)) * EPS_PX).set(1);
+        const op = new Fade(slide ? 1 : 0, role('fade'), EPS_OPACITY).set(1);
+        const apply = () => {
             if (this._stripGone)
                 return;
             const m = new Graphene.Matrix();
-            m.init_translate(new Graphene.Point3D({x: from * (1 - p), y: 0, z: 0}));
+            m.init_translate(new Graphene.Point3D({x: from * (1 - p.x), y: 0, z: 0}));
             this._strip.set_child_transform(m);
+            if (this._plateLayer && !this._plateLayer._stageGone)
+                this._plateLayer.set_child_transform(m);
             if (!slide)
-                this._strip.opacity = Math.round(255 * Math.min(1, p * 1.4));
+                this._strip.opacity = Math.round(255 * op.x);
         };
-        tl.connect('new-frame', () => apply(tl.get_progress()));
-        tl.connect('stopped', () => {
-            if (this._stripTravel === tl)
-                this._stripTravel = null;
-            if (!this._stripGone) {
-                this._strip.set_child_transform(null);
-                if (!slide)
-                    this._strip.opacity = 255;
+        const travel = {
+            ticker: null,
+            stop: () => {
+                travel.ticker.stop();
+                if (this._stripTravel === travel)
+                    this._stripTravel = null;
+                if (this._plateLayer && !this._plateLayer._stageGone)
+                    this._plateLayer.set_child_transform(null);
+                if (!this._stripGone) {
+                    this._strip.set_child_transform(null);
+                    if (!slide)
+                        this._strip.opacity = 255;
+                }
+            },
+        };
+        travel.ticker = new Ticker(dt => {
+            if (this._stripTravel !== travel || this._stripGone)
+                return false;
+            p.step(dt);
+            op.step(dt);
+            apply();
+            if (p.rest && op.rest) {
+                travel.stop();
+                return false;
             }
+            return true;
         });
-        this._stripTravel = tl;
-        apply(0);
-        tl.start();
+        if (motionMode() === 'off') {
+            this._stripTravel = travel;
+            travel.stop();
+            return;
+        }
+        this._stripTravel = travel;
+        apply();
+        travel.ticker.start();
     }
 
     _dropGhost(ghost) {
@@ -2144,19 +2451,9 @@ class StageManager {
             return;
         this._stripShown = true;
         this._strip.targetTranslationX = 0;
+        this._strip.targetTranslationY = 0;
         this._strip.remove_transition('translation-x');
-        this._strip.ease({translation_x: 0, opacity: 255, duration: realMs(SWAP.revealMs),
-            mode: Clutter.AnimationMode.EASE_OUT_SINE});
-    }
-
-    // Where the old stage's window ends: smaller, a good way toward the strip, turned and
-    // invisible (A16 item 1; A16-measurements 1a).
-    _outPose(snap) {
-        const area = this._workArea();
-        const f = snap.frame;
-        const w = f.width * SWAP.outScale, h = f.height * SWAP.outScale;
-        const cx = f.x + f.width / 2 - SWAP.outSlide * area.width, cy = f.y + f.height / 2;
-        return {x: cx - w / 2, y: cy - h / 2, width: w, height: h, opacity: 0, tilt: -1};
+        liquidEase(this._strip, {translation_x: 0, translation_y: 0, opacity: 255}, {role: 'pour'});
     }
 
     _sendToCast(wins, {alreadyMinimized = false, kind = 'park', fromPose = null} = {}) {
@@ -2186,13 +2483,15 @@ class StageManager {
         this._castKind = kind;
         this._rebuildCast(true, new Set(wins));
         this._castKind = null;
-        // back windows first, so the front window's image is drawn on top
+        // back windows first, so the front window's image is drawn on top. Vitre Motion Lab 2: the old stage's windows fly all
+        // the way into the clicked slot (one continuous move); a window beyond the pile's PILE_MAX flies into its back slot and
+        // fades there.
         for (const {win, snap, from, speeds} of [...flights].reverse()) {
             const item = this._groupOf(win, false)?.item;
-            if (snap && kind === 'swap-out' && !item?.slots.has(win)) {
-                this._startFlight(win, snap, from, this._outPose(snap), 'swap-out', speeds);
-            } else if (snap && item?.slots.has(win)) {
+            if (snap && item?.slots.has(win)) {
                 this._startFlight(win, snap, from, item.slotRect(win, snap.frame, true), kind === 'swap-out' ? 'park-swap' : 'park', speeds);
+            } else if (snap && item && !item.destroyed && kind === 'swap-out') {
+                this._startFlight(win, snap, from, {...item.slotRect(win, snap.frame, true, PILE_MAX - 1), opacity: 0}, 'park-swap', speeds);
             } else {
                 item?.setFlightHidden(win, false);
             }
@@ -2350,8 +2649,13 @@ class StageManager {
             const slotKey = group.item ? group.lastUsed : null;
             state.stage = group;
             group.touch(focusWin);
-            if (old && old !== group && slotKey !== null)
+            if (old && old !== group && slotKey !== null) {
                 old.lastUsed = slotKey;
+                // (and its side of the Dock in the bottom band: it flies into that very slot)
+                const sd = this._bandSide?.get(group);
+                if (sd)
+                    this._bandSide.set(old, sd);
+            }
             const active = global.workspace_manager.get_active_workspace();
             const outgoing = old && old !== group
                 ? old.windows.filter(w => this._eligible(w) && !w.minimized && w.get_workspace() === active)
@@ -2370,14 +2674,13 @@ class StageManager {
     }
 
     // A window image in motion. kind:
-    //   'in'        the window grows from where it was (rail slot, pointer) to its frame; ease-out
-    //               sine, already `p0` of the way in the first painted frame (A16 item 1)
-    //   'swap-out'  the old stage's window: shrinks to 0.62, slides toward the strip, turns its
-    //               strip-side edge away and fades, gone in ~75 ms; never reaches the strip
-    //   'park'      a window going into a rail slot (minimize, dragged back, adoption): 370 ms
+    //   'in'        the window grows from where it was (rail slot, pointer) to its frame on the glide springs,
+    //               already `p0` of the way in the first painted frame (A16 item 1)
+    //   'park-swap' the old stage's window in a swap: it flies all the way into the clicked slot (one continuous move)
+    //   'park'      a window going into a rail slot (minimize, dragged back, adoption) on the glide springs
     // `speeds` (from _takeFlight) continue an interrupted flight with the speed it had.
-    // Vitre: the end of a flight is a small press, like a part clicking into place: the window overshoots by about 1 %
-    // and settles. Short, and always cancelled by whatever moves the window next.
+    // Vitre: the end of a flight is a small press, like a part clicking into place: a bead kick that peaks about 1 %
+    // past the window's size and settles. Short, and always cancelled by whatever moves the window next.
     _clickActor(actor, amount = SWAP.clickIn) {
         if (!motionEnabled() || !actor?.get_parent() || actor.is_finalized?.())
             return;
@@ -2389,21 +2692,12 @@ class StageManager {
         const base = {sx: actor.scale_x || 1, sy: actor.scale_y || 1, pivot: actor.get_pivot_point()};
         actor._vitreClickBase = base;
         actor.set_pivot_point(0.5, 0.5);
-        const [out, back] = SWAP.clickMs;
-        actor.ease({scale_x: base.sx * amount, scale_y: base.sy * amount, duration: realMs(out), mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onStopped: () => {
-                if (actor._vitreClick !== token || actor.is_finalized?.())
-                    return;
-                actor.ease({scale_x: base.sx, scale_y: base.sy, duration: realMs(back), mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-                    onStopped: () => {
-                        if (actor._vitreClick !== token || actor.is_finalized?.())
-                            return;
-                        actor._vitreClick = null;
-                        actor._vitreClickBase = null;
-                        actor.set_scale(base.sx, base.sy);
-                        actor.set_pivot_point(base.pivot[0], base.pivot[1]);
-                    }});
-            }});
+        pressKick(actor, amount, base, () => actor._vitreClick === token, () => {
+            actor._vitreClick = null;
+            actor._vitreClickBase = null;
+            actor.set_scale(base.sx, base.sy);
+            actor.set_pivot_point(base.pivot[0], base.pivot[1]);
+        });
     }
 
     _cancelClick(actor) {
@@ -2434,55 +2728,65 @@ class StageManager {
         const interrupted = Object.keys(speeds).length > 0;
         const area = this._workArea();
         const frame = snap.frame;
-        const fly = flyActor(win, snap, this._look, area.y + area.height / 2, {real: kind === 'swap-out'});
-        if (kind === 'in')
-            fly._geo.strength = SWAP.inKeystone / (1 - LOOK.farRatio);
+        const fly = flyActor(win, snap, this._look, this._vanishY());
         const lerp = (a, b, t) => a + (b - a) * t;
-        // The first painted frame is not the start pose: the swap is already some way along in it.
-        const t0 = interrupted ? 0 : kind === 'in' ? p0 : kind === 'swap-out' ? SWAP.outP0 : 0;
-        const tTilt = interrupted ? 0 : kind === 'swap-out' ? SWAP.outTiltP0 : t0;
-        const tOpacity = interrupted ? 0 : kind === 'swap-out' ? 0 : t0;
         const tgt = {opacity: 255, tilt: 0, ...target};
         const begin = {opacity: 255, tilt: 0, ...from};
-        fly.set_position(lerp(begin.x, tgt.x, t0), lerp(begin.y, tgt.y, t0));
-        fly.scale_z = 1 + lerp(begin.tilt, tgt.tilt, tTilt);
-        fly.set_scale(lerp(begin.width, tgt.width, t0) / frame.width, lerp(begin.height, tgt.height, t0) / frame.height);
-        fly.opacity = Math.round(lerp(begin.opacity, tgt.opacity, tOpacity));
+        // the hinge's perspective is the one of this flight's rail end (a back slot is narrower than the front one), so the
+        // picture there has exactly the rail's keystone
+        const railEnd = direction === 'in' ? begin : tgt;
+        if (railEnd.tilt > 0.5 && railEnd.width > 0)
+            fly._geo.railW = railEnd.width;
+        // a slot left of the Dock (the bottom band) hinges about its right edge: the whole flight turns about that edge
+        fly._geo.mirror = Boolean(railEnd.mirror);
+        // the first painted frame (an 'in' flight may start `p0` of the way along)
+        const t0 = interrupted || direction !== 'in' ? 0 : p0;
+        const e0 = {L: lerp(begin.x, tgt.x, t0), T: lerp(begin.y, tgt.y, t0),
+            R: lerp(begin.x + begin.width, tgt.x + tgt.width, t0), B: lerp(begin.y + begin.height, tgt.y + tgt.height, t0),
+            tilt: lerp(begin.tilt, tgt.tilt, t0)};
+        fly.set_position(e0.L, e0.T);
+        fly.scale_z = 1 + e0.tilt;
+        fly.set_scale((e0.R - e0.L) / frame.width, (e0.B - e0.T) / frame.height);
+        fly.opacity = Math.round(lerp(begin.opacity, tgt.opacity, t0));
         this._flyLayer.add_child(fly);
         const item = this._groupOf(win, false)?.item;
-        // scale_z carries the tilt (1 + tilt), last, so the matrix is rebuilt from the final
-        // values of the frame.
-        const end = {x: tgt.x, y: tgt.y, scale_x: tgt.width / frame.width, scale_y: tgt.height / frame.height,
-            scale_z: 1 + tgt.tilt, opacity: tgt.opacity};
-        if (Math.abs(end.scale_z - fly.scale_z) < 1e-3)
-            end.scale_z = fly.scale_z + 1e-3;     // always animate, so the matrix follows x and y
-        const Mode = Clutter.AnimationMode;
-        let geomPlan, fadePlan, tiltPlan;
-        if (kind === 'in') {
-            const ms = (count > 1 ? SWAP.inMsGroup : SWAP.inMs) * factor;
-            geomPlan = fadePlan = tiltPlan = {ms, mode: Mode.EASE_OUT_SINE, v0: Math.PI / 2, profile: 'sine'};
-        } else if (kind === 'swap-out') {
-            geomPlan = {ms: SWAP.outGeomMs, mode: Mode.EASE_OUT_CUBIC, v0: 3, profile: 'cubic'};
-            fadePlan = {ms: SWAP.outFadeMs, delay: SWAP.outFadeDelay, mode: Mode.LINEAR, v0: 1, profile: 'linear'};
-            // the keystone starts gently and closes late (the reference design edge ratio 1.54, 1.76, 5.3 at +0, +17, +33 ms)
-            tiltPlan = {ms: SWAP.outGeomMs, mode: Mode.EASE_IN_OUT_SINE, v0: 0, profile: 'inout'};
-        } else {
-            geomPlan = fadePlan = tiltPlan = {ms: SWAP.parkMs, mode: Mode.EASE_IN_OUT_SINE, v0: 0, profile: 'inout'};
+        const end = {L: tgt.x, T: tgt.y, R: tgt.x + tgt.width, B: tgt.y + tgt.height, tilt: tgt.tilt};
+        // Vitre Motion Lab 2: one continuous move. Each picture is four edge springs on the flight's glide (flightParams: a tenth
+        // slower, damped to 0.9): the edge facing the way it travels leads, the far edge follows on viscosity (it stretches with
+        // speed and relaxes on its own). The tilt (about the
+        // near edge, see hingeRatio): an incoming window flattens on glide (early, while it is still small), an outgoing one
+        // turns on glide trail (late, as it shrinks). Opacity on the fade role. An interrupted flight (a swap started mid-swap)
+        // starts with the speeds it had: both windows turn round without a step. The picture moves by translation, not by x
+        // and y: a position change on a mapped St.Widget queues a relayout on every frame (Clutter-WARNING "needs an
+        // allocation"); x and y stay where it started.
+        const {lead, trail} = flightParams();
+        const right = end.L + end.R >= e0.L + e0.R, down = end.T + end.B >= e0.T + e0.B;
+        const P = {L: right ? trail : lead, R: right ? lead : trail, T: down ? trail : lead, B: down ? lead : trail,
+            tilt: direction === 'in' ? lead : trail};
+        const origin = {x: fly.x, y: fly.y};
+        // every spring rests within a quarter pixel: the edges in pixels, the tilt by its far edge's travel (about the frame's
+        // height per unit of tilt), the press by the picture's size
+        const springs = {};
+        for (const key of ['L', 'T', 'R', 'B', 'tilt']) {
+            const sp = new Spring(e0[key], P[key], key === 'tilt' ? EPS_PX / Math.max(1, frame.height) : EPS_PX);
+            sp.v = (speeds[key] ?? 0) * 1000;
+            springs[key] = sp.set(end[key]);
         }
-        const planOf = key => key === 'opacity' ? fadePlan : key === 'scale_z' ? tiltPlan : geomPlan;
-        const motion = {};
-        for (const [key, value] of Object.entries({x: end.x, y: end.y, scale_x: end.scale_x, scale_y: end.scale_y,
-            scale_z: end.scale_z, opacity: end.opacity})) {
-            const plan = planOf(key);
-            const delta = value - fly[key];
-            const effective = realMs(plan.ms) * St.Settings.get().slow_down_factor;
-            // `profile`: the closed-form curve of a first flight (exact speed when it is interrupted);
-            // a continued flight is a Hermite segment from the speed it inherited.
-            motion[key] = {delta, duration: effective, profile: interrupted ? 'hermite' : plan.profile,
-                velocity: speeds[key] ?? (effective ? plan.v0 * delta / effective : 0)};
+        const press = new Spring(0, role('bead', {trail: true}), EPS_PX / Math.max(1, tgt.width, tgt.height));
+        const fade = new Fade(fly.opacity / 255, role('fade', {exit: tgt.opacity < fly.opacity}), EPS_OPACITY).set(tgt.opacity / 255);
+        const mode = motionMode();
+        if (mode === 'reduced') {
+            // no travel: the picture is where it goes and crosses over there (the 160 ms spring)
+            for (const [key, sp] of Object.entries(springs))
+                sp.snap(end[key]);
+            fade.snap(direction === 'in' ? 0 : fly.opacity / 255);
+            fade.set(direction === 'in' ? 1 : 0, REDUCED);
         }
+        // a picture flying into its slot lands once all four edges are within SWAP.landPx: the strip catches it (a press
+        // kick on the bead spring) and the pile's badge comes back on the fade spring
+        const landing = direction === 'out' && mode === 'full' && tgt.opacity > 0 && Boolean(item?.slots.has(win));
         const token = {fly, actor, snap, direction, kind, onLanded, ov: Boolean(Main.overview.visible), target: {...tgt}, started: GLib.get_monotonic_time(),
-            duration: motion.x.duration, motion, timeline: null};
+            springs, press, fade, landing, landed: false, ticker: null};
         this._flights.set(win, token);
         if (direction === 'in') {
             actor.opacity = 0;
@@ -2494,6 +2798,7 @@ class StageManager {
         const complete = () => {
             if (this._flights.get(win) !== token)
                 return;
+            token.ticker?.stop();
             if (fly._stageGone) {
                 this._takeFlight(win);
                 return;
@@ -2503,12 +2808,10 @@ class StageManager {
             if (direction === 'out') {
                 const landed = this._groupOf(win, false)?.item;
                 landed?.setFlightHidden(win, false);
-                if (kind === 'swap-out') {
-                    landed?.land();
-                } else {
-                    landed?.setInert(false);
-                    landed?.settle();       // the thumbnail clicks into its slot
-                }
+                landed?.setInert(false);
+                // the press the landing started goes on in the thumbnail, with its place and speed
+                if (token.landed)
+                    landed?.settle(press);
             } else if (actor.get_parent()) {
                 actor.opacity = 255;
                 if (!onLanded)
@@ -2531,94 +2834,56 @@ class StageManager {
             if (!this._flights.size)
                 this._queueOverlap();
         };
-        // Done when the geometry, the keystone and the fade (which may take longer) are all done.
-        const fades = end.opacity !== fly.opacity;
-        const splitTilt = tiltPlan !== geomPlan;
-        let pending = 1 + (fades ? 1 : 0) + (splitTilt && !interrupted ? 1 : 0);
-        const part = () => {
-            if (--pending <= 0)
-                complete();
+        const apply = () => {
+            const geo = fly._geo;
+            fly._geo = null;                // one matrix for the whole step
+            const {L, T, R, B} = springs;
+            // the press swells the picture about its near edge, at its vertical centre (the hinge)
+            const k = 1 + press.x;
+            const w = Math.max(1, R.x - L.x) * k, h = Math.max(1, B.x - T.x) * k, cy = (T.x + B.x) / 2;
+            fly.translation_x = (fly._geo?.mirror ? R.x - w : L.x) - origin.x;
+            fly.translation_y = cy - h / 2 - origin.y;
+            fly.set_scale(w / frame.width, h / frame.height);
+            fly.scale_z = 1 + springs.tilt.x;
+            fly._geo = geo;
+            fly.opacity = Math.round(255 * fade.x);
+            syncFlyTilt(fly);
         };
-        const geom = {x: end.x, y: end.y, scale_x: end.scale_x, scale_y: end.scale_y};
-        if (!splitTilt || interrupted)
-            geom.scale_z = end.scale_z;
-        let clock = null;
-        if (interrupted) {
-            // The image carries on from the pose it was painted in, with the speed it had, and arrives at rest
-            // (a Hermite segment). Clutter.Transition.set_progress_func would do this, but the Shell here calls it
-            // and ignores what it returns, so the image would stand still: a clock actor is eased 0 -> 1
-            // instead and every frame the pose is computed from it.
-            clock = new Clutter.Actor({x: 0, width: 1, height: 1, opacity: 0});
-            fly.add_child(clock);
-            // The picture moves by translation, not by x and y: a position change on a mapped St.Widget queues a
-            // relayout on every frame (Clutter-WARNING "needs an allocation"); x and y stay where it started.
-            const origin = {x: fly.x, y: fly.y};
-            const curves = Object.keys(geom).map(key => {
-                const value = motion[key];
-                const from = fly[key];
-                // Speed relative to the average one (an ease-out cubic starts at 3). The image coasts on the way it
-                // was going before it turns toward the new target, but only by a little (`coast`, in the unit of
-                // the property): a flight that was fast over 50 ms must not drag a 280 ms one far past its mark.
-                const coast = COAST[key];
-                const raw = value.duration && Math.abs(value.delta) > 1e-7 ? value.velocity * value.duration / value.delta : 0;
-                const vn = Math.max(Math.abs(value.delta) > 1e-7 ? -Math.min(8, coast / (0.148 * Math.abs(value.delta))) : 0,
-                    Math.min(5, raw));
-                value.velocity = value.duration ? vn * value.delta / value.duration : 0;
-                return {key, from, to: end[key], vn};
-            });
-            const step = u => {
-                if (fly.is_finalized?.())
-                    return;
-                u = Math.min(1, Math.max(0, u));
-                const hermite = (v) => 3 * u * u - 2 * u * u * u + v * u * (1 - u) * (1 - u);
-                const geo = fly._geo;
-                fly._geo = null;                // one matrix for the whole step
-                for (const {key, from, to, vn} of curves) {
-                    const value = u >= 1 ? to : from + (to - from) * hermite(vn);
-                    if (key === 'x')
-                        fly.translation_x = value - origin.x;
-                    else if (key === 'y')
-                        fly.translation_y = value - origin.y;
-                    else
-                        fly[key] = value;
-                }
-                fly._geo = geo;
-                syncFlyTilt(fly);
-            };
-            clock.connect('notify::x', () => step(clock.x));
-            clock.ease({x: 1, duration: realMs(geomPlan.ms), mode: Mode.LINEAR, onComplete: () => {
-                step(1);
-                part();
-            }});
-        } else {
-            fly.ease({...geom, duration: realMs(geomPlan.ms), mode: geomPlan.mode, onComplete: part});
-            if (splitTilt)
-                fly.ease({scale_z: end.scale_z, duration: realMs(tiltPlan.ms), mode: tiltPlan.mode, onComplete: part});
-        }
-        if (fades)
-            fly.ease({opacity: end.opacity, duration: realMs(fadePlan.ms), delay: realMs(fadePlan.delay ?? 0),
-                mode: fadePlan.mode, onComplete: part});
-        // GNOME adjusts native timeline duration by its global slow-down factor.
-        // Sample that timeline rather than using the unadjusted requested time.
-        if (this._flights.get(win) !== token)
+        if (mode === 'off') {
+            for (const [key, sp] of Object.entries(springs))
+                sp.snap(end[key]);
+            fade.snap(tgt.opacity / 255);
+            apply();
+            complete();
             return;
-        token.timeline = (interrupted ? [clock.get_transition('x')] :
-            ['x', 'y', 'scale-x', 'scale-y', 'scale-z'].map(name => fly.get_transition(name))).find(Boolean) ?? null;
-        for (const [key, value] of Object.entries(motion)) {
-            const real = (interrupted && key !== 'opacity' ? clock.get_transition('x') :
-                fly.get_transition(key.replaceAll('_', '-')))?.get_duration();
-            if (real !== undefined)
-                value.duration = real;
-            if (!(key in speeds))
-                value.velocity = value.duration ? planOf(key).v0 * value.delta / value.duration : 0;
         }
-        token.duration = motion.x.duration;
-        // Only a watchdog for an interrupted compositor callback; it does not
-        // gate clicks, keyboard activation or the normal landing handoff.
-        const longest = Math.max(...Object.entries(motion).map(([key, v]) =>
-            v.duration + (key === 'opacity' ? fadePlan.delay ?? 0 : 0)));
-        if (longest)
-            this._later(longest + 160, complete);
+        token.ticker = new Ticker(dt => {
+            if (this._flights.get(win) !== token || fly._stageGone || fly.is_finalized?.())
+                return false;
+            for (const sp of Object.values(springs))
+                sp.step(dt);
+            press.step(dt);
+            fade.step(dt);
+            if (token.landing && ['L', 'T', 'R', 'B'].every(key => Math.abs(springs[key].x - end[key]) < SWAP.landPx)) {
+                token.landing = false;
+                token.landed = true;
+                press.kick(SWAP.landKick * (0.6 + feel().volume));
+                this._groupOf(win, false)?.item?.badgeLanded();
+            }
+            apply();
+            // done at rest (the press goes on in the thumbnail), or (a picture that fades out: a window beyond the pile) once it
+            // is invisible, as a closing window
+            const gone = tgt.opacity === 0 && fade.x < 0.01;        // the lab's closing windows: gone under 1 %
+            if (gone || (Object.values(springs).every(sp => sp.rest) && fade.rest)) {
+                complete();
+                return false;
+            }
+            return true;
+        });
+        apply();
+        token.ticker.start();
+        // only a watchdog for a flight whose frames stopped coming; it does not gate clicks, keyboard activation or the landing
+        this._later(FLIGHT_WATCHDOG_MS * slowFactor(), complete);    // (motion time: the rig's slow motion stretches it too)
     }
 
     // -- the overview (Vitre): the strip stays painted there and takes drops, see overviewDrag.js --
@@ -2708,8 +2973,14 @@ class StageManager {
                     w.get_workspace() === global.workspace_manager.get_active_workspace()))
                 return;
             const area = this._workArea();
-            this._dropZone.set_position(area.x + this._look.stripWidth, area.y);
-            this._dropZone.set_size(Math.max(0, area.width - this._look.stripWidth), area.height);
+            if (this._band) {
+                // everything above the band
+                this._dropZone.set_position(area.x, area.y);
+                this._dropZone.set_size(area.width, Math.max(0, this._band.y - area.y));
+            } else {
+                this._dropZone.set_position(area.x + this._look.stripWidth, area.y);
+                this._dropZone.set_size(Math.max(0, area.width - this._look.stripWidth), area.height);
+            }
             this._dropZone.show();
             Main.layoutManager.uiGroup.set_child_above_sibling(this._dropZone, null);
         });
@@ -2752,7 +3023,8 @@ class StageManager {
         const press = [item.draggable?._dragStartX ?? px, item.draggable?._dragStartY ?? py];
         const thumb = item.slotRect(win, snap.frame);
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-        const fly = flyActor(win, snap, this._look, area.y + area.height / 2);
+        const fly = flyActor(win, snap, this._look, this._vanishY());
+        fly._geo.mirror = Boolean(thumb.mirror);
         Shell.util_set_hidden_from_pick(fly, true);
         // The picture follows the pointer through translation, not x/y: a position change on a mapped
         // actor queues a relayout on every motion event (Clutter-WARNING "needs an allocation").
@@ -2791,7 +3063,7 @@ class StageManager {
                 this._cancelRailDrag();
         });
         if (motionEnabled())
-            grow.ease({x: 1, duration: realMs(SWAP.inMs), mode: Clutter.AnimationMode.EASE_OUT_SINE});
+            liquidEase(grow, {x: 1});
         else
             grow.x = 1;
         // the item leaves the rail now
@@ -2853,6 +3125,8 @@ class StageManager {
         this._rebuildCast(true, new Set(group.windows));
         const item = group.item;
         const back = item && item.slots.has(win) ? item.slotRect(win, snap.frame, true) : d.thumb;
+        if (fly._geo)
+            fly._geo.mirror = Boolean(back.mirror);
         let finished = false;
         let timeoutId = 0;
         const cancellation = {win, group, finish: () => done(false)};
@@ -2883,11 +3157,10 @@ class StageManager {
         fly.translation_y = 0;
         fly._geo = geo;
         syncFlyTilt(fly);
-        fly.ease({
+        liquidEase(fly, {
             x: back.x, y: back.y, scale_x: back.width / snap.frame.width, scale_y: back.height / snap.frame.height,
-            scale_z: 1 + (back.tilt ?? 1), duration: realMs(200), mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: done,
-        });
+            scale_z: 1 + (back.tilt ?? 1), onComplete: done,
+        }, {role: 'glide'});
         if (!finished)
             timeoutId = this._later(900, done);
     }
@@ -2932,9 +3205,10 @@ class StageManager {
         const area = this._workArea();
         const frame = rectOf(win.get_frame_rect());
         const changed = ['x', 'y', 'width', 'height'].some(key => frame[key] !== dragged.frame[key]);
-        const stripWidth = this._look.stripWidth;
-        const inRail = frame.x < area.x + stripWidth && frame.x + frame.width > area.x;
-        if (changed && inRail && x >= area.x && x < area.x + stripWidth && y >= area.y && y < area.y + area.height)
+        // a window let go with the pointer in the strip (the column, or the bottom band) parks there
+        const S = this._band ? this._stripRect() : {x: area.x, y: area.y, width: this._look.stripWidth, height: area.height};
+        const inRail = frame.x < S.x + S.width && frame.x + frame.width > S.x && frame.y < S.y + S.height && frame.y + frame.height > S.y;
+        if (changed && inRail && x >= S.x && x < S.x + S.width && y >= S.y && y < S.y + S.height)
             this._parkWindow(win, {user: false, restorePosition: dragged.frame});
     }
 
@@ -3019,11 +3293,171 @@ class StageManager {
 
     // -- the strip --
 
+    // The bottom band: each side's piles in a row outward from the Dock (the most recent nearest it), the front thumbnail
+    // centred in the band's height. A side with more than fits compacts toward the Dock: the spacing shrinks so the outermost
+    // pile ends at the screen margin, and the piles overlap, the nearer one on top. Item-local (strip) coordinates.
+    _bandPlaces(items) {
+        const band = this._band;
+        const places = new Map();
+        for (const [side, list] of [['L', items.filter(i => i._side === 'L')], ['R', items.filter(i => i._side === 'R')]]) {
+            if (!list.length)
+                continue;
+            // the plate begins a clear gap from the capsule; its piles start the capsule's own padding inside it
+            const edge = side === 'L' ? band.dockL - band.capGap : band.dockR + band.capGap;
+            const near = side === 'L' ? edge - band.padX : edge + band.padX;
+            const room = side === 'L' ? near - (band.x + BAND.margin + band.padX) : band.x + band.w - BAND.margin - band.padX - near;
+            // natural distance of each pile's near edge from the Dock side, and the pile's own width
+            const offsets = [];
+            let o = 0;
+            for (const item of list) {
+                offsets.push(o);
+                o += item.width + band.pileGap;
+            }
+            const last = list[list.length - 1].width;
+            const span = offsets[offsets.length - 1] + last;
+            const k = span > room && offsets[offsets.length - 1] > 0 ? Math.max(0, (room - last) / offsets[offsets.length - 1]) : 1;
+            list.forEach((item, i) => {
+                const off = offsets[i] * k;
+                const x = side === 'L' ? near - off - item.width : near + off;
+                const y = Math.round(band.cy - band.y - item._front.h / 2) - item._rise;
+                places.set(item, {x: Math.round(x - band.x), y});
+            });
+            // the nearer pile on top
+            for (const item of [...list].reverse())
+                this._strip.set_child_above_sibling(item, null);
+            // the plate: from the outermost pile (its padding beyond it) to the gap at the capsule
+            const far = side === 'L' ? Math.min(...list.map(i => places.get(i).x)) + band.x - band.padX
+                : Math.max(...list.map(i => places.get(i).x + i.width)) + band.x + band.padX;
+            places.set(side, side === 'L' ? {x: far, w: edge - far} : {x: edge, w: far - edge});
+        }
+        return places;
+    }
+
+    // ---- the band's plates: glass the Dock's height under each side group ----
+
+    _makePlate() {
+        const dockBg = this._dock?.bgActor;
+        // the Dock's own capsule style (its tint, border and radius: no colour of ours) ...
+        const glass = new St.Widget({style_class: dockBg?.style_class ?? '', reactive: false, opacity: 0});
+        const style = dockBg?.get_style?.();
+        if (style)
+            glass.set_style(style);
+        const root = new Clutter.Actor({reactive: false});
+        root.add_child(glass);
+        this._plateLayer.add_child(root);
+        const p = {root, glass, panel: null, gone: false};
+        // ... and its blur: Dhruva's own BlurPanel, the module the Dock runs (same URL, same settings), when it can be had
+        this._plateGlass(p).catch(e => console.warn(`Vitre Stage: the band's plates go without the Dock's blur (${e.message})`));
+        return p;
+    }
+
+    async _plateGlass(p) {
+        const ext = Main.extensionManager.lookup('dhruva@narkagni');
+        const ui = this._dock?._dockUI;
+        if (!ext?.dir || !ui?.settings)
+            return;
+        const mod = await import(`${ext.dir.get_uri()}/src/ui/blur/BlurPanel.js`);
+        if (p.gone || !mod?.BlurPanel)
+            return;
+        p.panel = new mod.BlurPanel(p.glass, ui.settings, ui._dockBlur?.cornerRadius ?? 20, p.root);
+    }
+
+    _dropPlates() {
+        for (const p of Object.values(this._plates ?? {})) {
+            p.gone = true;
+            try {
+                p.panel?.destroy();
+            } catch (_e) { /* the Dock went first */ }
+            if (!p.root._stageGone)
+                p.root.destroy();
+        }
+        this._plates = {};
+    }
+
+    // places: _bandPlaces' map (its 'L' and 'R' entries are the plates' rects, stage x), or null (the column: no plates)
+    _syncPlates(places, animate) {
+        if (!this._plateLayer || this._plateLayer._stageGone)
+            return;
+        if (!places) {
+            this._dropPlates();
+            return;
+        }
+        const band = this._band;
+        for (const side of ['L', 'R']) {
+            const r = places.get(side);
+            let p = this._plates[side];
+            if (!r) {
+                if (p)
+                    liquidEase(p.glass, {opacity: 0});
+                continue;
+            }
+            const fresh = !p;
+            p ??= this._plates[side] = this._makePlate();
+            const geo = {x: Math.round(r.x), y: Math.round(band.capY), width: Math.round(r.w), height: Math.round(band.capH)};
+            if (fresh || !animate || !motionEnabled()) {
+                p.glass.set_position(geo.x, geo.y);
+                p.glass.set_size(geo.width, geo.height);
+            } else {
+                springTo(p.glass, {x: geo.x, width: geo.width, y: geo.y, height: geo.height});
+            }
+            if (p.glass.opacity < 255)
+                liquidEase(p.glass, {opacity: 255});
+        }
+        this._followCapsule();
+    }
+
+    // The Dock's capsule grows while it magnifies: each side group (piles and plate) moves out with its edge, so nothing ever
+    // overlaps it; it is back in place when the capsule is (no motion of its own: it is the capsule's)
+    _followCapsule() {
+        if (!this._band || !this._dockRest || this._stripGone)
+            return;
+        const bg = this._dock?.bgActor;
+        if (!bg || this._dock._vitreStageGone)
+            return;
+        const [x] = bg.get_transformed_position();
+        const [w] = bg.get_transformed_size();
+        const rest = this._dockRest;
+        const out = {L: -Math.max(0, rest.x - x), R: Math.max(0, x + w - (rest.x + rest.w))};
+        for (const item of this._strip.get_children()) {
+            const dx = out[item._side];
+            if (dx !== undefined && Math.abs(item.translation_x - dx) > 0.01)
+                item.translation_x = dx;
+        }
+        for (const [side, p] of Object.entries(this._plates ?? {})) {
+            if (!p.gone && Math.abs(p.glass.translation_x - out[side]) > 0.01)
+                p.glass.translation_x = out[side];
+        }
+    }
+
+    // another rebalancing layout once the pile that is crossing has gone some way (one crossing at a time)
+    _queueRebalance() {
+        if (this._rebalanceQueued || this._stripGone)
+            return;
+        this._rebalanceQueued = true;
+        this._later(450 * slowFactor(), () => {
+            this._rebalanceQueued = false;
+            if (!this._stripGone && this._band && !this._disabled)
+                this._rebuildCast(true);
+        });
+    }
+
+    // the bottom band's stacking: on each side the pile nearest the Dock on top
+    _restackBand() {
+        if (!this._band || this._stripGone)
+            return;
+        const dist = item => item._side === 'L' ? this._band.dockL - (this._band.x + (item.targetX ?? item.x) + item.width)
+            : this._band.x + (item.targetX ?? item.x) - this._band.dockR;
+        const items = this._strip.get_children().filter(i => i._side === 'L' || i._side === 'R').sort((a, b) => dist(b) - dist(a));
+        for (const item of items)
+            this._strip.set_child_above_sibling(item, null);
+    }
+
     _castGroups() {
         const state = this._state();
         const area = this._workArea();
         const {gap, thumbHMax} = this._look;
-        const fit = Math.max(1, Math.floor((0.9 * area.height + gap) / (thumbHMax + gap)));
+        // (in the bottom band the row compacts toward the Dock instead: only the setting limits it)
+        const fit = this._band ? 99 : Math.max(1, Math.floor((0.9 * area.height + gap) / (thumbHMax + gap)));
         const max = Math.min(this._settings.get_int('max-groups'), fit);
         return state.groups
             .filter(g => g !== state.stage && g !== this._dragGroup &&
@@ -3039,14 +3473,54 @@ class StageManager {
         const groups = this._castGroups();
         const old = new Map(this._strip.get_children().filter(item => !item.leaving).map(item => [item.group, item]));
         const fresh = new Set();
-        const items = groups.map(group => {
+        // the bottom band: the most recent pile nearest the Dock, alternating sides, left first
+        // The bottom band: a pile keeps its side once it has one (piles never hop across the Dock when another one comes or
+        // goes; a swap hands the clicked pile's side to the old stage, which lands in its slot); a new pile goes to the side
+        // with fewer piles, left on a tie. Within a side the most recent pile is nearest the Dock.
+        // The sides stay even (2026-10-29: five piles had all landed on the left): piles without a side (the first layout, a
+        // switch of strip-position) are dealt alternately, left first, most recent first; when the sides differ by two or
+        // more (closes, unparks), the outermost pile of the heavier side crosses to the lighter one on glide, one per
+        // layout, and the next layout follows once it has gone (the inner piles only ever shift along their own side).
+        this._bandSide ??= new WeakMap();
+        let crossing = null;
+        if (this._band) {
+            const count = {L: 0, R: 0};
+            for (const g of groups) {
+                const sd = this._bandSide.get(g);
+                if (sd === 'L' || sd === 'R')
+                    count[sd]++;
+            }
+            for (const g of groups) {
+                if (this._bandSide.get(g) === 'L' || this._bandSide.get(g) === 'R')
+                    continue;
+                const sd = count.R < count.L ? 'R' : 'L';
+                this._bandSide.set(g, sd);
+                count[sd]++;
+            }
+            if (Math.abs(count.L - count.R) >= 2) {
+                const heavy = count.L > count.R ? 'L' : 'R';
+                // groups are most recent first: the last of the heavy side is its outermost pile
+                const outer = groups.filter(g => this._bandSide.get(g) === heavy).pop();
+                this._bandSide.set(outer, heavy === 'L' ? 'R' : 'L');
+                crossing = outer;
+                if (Math.abs(count.L - count.R) >= 4)
+                    this._queueRebalance();
+            }
+        }
+        const sideOf = i => this._band ? this._bandSide.get(groups[i]) : 'rail';
+        const items = groups.map((group, i) => {
             const entries = group.windows.filter(w => this._eligible(w) && this._ours.has(w) && this._snapshots.has(w))
                 .map(w => [w, this._snapshots.get(w)]);
             let item = old.get(group);
             if (item) {
+                item.setSide(sideOf(i));
                 item.update(entries, this._look);
             } else {
                 item = new CastItem(group, entries, this._look);
+                if (sideOf(i) !== 'rail') {
+                    item.setSide(sideOf(i));
+                    item.update(entries, this._look);
+                }
                 item.connect('clicked', () => {
                     const event = Clutter.get_current_event();
                     const shift = event && (event.get_state() & Clutter.ModifierType.SHIFT_MASK);
@@ -3060,7 +3534,7 @@ class StageManager {
                 // The old stage's thumbnail takes no clicks until its ghost is gone and it has landed.
                 if (this._castKind === 'swap-out' && entries.some(([w]) => pending.has(w))) {
                     item.setInert(true);
-                    this._later(SWAP.parkMs + SWAP.clickMs[0] + SWAP.clickMs[1] + 900, () => {
+                    this._later(INERT_WAIT_MS, () => {
                         if (!item.destroyed)
                             item.setInert(false);
                     });
@@ -3078,10 +3552,14 @@ class StageManager {
                 group.item = null;
                 // A closed app's pile shrinks out; a pile that went to the stage is
                 // replaced by the flying windows and just goes.
-                if (this._closing.has(group) && this._stripShown && !quiet && motionEnabled())
+                if (this._closing.has(group) && this._stripShown && !quiet && motionEnabled()) {
                     item.leave();
-                else
+                } else {
+                    // the pile that went to the stage: its badge fades out where it was (fade exit)
+                    if (group === this._state().stage && !quiet)
+                        item.releaseBadge(this._flyLayerGone ? null : this._flyLayer);
                     item.destroy();
+                }
             }
         }
         this._closing.clear();
@@ -3089,8 +3567,10 @@ class StageManager {
         const {margin, gap} = this._look;
         const total = items.reduce((sum, item) => sum + item._front.h, 0) + gap * Math.max(0, items.length - 1);
         let y = Math.max(0, Math.round((area.height - total) / 2));
+        const placed = this._band ? this._bandPlaces(items) : null;
         for (const item of items) {
-            const itemX = margin - item._fan, itemY = y - item._rise;
+            const itemX = placed ? placed.get(item).x : margin - item._fan;
+            const itemY = placed ? placed.get(item).y : y - item._rise;
             item.group.item = item;
             const sameTarget = item.targetX === itemX && item.targetY === itemY;
             const keepReflow = sameTarget && !quiet && motionEnabled() &&
@@ -3100,8 +3580,10 @@ class StageManager {
             if (!item._growing)
                 item.opacity = 255;
             if (!keepReflow) {
-                if (animate && old.has(item.group) && !quiet)
-                    springTo(item, {x: itemX, y: itemY}, {response: CAST_RESPONSE});
+                if (item.group === crossing && old.has(item.group) && !quiet && motionEnabled())
+                    springTo(item, {x: itemX, y: itemY}, {role: 'glide'});     // a pile crossing to the lighter side
+                else if (animate && old.has(item.group) && !quiet)
+                    springTo(item, {x: itemX, y: itemY});
                 else {
                     item.remove_transition('x');
                     item.remove_transition('y');
@@ -3112,6 +3594,7 @@ class StageManager {
                 item.growIn();
             y += item._front.h + gap;
         }
+        this._syncPlates(placed, animate && !quiet);
         this._applyOverviewMode();
         this._syncBadges();
         // Closing/merging/reordering a pile can change an in-flight target.
@@ -3146,26 +3629,199 @@ class StageManager {
         const mon = Main.layoutManager.primaryMonitor;
         if (!this._reserve || !mon)
             return;
+        // the strip at the bottom reserves nothing (the Dock's own strut is its band)
+        this._reserve.visible = this._reserveWidth > 0;
         this._reserve.set_position(mon.x, mon.y);
-        this._reserve.set_size(this._reserveWidth, mon.height);
+        this._reserve.set_size(this._reserveWidth, this._reserveWidth > 0 ? mon.height : 0);
+    }
+
+    // ---- the strip's place: the left column, or the bottom band beside the Dock ----
+
+    // the Dock's container (Dhruva), while it is up
+    _dockActor() {
+        const d = this._dock;
+        if (d && !d._vitreStageGone && d.get_stage?.())
+            return d;
+        const find = (a, depth) => a?.get_name?.() === 'DhruvaContainer' ? a
+            : depth > 0 ? (a?.get_children?.() ?? []).map(c => find(c, depth - 1)).find(Boolean) ?? null : null;
+        const dock = find(Main.layoutManager.uiGroup, 3);
+        if (dock && dock !== d) {
+            this._dock = dock;
+            this._dockRest = null;
+            dock.connect('destroy', () => {
+                dock._vitreStageGone = true;
+                if (this._dock === dock) {
+                    this._dock = null;
+                    this._dockRest = null;
+                    this._queueDock();
+                }
+            });
+            // the Dock's resting size is measured whenever its layout changes, except while it magnifies (see _measureDock)
+            for (const a of [dock, dock.bgActor, dock.boxActor].filter(Boolean))
+                a.connectObject('notify::allocation', () => this._queueDock(), this);
+            dock.bgActor?.connectObject('notify::allocation', () => this._followCapsule(), this);
+        }
+        return dock ?? null;
+    }
+
+    // the Dock's background at rest (stage px) and its icons' height; kept while the pointer is on the Dock (it magnifies,
+    // previews): the strip never moves with it
+    _measureDock() {
+        const dock = this._dockActor();
+        if (!dock || !dock.visible || !dock.bgActor)
+            return this._dockRest = null;
+        if (dock.boxActor?.hover || dock.hover)
+            return this._dockRest;
+        const bg = dock.bgActor;
+        const [x, y] = bg.get_transformed_position();
+        const [w, h] = bg.get_transformed_size();
+        if (!(w > 1 && h > 1))
+            return this._dockRest;
+        // an icon's size: the smaller side of each Dock button (its box also holds the running dot), the median of them
+        const icons = (dock.boxActor?.get_children?.() ?? []).filter(c => c.visible).map(c => Math.min(...c.get_transformed_size()))
+            .filter(v => v > 4 && v <= h).sort((a, b) => a - b);
+        const iconH = icons.length ? icons[icons.length >> 1] : h * 0.75;
+        // its inner padding (capsule edge to the first icon), the plates use the same
+        const first = (dock.boxActor?.get_children?.() ?? []).find(c => c.visible && Math.min(...c.get_transformed_size()) > 4);
+        const padX = first ? first.get_transformed_position()[0] - x : iconH / 2;
+        this._dockRest = {x, y, w, h, iconH, padX};
+        return this._dockRest;
+    }
+
+    _queueDock() {
+        if (this._dockQueued || this._stripGone)
+            return;
+        this._dockQueued = true;
+        this._later(120, () => {
+            this._dockQueued = false;
+            const before = this._dockRest;
+            const now = this._measureDock();
+            const same = (a, b) => Boolean(a) === Boolean(b) && (!a || ['x', 'y', 'w', 'h'].every(k => Math.abs(a[k] - b[k]) <= 0.5));
+            // a new resting size counts once it has held for a moment (the capsule shrinking back after a magnify passes
+            // through every width on its way): until then the old one stays and the next measure decides
+            if (!same(now, before) && !same(now, this._dockCandidate)) {
+                this._dockCandidate = now ? {...now} : null;
+                this._dockRest = before;
+                this._queueDock();
+                return;
+            }
+            this._dockCandidate = null;
+            if (!same(now, before) || Boolean(this._band) !== Boolean(this._computeBand()))
+                this._relayout();
+            else
+                this._followCapsule();
+        });
+    }
+
+    // the bottom band (stage px) the strip sits in, or null (the left column: the setting, or no Dock at the bottom)
+    _computeBand() {
+        if (this._settings.get_string('strip-position') !== 'bottom')
+            return null;
+        const mon = Main.layoutManager.primaryMonitor;
+        const dock = this._dockRest ?? this._measureDock();
+        if (!mon || !dock)
+            return null;
+        if (dock.y + dock.h < mon.y + mon.height * 0.7 || dock.w > mon.width * 0.9 || dock.x < mon.x || dock.x + dock.w > mon.x + mon.width)
+            return null;        // a Dock on a side edge, or across the whole width: the column at the left
+        const wa = Main.layoutManager.getWorkAreaForMonitor(Main.layoutManager.primaryIndex);
+        const top = Math.min(wa.y + wa.height, dock.y);
+        const h = mon.y + mon.height - top;
+        // cy: the Dock's middle, where the thumbnails line up with its icons (the tilt's vanishing height too); the plates take
+        // the capsule's height and padding, the gaps follow the icon size
+        const icon = dock.iconH;
+        const gapOf = k => Math.round(Math.min(20, Math.max(8, icon * k)));
+        return {x: mon.x, y: top, w: mon.width, h, dockL: dock.x, dockR: dock.x + dock.w, cy: dock.y + dock.h / 2,
+            thumbH: Math.max(BAND.minH, Math.min(Math.round(icon * BAND.thumb), Math.round(dock.h - 2 * BAND.thumbPad))),
+            capY: dock.y, capH: dock.h, capGap: gapOf(BAND.capGap), pileGap: gapOf(BAND.pileGap),
+            padX: Math.round(Math.min(32, Math.max(8, dock.padX)))};
+    }
+
+    // where the strip is, in stage px (the band, or the column)
+    _stripRect() {
+        if (this._band)
+            return {x: this._band.x, y: this._band.y, width: this._band.w, height: this._band.h};
+        const area = this._workArea();
+        return {x: area.x, y: area.y, width: this._look.stripWidth, height: area.height};
+    }
+
+    // the tilt's vanishing height for flights and the overview (as the strip's own: the middle of the band or the work area)
+    _vanishY() {
+        if (this._band)
+            return this._band.cy;
+        const area = this._workArea();
+        return area.y + area.height / 2;
+    }
+
+    // where the strip goes when a window covers it: off the left edge, or down out of the band
+    _hideOffset() {
+        return this._band ? [0, this._band.h + 12] : [-this._look.stripWidth, 0];
+    }
+
+    // The strip's place in the stacking: under the top bar (the column), or under the Dock (the band: a magnified Dock or its
+    // preview covers the piles beside it, and its clicks stay its own)
+    _stackStrip() {
+        const ui = Main.layoutManager.uiGroup;
+        let below = Main.layoutManager.panelBox;
+        if (this._band && this._dock) {
+            let a = this._dock;
+            while (a.get_parent() && a.get_parent() !== ui)
+                a = a.get_parent();
+            if (a.get_parent() === ui)
+                below = a;
+        }
+        if (this._strip.get_parent() === ui && below.get_parent() === ui) {
+            ui.set_child_below_sibling(this._strip, below);
+            if (this._plateLayer?.get_parent() === ui)
+                ui.set_child_below_sibling(this._plateLayer, this._strip);
+            ui.set_child_below_sibling(this._zone, this._plateLayer?.get_parent() === ui ? this._plateLayer : this._strip);
+            // the flights stay right above the strip (a picture lands on its plate, not under it)
+            if (this._flyLayer?.get_parent() === ui)
+                ui.set_child_above_sibling(this._flyLayer, this._strip);
+        }
     }
 
     _relayout() {
         if (this._stripGone)
             return;
         this._invalidateRailDrags();
-        const area = this._workArea();
-        this._look = currentLook = computeLook(area);
-        if (this._reserve && this._look.stripWidth !== this._reserveWidth) {
-            this._reserveWidth = this._look.stripWidth;
+        this._dockActor();
+        const band = this._computeBand();
+        const modeChanged = Boolean(band) !== Boolean(this._band);
+        this._band = band;
+        // only the left column is reserved; with the setting at 'bottom' and no Dock at the bottom (yet: it starts after Stage)
+        // the strip waits in the column without a reservation, so a login does not resize maximized windows twice
+        const left = this._settings.get_string('strip-position') === 'left';
+        const reserve = band || !left ? 0 : computeLook(this._workArea()).stripWidth;
+        if (this._reserve && reserve !== this._reserveWidth) {
+            this._reserveWidth = reserve;
             this._placeReserve();
         }
-        this._strip.set_position(area.x, area.y);
-        this._strip.set_size(this._look.stripWidth, area.height);
-        this._edge.set_position(area.x, area.y);
-        this._edge.set_size(EDGE_TRIGGER_WIDTH, area.height);
-        this._zone.set_position(area.x, area.y);
-        this._zone.set_size(this._look.stripWidth + 8, area.height);
+        const area = this._workArea();
+        this._look = currentLook = computeLook(area, band);
+        if (modeChanged) {
+            // from one place to the other: the strip is where it belongs, shown
+            this._strip.remove_all_transitions();
+            stopAnimate(this._strip);
+            this._strip.targetTranslationX = this._strip.targetTranslationY = 0;
+            this._strip.set_translation(0, 0, 0);
+            this._strip.opacity = 255;
+            this._stripShown = true;
+        }
+        const r = this._stripRect();
+        this._strip.set_position(r.x, r.y);
+        this._strip.set_size(r.width, r.height);
+        this._stackStrip();
+        if (band) {
+            this._edge.set_position(band.x, band.y + band.h - EDGE_TRIGGER_WIDTH);
+            this._edge.set_size(band.w, EDGE_TRIGGER_WIDTH);
+            this._zone.set_position(band.x, band.y - 8);
+            this._zone.set_size(band.w, band.h + 8);
+        } else {
+            this._edge.set_position(area.x, area.y);
+            this._edge.set_size(EDGE_TRIGGER_WIDTH, area.height);
+            this._zone.set_position(area.x, area.y);
+            this._zone.set_size(this._look.stripWidth + 8, area.height);
+        }
         this._rebuildCast(false);
     }
 
@@ -3191,8 +3847,7 @@ class StageManager {
                 this._setStripVisible(false);
             return;
         }
-        const area = this._workArea();
-        const right = area.x + this._look.stripWidth;
+        const S = this._stripRect();
         const active = global.workspace_manager.get_active_workspace();
         this._overlapped = global.display.list_all_windows().some(w => {
             if (w.minimized || !w.showing_on_its_workspace?.() || !this._onPrimary(w))
@@ -3206,7 +3861,7 @@ class StageManager {
             if (w.is_skip_taskbar() && !w.get_transient_for())
                 return false;
             const f = w.get_frame_rect();
-            return f.x < right && f.x + f.width > area.x && f.y < area.y + area.height && f.y + f.height > area.y;
+            return f.x < S.x + S.width && f.x + f.width > S.x && f.y < S.y + S.height && f.y + f.height > S.y;
         });
         this._edge.reactive = this._overlapped;
         if (!this._overlapped)
@@ -3219,8 +3874,10 @@ class StageManager {
     _pointerInStrip(x, y) {
         if (x === undefined)
             [x, y] = global.get_pointer();
-        const area = this._workArea();
-        return x >= area.x && x < area.x + this._look.stripWidth + 8 && y >= area.y && y < area.y + area.height;
+        const S = this._stripRect();
+        if (this._band)
+            return x >= S.x && x < S.x + S.width && y >= S.y - 8 && y < S.y + S.height;
+        return x >= S.x && x < S.x + S.width + 8 && y >= S.y && y < S.y + S.height;
     }
 
     // -- the strip over a covering window (A16 item 9) --
@@ -3295,8 +3952,9 @@ class StageManager {
             return;
         this._stripShown = false;
         this._strip.remove_all_transitions();
-        this._strip.targetTranslationX = -this._look.stripWidth;
-        this._strip.translation_x = this._strip.targetTranslationX;
+        stopAnimate(this._strip);
+        [this._strip.targetTranslationX, this._strip.targetTranslationY] = this._hideOffset();
+        this._strip.set_translation(this._strip.targetTranslationX, this._strip.targetTranslationY, 0);
         this._strip.opacity = 0;
     }
 
@@ -3308,7 +3966,8 @@ class StageManager {
     _syncRevealTilt() {
         if (this._stripGone)
             return;
-        const hidden = Math.min(1, Math.max(0, -this._strip.translation_x / Math.max(1, this._look.stripWidth)));
+        const [ox, oy] = this._hideOffset();
+        const hidden = Math.min(1, Math.max(0, ox ? this._strip.translation_x / ox : oy ? this._strip.translation_y / oy : 0));
         const boost = Math.round((1 + (SWAP.revealTilt - 1) * hidden) * 1000) / 1000;
         for (const item of this._strip.get_children())
             item.setTiltBoost?.(boost);
@@ -3320,7 +3979,9 @@ class StageManager {
         if (this._stripShown === visible)
             return;
         this._stripShown = visible;
-        this._strip.targetTranslationX = visible ? 0 : -this._look.stripWidth;
+        const [ox, oy] = visible ? [0, 0] : this._hideOffset();
+        this._strip.targetTranslationX = ox;
+        this._strip.targetTranslationY = oy;
         if (!visible && this._zone) {
             this._zone.reactive = false;
             this._stopRevealWatch();
@@ -3328,14 +3989,14 @@ class StageManager {
         if (reveal) {
             this._strip.remove_transition('translation-x');
             this._strip.remove_transition('opacity');
-            this._strip.ease({translation_x: 0, opacity: 255, duration: realMs(SWAP.revealMs),
-                mode: Clutter.AnimationMode.EASE_OUT_SINE});
+            liquidEase(this._strip, {translation_x: 0, translation_y: 0, opacity: 255}, {role: 'pour'});
             return;
         }
         springTo(this._strip, {
             translation_x: this._strip.targetTranslationX,
+            translation_y: this._strip.targetTranslationY,
             opacity: visible ? 255 : 0,
-        }, {response: STRIP_RESPONSE});
+        }, {role: 'pour'});
     }
 }
 

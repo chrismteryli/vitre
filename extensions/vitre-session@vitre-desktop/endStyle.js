@@ -4,13 +4,20 @@
  * decorates that instance and never replaces or re-implements any of its methods: no method override at all, only
  *   - a style class on the card (CSS: ink glass, Control Center's glass pills for the buttons),
  *   - the Vitre mark above the title and a countdown track under the text,
- *   - a listener on the dialog's `notify::state` (OPENING / CLOSING / CLOSED) that runs the liquid drip: a thin glass bar
- *     at the top centre pulls a drop that falls to the card's top and blooms into the card (the A17 drip: dripMotion.js,
- *     the same constants and curves as every top-bar pop-out), and the reverse when it closes.
+ *   - a listener on the dialog's `notify::state` (OPENING / CLOSING / CLOSED) that runs the liquid stretch: the card's glass
+ *     pours out of a thin glass bar at the top centre and stays connected until it arrives (vitreMotion.js, liquid.js
+ *     springs on the pour role, as every top-bar pop-out), and goes home on the same springs when it closes.
  * The glass of the card is a GlassSheet (the A17 field) parked in the UI group just under the modal group (a BinLayout parent gives the field a zero width); the card's CSS
  * then paints no glass of its own (class vitre-es-glass). If the sheet cannot be built the card keeps its solid ink fill.
  * Buttons, keys (Escape = Cancel, the stock initial focus on Cancel), the countdown, the D-Bus signals and the 100 ms
  * stock fade are all untouched: the stock timer decides when the session ends, this only draws.
+ *
+ * The end of the session (Motion Lab 2, shut down): when Log Out / Restart / Power Off is confirmed (its button, or the
+ * countdown running out) the card drains into a bead of glass, the bead rises into the top bar and is absorbed
+ * (vitreMotion.js BeadStory), the bar goes out on the fade exit spring and the screen goes black on {r: 0.6, z: 1}. To know
+ * a confirmation from a Cancel the instance's close() and _confirm() are wrapped (own properties, the originals run first
+ * and unchanged, removed on disable). If the session is still running END_FAILSAFE_MS later (an application held the log
+ * out, or the dialog opens again) the bar and the screen come back.
  */
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -22,18 +29,22 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
-import {DripClock, clamp01} from './dripMotion.js';
-import {END_OPTS, cardMoved, dropContext, dropFrame, retargetContext} from './vitreMotion.js';
+import {END_OPTS, cardMoved, clamp01, dropContext, dropFrame, retargetContext, BeadStory} from './vitreMotion.js';
 import {FrameClock, GlassSheet, SESSION_SLOW, boxAround, fault, motionAllowed, stageRect, wallMs} from './sessionDrip.js';
+import {role} from './liquid.js';
+import {animate, stopAnimate} from './liquidClock.js';
 import {markerPresent} from './lockStyle.js';
 
-const MARK_SIZE = 52;
+const MARK_SIZE = 48;
 const GEOMETRY_TIMEOUT_MS = 700;
 const WATCHDOG_MS = 4000;
 const PILL_W = 84;
 const PILL_H = 8;
 const PILL_GAP = 8;             // below the panel
 const PREWARM_MS = 2500;
+const MAX_STEP_MS = 34;          // a frame the shell held slows the motion instead of skipping it
+const END_FAILSAFE_MS = 8000;    // the bar and the screen come back if the session is still here this long after the black
+const BLACK = {r: 0.6, z: 1};    // the screen going black (lab 2)
 
 // Ink glass for the card over the live desktop: navy tint, a little saturation, the house blur
 export const ES_FINISH = {
@@ -89,7 +100,7 @@ export class EsDrip {
         this.skin = skin;
         this.phase = 'closed';      // closed | waiting | opening | open | closing
         this.clock = new FrameClock(ms => this._onFrame(ms));
-        this.dclock = null;
+        this._last = null;
         this.ctx = null;
         this.sheet = null;
         this.log = null;
@@ -99,6 +110,7 @@ export class EsDrip {
         this._watchdogId = 0;
         this._failed = false;
         this._openCalls = 0;
+        this._ending = false;       // the running story is the end of the session (BeadStory), not the close home
     }
 
     get busy() {
@@ -115,8 +127,8 @@ export class EsDrip {
             return;
         }
         if (this.phase === 'closing') {
-            // reversal: continue from where the retract is
-            this.dclock.open(this._now());
+            // reversal: the springs turn around from where they are, with their speed
+            this.ctx.open();
             this.phase = 'opening';
             skin.card.remove_all_transitions();
             return;
@@ -130,7 +142,7 @@ export class EsDrip {
         this._armWatchdog();
     }
 
-    close(scale = 1) {
+    close(_scale = 1) {
         this.stats.closes++;
         if (this.phase === 'waiting') {
             this._abort('closed-while-waiting');
@@ -142,19 +154,52 @@ export class EsDrip {
             this._abort('no-motion');
             return;
         }
+        if (this.skin.ending && this._beginEnding())
+            return;
         if (this.phase === 'open') {
             // from rest: rebuild from the current card (a list may have changed its height)
             const geom = this._geometry(true);
             if (geom)
                 this.ctx = dropContext(geom, this.skin.style.motion, END_OPTS);
-            this.dclock = new DripClock(this.ctx.totalMs);
-            this.dclock.tau = this.dclock.totalMs;
+            this._last = null;
             if (!this.clock.running)
                 this.clock.start();
             this._armWatchdog();
         }
-        this.dclock.close(this._now(), scale, clamp01(this.skin.card.opacity / 255));
+        this.ctx.close();
         this.phase = 'closing';
+    }
+
+    // a confirmed end of the session: the card drains into the bead, it rises into the bar and is absorbed, then the bar and
+    // the screen go (skin.blackout)
+    _beginEnding() {
+        if (this._ending)
+            return true;
+        const geom = this._geometry(true);
+        if (!geom || !this.sheet || this.sheet.dead)
+            return false;
+        const c = geom.card;
+        let barY = geom.source.bar.y;
+        const panel = Main.panel;
+        if (panel?.mapped) {
+            const [, py] = panel.get_transformed_position();
+            const [, ph] = panel.get_transformed_size();
+            if (Number.isFinite(py) && ph > 0)
+                barY = py + ph / 2;
+        }
+        const scale = Math.max(1, St.ThemeContext.get_for_stage(global.stage).scale_factor);
+        const story = new BeadStory({cx: c.x + c.w / 2, barY, land: c.y + c.h / 2, card: c, scale});
+        story.drain();
+        this.ctx = story;
+        this._ending = true;
+        this.sheet.setBox(boxAround([c, {x: c.x + c.w / 2 - 16, y: barY - 16, w: 32, h: 32}], 24));
+        this.sheet.setOpacity(1);
+        this._last = null;
+        if (!this.clock.running)
+            this.clock.start();
+        this._armWatchdog();
+        this.phase = 'closing';
+        return true;
     }
 
     // ---- frame -----------------------------------------------------------------------------------------------
@@ -184,33 +229,33 @@ export class EsDrip {
             }
             this.ctx = dropContext(geom, this.skin.style.motion, END_OPTS);
             this._ensureSheet();
-            this.dclock = new DripClock(this.ctx.totalMs);
-            this.dclock.open(ms);
+            this.ctx.open();
+            this._last = ms;
             this.phase = 'opening';
             this.stats.geometryWaitMs = Math.round(wallMs() - this._waitSince);
         }
-        const u = this.dclock.update(ms);
-        this._apply(u.tau, ms);
-        if (u.finished === 'open')
+        // the springs are stepped by the frame's time, capped so that a frame the shell held slows the motion instead of skipping it
+        const dt = this._last === null || this._last === undefined ? 0 : Math.min(MAX_STEP_MS, Math.max(0, ms - this._last)) / 1000;
+        this._last = ms;
+        const fr = this.ctx.step(dt);
+        this._apply(fr);
+        if (fr.mode === 'open' && !this._ending)
             this._finishOpen();
-        else if (u.finished === 'close')
+        else if (fr.mode === 'closed')
             this._finishClose();
     }
 
-    _apply(tau, ms) {
+    _apply(fr) {
         const skin = this.skin;
-        const fr = dropFrame(this.ctx, Math.min(tau, this.ctx.totalMs));
         this.lastFrame = fr;
         this.stats.frames++;
         this.sheet.setShapes(fr.shapes, fr.k);
         this._tint(fr);
         this.sheet.setOpacity(this.measure === 'coverage' ? 1 : fr.fieldAlpha);
-        let content = fr.contentAlpha;
-        if (this.phase === 'closing')
-            content = Math.min(content, this.dclock.contentCeiling(ms));
+        const content = fr.contentAlpha;
         skin.card.opacity = Math.round(255 * clamp01(content));
         if (this.log)
-            this.log.push({tau: Math.round(tau * 10) / 10, phase: this.phase, k: fr.k, fieldAlpha: fr.fieldAlpha, content,
+            this.log.push({tau: Math.round(fr.t * 10) / 10, phase: this.phase, k: fr.k, fieldAlpha: fr.fieldAlpha, content,
                 shapes: fr.shapes.map(s => [s.x, s.y, s.w, s.h, s.r].map(v => Math.round(v * 100) / 100))});
     }
 
@@ -269,7 +314,7 @@ export class EsDrip {
         this.skin.card.opacity = 255;
         this.phase = 'open';
         if (this.sheet) {
-            const fr = dropFrame(this.ctx, this.ctx.totalMs);
+            const fr = this.ctx.settle();
             this.sheet.setShapes(fr.shapes, fr.k);
             this._tint(fr);
             this.sheet.setOpacity(1);
@@ -279,8 +324,11 @@ export class EsDrip {
     }
 
     _finishClose() {
+        const ended = this._ending;
         this._teardown();
         this.phase = 'closed';
+        if (ended)
+            this.skin.blackout();
         // the stock fade has hidden the dialog by now (it takes 100 ms, the retract at least 72 ms): the card is whole again
         // for the next open. If the retract ended first, the CLOSED notification does this.
         if (this.skin.dialog.state === ModalDialog.State.CLOSED)
@@ -289,6 +337,8 @@ export class EsDrip {
 
     _abort(reason) {
         this.stats.aborts.push(reason);
+        if (this._ending)
+            this.skin.blackout();           // the session is ending all the same
         this._teardown();
         this.skin.card.opacity = 255;
         this.phase = 'closed';
@@ -335,6 +385,7 @@ export class EsDrip {
             // destroyed
         }
         this.ctx = null;
+        this._ending = false;
     }
 
     // The glass must follow the card, in the drip as well as at rest: the lists of busy applications and other users load
@@ -352,13 +403,15 @@ export class EsDrip {
         if (!cardMoved(this.ctx.card, next.card, 0.25))
             return;
         this.stats.refits = (this.stats.refits ?? 0) + 1;
-        if (running)
+        if (running) {
             retargetContext(this.ctx, next);
-        else
+        } else {
             this.ctx = next;
+            next.settle();
+        }
         this.sheet.setBox(boxAround([this.ctx.bar, this.ctx.card], 24));
         if (!running) {
-            const fr = dropFrame(this.ctx, this.ctx.totalMs);
+            const fr = dropFrame(this.ctx);
             this.sheet.setShapes(fr.shapes, fr.k);
         }
         // (while opening, the next frame of the running clock draws the new shapes)
@@ -390,6 +443,95 @@ export class EndSkin {
         this.drip = new EsDrip(this);
         this._spare = null;
         this._prewarmId = 0;
+        this.ending = false;            // Log Out / Restart / Power Off was confirmed (not Cancel)
+        this.failsafeMs = END_FAILSAFE_MS;
+        this._black = null;
+        this._blackId = 0;
+        this._wrapped = [];
+    }
+
+    // the instance's close() and _confirm() tell a confirmation from a Cancel; the originals run first and unchanged
+    _wrapConfirm() {
+        const d = this.dialog;
+        const skin = this;
+        const wrap = (name, before) => {
+            const own = Object.prototype.hasOwnProperty.call(d, name);
+            const prev = d[name];
+            d[name] = function (...args) {
+                try {
+                    before(args);
+                } catch (_e) {
+                    // drawing only: never in the way of the dialog
+                }
+                return prev.apply(this, args);
+            };
+            this._wrapped.push({name, own, prev});
+        };
+        // the confirm buttons close with close(true) and confirm once closed; Cancel, Esc and D-Bus Close call close()
+        wrap('close', args => {
+            if (args[0] === true)
+                skin.ending = true;
+        });
+        // the countdown confirms without a close: the card leaves from where it is
+        wrap('_confirm', () => {
+            skin.ending = true;
+            if (skin.drip.phase === 'open')
+                skin.drip.close();
+        });
+    }
+
+    _unwrapConfirm() {
+        const d = this.dialog;
+        for (const {name, own, prev} of this._wrapped.reverse()) {
+            if (own)
+                d[name] = prev;
+            else
+                delete d[name];
+        }
+        this._wrapped = [];
+    }
+
+    // the end of the story: the bar goes out on the fade exit spring and the screen goes black; the session ends under it
+    blackout() {
+        if (this._black || this.dead)
+            return;
+        const black = new St.Widget({name: 'vitre-end-black', reactive: false, opacity: 0, style: 'background-color: black;'});
+        black.add_constraint(new Clutter.BindConstraint({source: global.stage, coordinate: Clutter.BindCoordinate.ALL}));
+        Shell.util_set_hidden_from_pick(black, true);
+        Main.layoutManager.uiGroup.add_child(black);
+        this._black = black;
+        animate(Main.layoutManager.panelBox, {opacity: 0}, {fade: role('fade', {exit: true})});
+        animate(black, {opacity: 255}, {fade: BLACK});
+        this._blackId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, this.failsafeMs, () => {
+            this._blackId = 0;
+            this.unblack();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // still here (the log out was held, the dialog opens again, disable): the bar and the screen come back
+    unblack(instant = false) {
+        if (this._blackId) {
+            GLib.Source.remove(this._blackId);
+            this._blackId = 0;
+        }
+        const black = this._black;
+        this._black = null;
+        this.ending = false;
+        const panelBox = Main.layoutManager.panelBox;
+        if (instant) {
+            stopAnimate(panelBox);
+            panelBox.opacity = 255;
+        } else {
+            animate(panelBox, {opacity: 255}, {fade: role('fade')});
+        }
+        if (!black)
+            return;
+        if (instant) {
+            black.destroy();
+            return;
+        }
+        animate(black, {opacity: 0}, {fade: role('fade'), onDone: () => black.destroy()});
     }
 
     build() {
@@ -409,6 +551,7 @@ export class EndSkin {
         this.track.add_child(this.fill);
         card.insert_child_below(this.track, d.buttonLayout);
         this.countdown = new Countdown(this.fill);
+        this._wrapConfirm();
         d.connectObject('notify::state', () => this._onState(), this);
         d.dialogLayout.connectObject('notify::opacity', () => this.drip.followOpacity(d.dialogLayout.opacity / 255), this);
         card.connectObject('notify::allocation', () => {
@@ -468,6 +611,9 @@ export class EndSkin {
 
     _onOpening() {
         const d = this.dialog;
+        this.ending = false;
+        if (this._black)
+            this.unblack();
         this.countdown.start(d._totalSecondsToStayOpen ?? 0);
         this.drip.open();
     }
@@ -515,6 +661,12 @@ export class EndSkin {
 
     destroy() {
         this.dead = true;
+        try {
+            this._unwrapConfirm();
+        } catch (_e) {
+            // keep restoring
+        }
+        this.unblack(true);
         if (this._prewarmId) {
             GLib.Source.remove(this._prewarmId);
             this._prewarmId = 0;

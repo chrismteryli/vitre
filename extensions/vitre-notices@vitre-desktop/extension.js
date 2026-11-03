@@ -286,7 +286,7 @@ export default class NotificationCenter extends Extension {
         });
         j.property(n.pointer, '_dripOwned', true);   // A17: Liquid Menus leaves this menu to us
         installPopupMotion(n.pointer, j, () => this._active, this._drip);
-        // A13: stacks expand / collapse on the slide curve shape
+        // A13: stacks expand on the pour spring and collapse on its exit spring (liquid.js)
         try {
             installStackMotion(j, () => this._active);
         } catch (error) {

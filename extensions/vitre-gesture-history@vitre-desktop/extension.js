@@ -10,8 +10,8 @@
 //    first animated frame starts at a different speed than the fingers (rig numbers in README.txt).  Here:
 //      - SwipeTracker._endGesture notes the release (a better fingers' speed than GNOME's 150 ms average),
 //      - ControlsManager.gestureEnd (overview) and MonitorGroup.ease_property (workspace swipe) run the SAME ease
-//        GNOME would, but the transition is a ReleaseTransition whose value follows a critically damped spring that
-//        starts at the fingers' speed and ends exactly on the target.  Same target, same onComplete, same ownership;
+//        GNOME would, but the transition is a ReleaseTransition whose value follows the liquid engine's track spring
+//        (liquid.js) that starts at the fingers' speed and rests exactly on the target.  Same target, same onComplete, same ownership;
 //        a new gesture removes the transition exactly as before.  Animations off: GNOME jumps, so do we.
 //    This is NOT Spring Motion: no global ease wrapper, no change to any non-gesture animation.
 //    Everything is guarded: a missing class or method is logged once and GNOME's behaviour is left alone.
@@ -24,7 +24,7 @@ import * as SwipeTrackerModule from 'resource:///org/gnome/shell/ui/swipeTracker
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as WorkspaceAnimation from 'resource:///org/gnome/shell/ui/workspaceAnimation.js';
 
-import {estimateReleaseVelocity, planRelease, springProgress} from './releaseMotion.js';
+import {estimateReleaseVelocity, planRelease} from './releaseMotion.js';
 
 // Matches the installed GNOME 51 EventHistory threshold; not an the reference constant.
 const HISTORY_WINDOW_MS = 150;
@@ -68,12 +68,12 @@ function getTransitionClass() {
             let p = progress;
             if (plan) {
                 try {
-                    p = springProgress(progress * plan.T, plan.e0, plan.v0, plan.w, plan.T);
+                    p = plan.progress(progress * plan.T);
                     if (progress >= 1 || !Number.isFinite(p))
                         p = 1;
                 } catch (e) {
-                    warnOnce('compute', `spring failed (${e.message}); using the stock curve`);
-                    p = 1 - Math.pow(1 - progress, 3);
+                    warnOnce('compute', `spring failed (${e.message}); finishing on a straight line`);
+                    p = progress;
                 }
             }
             super.vfunc_compute_value(animatable, interval, p);

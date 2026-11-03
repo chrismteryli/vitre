@@ -1,7 +1,7 @@
 {
   "uuid": "vitre-dock@vitre-desktop",
   "name": "Vitre Dock",
-  "description": "A magnifying glass Dock with window previews, Quick Launch, app folders and more. Vitre Dock is a fork of Dhruva by NarkAgni (https://github.com/narkagni/dhruva, GPL-3.0) with changes for Vitre: it hands window motion over to Vitre, keeps the app on the stage where it is and keeps a window preview open while the Dock redraws.",
+  "description": "A magnifying glass Dock with window previews, Quick Launch, app folders and more. Vitre Dock is a fork of Dhruva by NarkAgni (https://github.com/narkagni/dhruva, GPL-3.0) with changes for Vitre: it hands window motion over to Vitre, keeps the app on the stage where it is, keeps a window preview open while the Dock redraws, shows the newest downloads as a stack that opens as a fan or a grid, and has a Trash that takes the files you drop on it.",
   "shell-version": [
     "51"
   ],
@@ -9,5 +9,5 @@
   "gettext-domain": "vitre-dock@vitre-desktop",
   "url": "https://github.com/chrismteryli/vitre",
   "version": 1,
-  "version-name": "0.2.0 (Dhruva 4.7)"
+  "version-name": "0.3.0 (Dhruva 4.7)"
 }

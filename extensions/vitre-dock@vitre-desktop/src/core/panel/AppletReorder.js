@@ -21,6 +21,7 @@ import Clutter from 'gi://Clutter';
 
 import { moveWithSlide } from '../../ui/DragDrop.js';
 import { isActorAlive, getBoxVertical } from '../Utils.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const LIFT_SCALE = 1.1;
@@ -77,12 +78,11 @@ export default class AppletReorder {
 
         item.remove_all_transitions();
         item.set_pivot_point(0.5, 0.5);
-        item.ease({
+        liquidEase(item, {
             scale_x: LIFT_SCALE,
             scale_y: LIFT_SCALE,
             opacity: LIFT_OPACITY,
             duration: LIFT_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
         global.stage.connectObject('captured-event', (_stage, stageEvent) => this._onDragEvent(stageEvent), this);
         return Clutter.EVENT_STOP;
@@ -123,13 +123,12 @@ export default class AppletReorder {
         this._drag = null;
 
         if (isActorAlive(item)) {
-            item.ease({
+            liquidEase(item, {
                 [prop]: 0,
                 scale_x: 1,
                 scale_y: 1,
                 opacity: 255,
                 duration: SETTLE_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
             });
         }
         if (isDropped) this._onReorder();

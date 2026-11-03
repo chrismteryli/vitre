@@ -26,9 +26,9 @@ import PangoCairo from 'gi://PangoCairo';
 
 import { isActorAlive } from '../../../core/Utils.js';
 import { TimeoutTracker } from '../../../core/TimeoutTracker.js';
+import { Spring, role } from '../../../liquid/liquid.js';
 
 
-const SLIDE_DURATION_MS = 220;
 const INITIAL_HEAD_PAUSE_MS = 300;
 
 export const KaraokeLyricsWidget = GObject.registerClass({
@@ -111,8 +111,11 @@ export const KaraokeLyricsWidget = GObject.registerClass({
     _startSlide(lineDurationMs) {
         if (!this._cancellable) return;
 
+        // liquid v3: the line slides in on a bead spring (liquid.js), stepped by the time between ticks
         this._slideProgress = 0.0;
         this._slideStartTime = Date.now();
+        this._slideLast = this._slideStartTime;
+        this._slideSpring = new Spring(0, role('bead'), 1e-3).set(1);
         this._slideActive = true;
 
         this._stopSlide();
@@ -122,18 +125,19 @@ export const KaraokeLyricsWidget = GObject.registerClass({
                 return GLib.SOURCE_REMOVE;
             }
 
-            const elapsed = Date.now() - this._slideStartTime;
-            const t = Math.min(1.0, elapsed / SLIDE_DURATION_MS);
-            this._slideProgress = 1.0 - Math.pow(1.0 - t, 3);
+            const now = Date.now();
+            const dt = Math.min(1 / 30, Math.max(0, (now - this._slideLast) / 1000));
+            this._slideLast = now;
+            this._slideProgress = this._slideSpring.step(dt);
 
             this.queue_repaint();
 
-            if (t >= 1.0) {
+            if (this._slideSpring.rest) {
                 this._slideActive = false;
                 this._previousText = '';
                 this._slideTickId = 0;
 
-                const remainingLineTime = Math.max(800, lineDurationMs - SLIDE_DURATION_MS);
+                const remainingLineTime = Math.max(800, lineDurationMs - (now - this._slideStartTime));
                 this._evaluateMarquee(remainingLineTime);
                 return GLib.SOURCE_REMOVE;
             }

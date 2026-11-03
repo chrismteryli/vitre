@@ -1,0 +1,12 @@
+# Extensions of the distribution's own GNOME session that the Vitre session mode also loads. make-mode.py puts them first in
+# /usr/share/gnome-shell/modes/vitre.json, before the Vitre list (settings/extensions.txt of the Vitre source).
+# A uuid that is not installed is skipped by GNOME Shell without an error (the .debs rely on the same thing for Debian).
+#
+# This is the Fedora/Arch counterpart of release/native/session/ubuntu-session-extensions.txt, with the upstream uuids:
+#   appindicatorsupport@rgcjonas.gmail.com  tray icons. Packaged as gnome-shell-extension-appindicator (Fedora and Arch).
+#   tiling-assistant@leleat-on-github       window tiling: Vitre's snapping motion uses its Super+Left/Right keys. Not in the Fedora or Arch
+#                                           repositories (checked 2026-10-22); installed from extensions.gnome.org it is picked up here.
+# Left out, because they are Ubuntu's: ubuntu-dock, ding (desktop icons), myna-shell, snapd-prompting, snapd-search-provider,
+# web-search-provider.
+appindicatorsupport@rgcjonas.gmail.com
+tiling-assistant@leleat-on-github

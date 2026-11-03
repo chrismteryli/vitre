@@ -32,9 +32,10 @@ import * as WindowPreviewModule from 'resource:///org/gnome/shell/ui/windowPrevi
 import Graphene from 'gi://Graphene';
 
 import {
-    clamp, smooth, lerp, makeRemap, slopeOf, estimateReleaseVelocity, planRelease, springProgress, lagged, bump,
-    shadowRebound, stepFollower,
+    clamp, smooth, lerp, makeRemap, slopeOf, estimateReleaseVelocity, planRelease, BEAD_PEAK, BEAD_TRAIL_PEAK,
 } from './motion.js';
+import {Spring, Fade, role, REDUCED, EPS_OPACITY, moving} from './liquid.js';
+import {Ticker} from './liquidClock.js';
 
 // =================================================================================================================
 // THE CONSTANTS TABLE. Every number that shapes the motion lives here (lengths in logical px unless said otherwise;
@@ -45,16 +46,12 @@ const TUNE = {
     deadZone: 0.20,          // fraction of the finger's travel (tracker progress 0..1) that moves nothing (concept 0.24, reference clip ~0.25)
     trackEnd: 1.00,          // overview progress reached at finger progress 1. Concept/reference: 0.53 at the end of the finger's travel,
                              // the release then carries on; 0.56 here would match that but a held swipe would never open fully
-    // --- release (critically damped spring, same constants as gesture-history v2 / A5) ------------------------------
-    omegaRef: 0.025,         // 1/ms at slow-down 1.0
-    cStiff: 2.35,            // stiffness per unit of v0/|e0| (fast flicks never overshoot the target)
+    // --- release: the liquid engine's track spring (liquid.js), from the finger's position and speed ----------------
     // --- landing ------------------------------------------------------------------------------------------------
-    overshoot: 0.010,        // window scale pop on landing: 1.010 once (not in depth.html; asked for in the brief)
-    popDelayMs: 100,         // pop starts this long after the release ...
-    popTauMs: 90,            // ... peaks at delay + tau and is gone (< 0.1 %) well inside 550 ms
-    shadowRebound: 0.12,     // concept SD: window shadow x(1 + 0.12 sd) over 100..620 ms after the release
-    // --- wallpaper (W = overview progress lagged by wallLagMs) -----------------------------------------------------
-    wallLagMs: 40,
+    overshoot: 0.010,        // window scale pop on landing: about 1.010 at its peak (a bead kick sized by the release speed)
+    popSpeedRef: 0.003,      // a release this fast (progress per ms) pops at full size; slower ones down to half, faster up to 1.2x
+    shadowRebound: 0.12,     // concept SD: window shadow x(1 + 0.12 sd), sd the trailing copy of the pop (bead x viscosity)
+    // --- wallpaper (W = the overview progress followed on the fade role: it dims, blurs and zooms behind the windows) ---
     wallZoom: 0.03,          // wallpaper scale 1 -> 1.03 (B8: was 1.02)
     wallDim: 0.26,           // black-blue overlay, 26 % at W = 1 (concept #000414; B8: 12 % read as "plain" on the real screen)
     wallBlurPx: 8,           // Shell.BlurEffect radius of the blurred wallpaper copy (logical px; B8 tried 16: frames of 20-63 ms in his live swipes)
@@ -72,8 +69,8 @@ const TUNE = {
     liftScale: 0.03,         // window scale 1 + 0.03 R
     liftRest: 0.42,          // R once landed (concept R_REST): windows stay 1.26 % larger
     liftRise: 0.32,          // finger travel over which R rises 0 -> 1, starting where the dead zone ends (concept .08 .. .40)
-    liftLagMs: 30,
-    carryMs: 80,             // a new gesture that grabs a landing in flight: the lift difference it finds fades out over this long (no jump)
+    // the lift follows the progress as its trailing copy (track x viscosity); a new gesture that grabs a landing in flight
+    // eases the lift difference it finds to 0 on the track spring (no jump)
     // --- Spaces strip ---------------------------------------------------------------------------------------------
     stripHeight: 40,         // glass bar at the top of the monitor
     rowsBelowStrip: 24,      // the window rows start this far below the strip
@@ -83,22 +80,19 @@ const TUNE = {
     stripContentSlope: 1.4,  // ... with this slope
     panelFadeSlope: 2.2,     // GNOME's top bar fades out with this slope (menu opacity = 1 - 2.2 P)
     // --- Vitre Stage piles (G follower and fan) ----------------------------------------------------------------
-    fanOmega: 23,            // rad/s of the second-order follower (concept G_WN)
-    fanZeta: 0.5,            // its damping (concept G_ZETA): one small rebound
+    // the pile follower G is a bead spring on the progress (one small rebound)
     fanTiltDeg: 32,          // the rail's resting tilt of a pile (Stage's own look, concept rotateY 32)
     fanRelaxDeg: 12,         // the fan opens the tilt by this many degrees at g = 1 (concept 32 -> 20)
     fanOffsetPx: 6,          // concept px each layer moves further out (13 -> 19): needs the Stage hook, see the report
     fanLiftPx: 3,            // concept px each layer rises further (8 -> 11): needs the Stage hook
     fanRollDeg: 2,           // layer k rolls by -k * 2 g degrees: needs the Stage hook
-    // --- reduced motion (Settings animations off) -----------------------------------------------------------------
-    reducedFadeMs: 120,
+    // --- reduced motion (Settings animations off): the overview group cross-fades on the 160 ms reduced spring --------
     // --- hover -------------------------------------------------------------------------------------------------------
     hover: false,            // false = the pointer over a window shows no title pill, close button or grow (hover removed, brief);
                              // long press and keyboard focus still show them
 };
 
 const IDLE_GAP_MS = 50;      // a gap between two ticks longer than this is the overview resting (nothing was painted), not a slow frame
-const POP_END_TAUS = 12;     // the landing pop (x e^(1-x), x = t / tau) is below 0.0002 after this many tau
 const MAX_DT_MS = 100;       // the longest step the follower integrates for one tick
 const HIDDEN = 0;
 const PICKER = 1;
@@ -146,6 +140,8 @@ function safe(fn) {
 }
 const slowDown = () => St.Settings.get().slow_down_factor;
 const animationsOn = () => St.Settings.get().enable_animations;
+// animations on and no reduced motion (the glide of a key or click open; reduced motion keeps GNOME's own)
+const fullMotion = () => animationsOn() && St.Settings.get().reducedMotion !== St.ReducedMotion.REDUCE;
 
 // the one live engine (set while the extension is enabled); the hooks below ask it
 let engine = null;
@@ -165,7 +161,7 @@ function getReleaseTransition() {
             let p = progress;
             if (plan) {
                 try {
-                    p = springProgress(progress * plan.T, plan.e0, plan.v0, plan.w, plan.T);
+                    p = plan.progress(progress * plan.T);
                     if (progress >= 1 || !Number.isFinite(p))
                         p = 1;
                 } catch (e) {
@@ -659,8 +655,10 @@ class WindowShadows {
                 sh.opacity = 0;
                 continue;
             }
-            const cx = box.x1 + w / 2, cy = box.y1 + h / 2;
-            const grow = (1 + lift * R) * (1 + this._tune.shadowRebound * sd);
+            // the window's size trails its place (p._depthK, see _applyPreviews): the shadow sits under the box it is drawn in
+            const kk = p._depthK ?? 1;
+            const cx = box.x1 + w * kk / 2, cy = box.y1 + h * kk / 2;
+            const grow = (1 + lift * R) * (1 + this._tune.shadowRebound * sd) * kk;
             setPosIf(sh, Math.round(cx - sh.width / 2), Math.round(cy - sh.height / 2));
             setScaleIf(sh, grow * w / SHADOW_REF.w, grow * h / SHADOW_REF.h);
             // alpha: .38 + .22 R of the .60 the style is drawn with; invisible while the window is still at rest
@@ -716,20 +714,22 @@ class PileFan {
     }
 
     // Stage's matrix m for one thumbnail with the fan added: the layer rolls about its bottom-left corner (before the tilt projection)
-    // and moves out and up (after it).
-    matrix(slot, m, w, h) {
+    // and moves out and up (after it). out = -1: the pile fans out to the left (the rail, and piles left of the Dock when the strip
+    // is at the bottom), 1: to the right (piles right of the Dock), rolling about its bottom-right corner.
+    matrix(slot, m, w, h, out = -1) {
         const g = this.g;
         if (!(g > 1e-4) || slot < 1)
             return null;
         const t = this._tune;
         const roll = new Graphene.Matrix();
         roll.init_identity();
-        roll.translate(new Graphene.Point3D({x: 0, y: -h, z: 0}));
-        roll.rotate_z(-slot * t.fanRollDeg * g);
-        roll.translate(new Graphene.Point3D({x: 0, y: h, z: 0}));
+        const px = out > 0 ? w : 0;
+        roll.translate(new Graphene.Point3D({x: -px, y: -h, z: 0}));
+        roll.rotate_z(out * slot * t.fanRollDeg * g);
+        roll.translate(new Graphene.Point3D({x: px, y: h, z: 0}));
         const move = new Graphene.Matrix();
         move.init_translate(new Graphene.Point3D({
-            x: -slot * t.fanOffsetPx * this.scale * g, y: -slot * t.fanLiftPx * this.scale * g, z: 0,
+            x: out * slot * t.fanOffsetPx * this.scale * g, y: -slot * t.fanLiftPx * this.scale * g, z: 0,
         }));
         return roll.multiply(m).multiply(move);
     }
@@ -746,7 +746,7 @@ class PileFan {
             // origin again, so the origin is taken out first (without this layer 1 lost its pile offset: 14 px, 8 px)
             const origin = new Graphene.Matrix();
             origin.init_translate(new Graphene.Point3D({x: -preview.actor.x, y: -preview.actor.y, z: 0}));
-            const m = this.matrix(slot, preview.actor.transform.multiply(origin), preview.w, preview.h);
+            const m = this.matrix(slot, preview.actor.transform.multiply(origin), preview.w, preview.h, item._side === 'R' ? 1 : -1);
             if (m)
                 preview.actor.set_transform(m);
         }
@@ -1028,11 +1028,14 @@ class DepthEngine {
         this.attached = false;
         this.gesture = null;               // {f0, remap, f, v} while the fingers are down
         this.rel = null;                   // the last release {t, P0, R0, target, up}
-        this._hist = [];
-        this._g = {g: 0, v: 0};
+        this._hist = null;                 // the followers of the progress {W (fade role), L (trailing copy), S (size)}, built at the first tick
+        this._driver = 'track';            // the role moving the progress now: 'track' (fingers, release) or 'glide' (a key, a click)
+        this._g = null;                    // the pile follower (bead role)
         this._lastTick = 0;
         this._lastP = 0;
-        this._popT0 = -1e9;
+        this._pop = new Spring(0, role('bead'), 1e-4);                 // the landing pop (bead kick sized by the release speed)
+        this._sd = new Spring(0, role('bead', {trail: true}), 1e-4);   // the shadow rebound: its trailing copy
+        this._fadeTicker = null;
         this.grabbing = false;             // true while a finger gesture begins (it may grab a running close: see detach)
         this._keep = null;                 // derived state a grab carries across the hidden -> showing pair
         this._dbg = {};
@@ -1058,9 +1061,15 @@ class DepthEngine {
         return this.depth;
     }
 
+    // the role that moves the overview state now (the windows' size follows it on its trail spring)
+    drive(roleName) {
+        this._driver = roleName;
+    }
+
     // ---- gesture bookkeeping (called from the hooks) ----
     onGestureBegin(f0) {
         this.rel = null;
+        this._driver = 'track';
         // a gesture that grabs the landing while it still rings keeps the pop and the shadow rebound going (they end by themselves);
         // the lift R it finds is carried over and fades into the new model (see _tick), so nothing jumps at the grab
         this._carry = {R: this._R ?? 0, pending: true, t0: 0, d: 0};
@@ -1077,18 +1086,33 @@ class DepthEngine {
         this.gesture = {f0, remap: makeRemap(this._tune, f0), f: f0, v: f0, up};
     }
 
+    // reduced motion: the overview group cross-fades in place on the 160 ms reduced spring (liquid.js REDUCED); a new fade
+    // retargets the one in flight (keeps its speed), and the callback of a fade that was retargeted never runs (as a removed ease)
     _fade(opacity, onComplete) {
         const group = Main.layoutManager.overviewGroup;
         group.remove_all_transitions();
         this._pendingFade = onComplete ?? null;
-        group.ease({
-            opacity, duration: this._tune.reducedFadeMs / slowDown(), mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            animationRequired: true,
-            onComplete: () => {
+        const done = onComplete ?? null;
+        if (!this._fadeSpring || !this._fadeTicker?.running)
+            this._fadeSpring = new Fade(group.opacity / 255, REDUCED, EPS_OPACITY);
+        const f = this._fadeSpring.set(opacity / 255, REDUCED);
+        this._fadeDone = done;
+        this._fadeTicker?.stop();
+        this._fadeTicker = new Ticker(dt => {
+            f.step(dt);
+            safe(() => {
+                group.opacity = Math.round(255 * clamp(f.x));
+            });
+            if (!f.rest)
+                return true;
+            if (this._fadeDone === done) {
+                this._fadeDone = null;
                 this._pendingFade = null;
-                onComplete?.();
-            },
+                done?.();
+            }
+            return false;
         });
+        this._fadeTicker.start();
     }
 
     // reduced-motion gesture: crossing the dead zone is the whole gesture (value jumps, the group fades)
@@ -1159,8 +1183,12 @@ class DepthEngine {
         this.rel = {
             t: nowMs(), P0, target, up: g?.up ?? false, R0: this._R ?? 0, f: g?.f ?? 0, v: vRel,
         };
-        if (target >= PICKER && g?.up)
-            this._popT0 = nowMs();
+        if (target >= PICKER && g?.up && animationsOn()) {
+            // the windows land: a pop that starts from the release speed (half size for a slow release, up to 1.2x for a flick)
+            const k = clamp(Math.abs(vRel) / this._tune.popSpeedRef, 0.5, 1.2);
+            this._pop.kick(k / BEAD_PEAK);
+            this._sd.kick(k / BEAD_TRAIL_PEAK);
+        }
         this.gesture = null;
     }
 
@@ -1192,8 +1220,8 @@ class DepthEngine {
             this._g = keep.g;
             this._R = keep.R;
         } else {
-            this._hist = [];
-            this._g = {g: 0, v: 0};
+            this._hist = null;
+            this._g = null;
             if (!this.gesture) {
                 this._R = 0;
                 this.rel = null;
@@ -1213,7 +1241,8 @@ class DepthEngine {
         this._fitThumbnails();
         this.reduced = !animationsOn();
         if (this.reduced) {
-            // 120 ms fade-through: the overview itself jumps, its group fades in (a gesture decides when, see reducedProgress)
+            // 160 ms fade-through: the overview itself jumps, its group fades in (a gesture decides when, see reducedProgress)
+            this._fadeTicker?.stop();
             group.remove_all_transitions();
             group.opacity = 0;
             if (!this.gesture?.reduced)
@@ -1252,8 +1281,11 @@ class DepthEngine {
         if (!keep)
             this._R = 0;                       // (a grab hands the lift to onGestureBegin's carry)
         this._carry = null;
-        this._popT0 = -1e9;
+        this._stopPop();
         this.rel = null;                       // a release must not outlive the overview it belonged to (stale lift on the next API open/close)
+        safe(() => this._fadeTicker?.stop());
+        this._fadeTicker = null;
+        this._fadeDone = null;
         safe(() => Main.layoutManager.overviewGroup.remove_all_transitions());
         safe(() => { Main.layoutManager.overviewGroup.opacity = 255; });
         if (controls && this._saved.maxThumbScale !== undefined && controls._thumbnailsBox)
@@ -1279,6 +1311,7 @@ class DepthEngine {
                 continue;
             p.set_scale(1, 1);
             p.set_pivot_point(0, 0);
+            p.set_translation(0, 0, 0);
             p._depthScaled = false;
         }
         if (controls?._searchEntryBin)
@@ -1342,28 +1375,45 @@ class DepthEngine {
         let dt = 8.333;
         if (this._lastTick) {
             const gap = (nowUs - this._lastTick) / 1000;
-            const settled = Math.abs(this._g.g - this._lastP) < 1e-3 && Math.abs(this._g.v) < 1e-3;
-            if (gap > IDLE_GAP_MS && settled)
-                this._hist.push({t: t - 1, p: this._lastP});
-            else
+            const settled = !this._followersMoving();
+            if (!(gap > IDLE_GAP_MS && settled))
                 dt = Math.min(MAX_DT_MS, gap);
         }
         this._lastTick = nowUs;
         const tune = this._tune;
-        const slow = slowDown();
+        // motion seconds: the rig's slow motion (St slow-down above 1) stretches them; Just Perfection's speed-up does not
+        const dts = dt / 1000 / Math.max(1, slowDown());
         const v = adj.value;
         const P = clamp(v);
         this._lastP = P;
         if (v < 0.001)
             this._syncPreviewOpacity();
-        this._hist.push({t, p: P});
-        while (this._hist.length > 2 && this._hist[1].t < t - 700)
-            this._hist.shift();
         this.reduced = !animationsOn();
         const motion = !this.reduced;
-        const W = motion ? lagged(this._hist, t, tune.wallLagMs) : P;
+        // the followers (liquid.js springs): the wallpaper on the fade role (it dims and blurs: opacity and blur never pass
+        // their target), the lift as the progress's trailing copy (track x viscosity: it stretches behind a fast release)
+        // Vitre Motion Lab 2: the windows are carried, not scaled. GNOME lays each preview out between its window and its slot by
+        // the workspace's state value (position and size together); S is that value's trailing copy on the trail spring of the
+        // role that moves it (glide x viscosity for a key or a click, track x viscosity for the fingers), and each preview's size
+        // is set from S while its place stays GNOME's (see _applyPreviews)
+        const Pg = clamp(this._activeWorkspace()?._container?.layout_manager?._stateAdjustment?.value ?? P);
+        if (!this._hist) {
+            this._hist = {W: new Fade(P, role('fade'), 1e-4), L: new Spring(P, role('track', {trail: true}), 1e-4),
+                S: new Spring(Pg, role('glide', {trail: true}), 1e-4)};
+        }
+        const F = this._hist;
+        let W = P, Pl = P, Ps = Pg;
+        if (motion) {
+            W = F.W.set(P).step(dts);
+            Pl = F.L.set(P).step(dts);
+            // (reduced motion: no stretch, the size goes with the place)
+            Ps = fullMotion() ? F.S.set(Pg, role(this._driver, {trail: true})).step(dts) : F.S.snap(Pg).x;
+        } else {
+            F.W.snap(P);
+            F.L.snap(P);
+            F.S.snap(Pg);
+        }
         // lift R (see the model: rises with the finger, relaxes to liftRest as the release lands)
-        const Pl = motion ? lagged(this._hist, t, tune.liftLagMs) : P;
         let R;
         const g = this.gesture;
         // a release only shapes the lift while ITS OWN spring is still running: once it has landed, or something else (Super, Esc,
@@ -1372,7 +1422,7 @@ class DepthEngine {
             const tr = adj.get_transition('value');
             if (tr && !(ReleaseTransition && tr instanceof ReleaseTransition)) {
                 this.rel = null;
-                this._popT0 = -1e9;
+                this._stopPop();
             } else if (!tr && !adj.gestureInProgress) {
                 this.rel = null;
             }
@@ -1390,29 +1440,31 @@ class DepthEngine {
         }
         const carry = this._carry;
         if (carry) {
+            // the lift difference a grab found goes to 0 on the track spring (it keeps no time constant of its own)
             if (carry.pending) {
                 carry.pending = false;
-                carry.t0 = t;
-                carry.d = carry.R - R;
+                carry.s = new Spring(carry.R - R, role('track'), 1e-4).set(0);
             }
-            const k = Math.exp(-(t - carry.t0) / (tune.carryMs * slow));
-            R += carry.d * k;
-            if (k < 0.01)
+            R += carry.s.step(dts);
+            if (carry.s.rest)
                 this._carry = null;
         }
         if (!motion)
             R = 0;
         this._R = R;
-        // pile follower
+        // pile follower (bead role)
+        if (!this._g)
+            this._g = new Spring(P, role('bead'), 1e-4);
         if (motion)
-            stepFollower(this._g, P, dt, tune.fanOmega, tune.fanZeta);
+            this._g.set(P).step(dts);
         else
-            this._g.g = P;
-        const G = Math.max(0, this._g.g);
-        // landing pop and shadow rebound (clock in animation time: slow-down scales it like every other animation)
-        const since = (nowMs() - this._popT0) / slow;
-        const pop = motion ? bump(since, tune.popDelayMs, tune.popTauMs) : 0;
-        const sd = motion ? shadowRebound(since) : 0;
+            this._g.snap(P);
+        const G = Math.max(0, this._g.x);
+        // landing pop and shadow rebound: bead kicks at the release, the rebound its trailing copy
+        if (!motion)
+            this._stopPop();
+        const pop = this._pop.step(dts);
+        const sd = this._sd.step(dts);
         const stripP = clamp(v);
         const glassOp = Math.min(1, tune.stripGlassSlope * stripP);
         const contentOp = clamp((stripP - tune.stripContentFrom) * tune.stripContentSlope);
@@ -1427,15 +1479,14 @@ class DepthEngine {
         Main.panel.opacity = Math.round(255 * panelOp);
         this._cardsOpacity(v);
         this._searchFade();
-        this._applyPreviews(R, pop, sd, P);
+        this._applyPreviews(R, pop, sd, P, Pg, Ps);
         this.piles.apply(G, motion && this.depth, this.backdrop.scale ?? 1.5);
         // The guarded writes (setScaleIf & co) produce no frame when nothing changed, so a curve that runs on the clock or follows the
         // value with a lag (landing pop, shadow rebound, wallpaper / lift lag, pile follower, carry) would stop a hair short of its end:
         // its last steps are smaller than the "did it change" tolerance and the frame that would show the next one is never asked for
         // (pop left at 0.01-0.05 of 1.010, vlook2 sheet). Ask for frames until they have landed. It ends by itself (the longest is the
         // pop, 1.2 s after a release); the overview at rest stays at 0 paints/s.
-        if (motion && (since < tune.popDelayMs + POP_END_TAUS * tune.popTauMs || this._carry || Math.abs(W - P) > 1e-3 || Math.abs(Pl - P) > 1e-3 ||
-            Math.abs(G - P) > 1e-3 || Math.abs(this._g.v) > 1e-3))
+        if (motion && (this._carry || this._followersMoving()))
             safe(() => this.strip.actor.queue_redraw());
         const cost = GLib.get_monotonic_time() - costStart;
         this._cost.n++;
@@ -1443,7 +1494,7 @@ class DepthEngine {
         this._cost.last = cost;
         this._cost.max = Math.max(this._cost.max, cost);
         this._dbg = {
-            v, P, W, R, G, pop, sd, stripH, glassOp, contentOp, panelOp, motion,
+            v, P, Pg, Ps, W, R, G, pop, sd, stripH, glassOp, contentOp, panelOp, motion, driver: this._driver,
             g: g ? {f: g.f, v: g.v} : null,
             rel: rel ? {P0: rel.P0, target: rel.target, up: rel.up} : null,
             wall: {zoom: this.backdrop.zoom?.scale_x ?? 1, bx: this.backdrop.sharp?.group.translation_x ?? 0,
@@ -1452,6 +1503,16 @@ class DepthEngine {
                 blurOp: this.backdrop.blurred?.group.opacity ?? 0, dim: this.backdrop.dim?.opacity ?? 0,
                 vig: this.backdrop.vignette?.opacity ?? 0},
         };
+    }
+
+    _followersMoving() {
+        const F = this._hist;
+        return Boolean((F && moving([F.W, F.L, F.S])) || (this._g && !this._g.rest) || !this._pop.rest || !this._sd.rest);
+    }
+
+    _stopPop() {
+        this._pop?.snap(0);
+        this._sd?.snap(0);
     }
 
     _stripText() {
@@ -1514,6 +1575,7 @@ class DepthEngine {
         if (p._depthScaled) {
             p.set_scale(1, 1);
             p.set_pivot_point(0, 0);
+            p.set_translation(0, 0, 0);
             p._depthScaled = false;
         }
     }
@@ -1524,7 +1586,19 @@ class DepthEngine {
             p._depthDrag = false;
     }
 
-    _applyPreviews(R, pop, sd, P) {
+    // the size a preview has at workspace state u (GNOME's WorkspaceLayout.vfunc_allocate: the window's box toward its slot,
+    // never smaller than the slot), for the width; null when the layout is not the one known
+    _sizeAt(lay, p, slotsScale, allocScale, u) {
+        const slot = lay._windowSlots?.find(sl => sl[4] === p);
+        const bb = p.boundingBox;
+        if (!slot || !bb)
+            return null;
+        const ss = slot[2] * slotsScale;
+        const sw = p.metaWindow?.showing_on_its_workspace?.() ? Math.max(bb.width * allocScale, ss) : 0;
+        return sw + (ss - sw) * u;
+    }
+
+    _applyPreviews(R, pop, sd, P, Pg = P, Ps = Pg) {
         const ws = this._activeWorkspace();
         if (!ws?._windows)
             return;
@@ -1548,16 +1622,44 @@ class DepthEngine {
                 shadowed.push([p, 1]);
             }
         }
+        // the size's trailing copy (Ps) against the value GNOME laid the previews out by (Pg): one scale per window about its
+        // top-left corner (its place leads), the lift and the pop about the centre of that box
+        const lay = ws._container?.layout_manager;
+        const cw = ws._container?.width ?? 0;
+        const trailing = Math.abs(Ps - Pg) > 1e-5 && lay?._windowSlotsBox && lay._workarea && cw > 0;
+        const slotsScale = trailing ? cw / Math.max(1, lay._windowSlotsBox.get_width()) : 1;
+        const allocScale = trailing ? cw / Math.max(1, lay._workarea.width) : 1;
+        for (const p of ws._windows) {
+            let k = 1;
+            if (trailing && lifted.includes(p)) {
+                const now = this._sizeAt(lay, p, slotsScale, allocScale, Pg), then = this._sizeAt(lay, p, slotsScale, allocScale, Ps);
+                if (now > 1 && then > 0)
+                    k = then / now;
+            }
+            p._depthK = k;
+        }
         if (this.depth && !this.reduced)
             this.shadows.sync(ws, shadowed, R, sd, this.backdrop.scale ?? 1.5);
         for (const p of lifted) {
-            if (p.get_transition('scale-x'))
-                continue;                      // GNOME's own appear animation
-            if (!p._depthScaled) {
-                p.set_pivot_point(0.5, 0.5);
-                p._depthScaled = true;
+            if (p.get_transition('scale-x') || p._vitreClick || p._vitreSprings?.springs?.has('scale_x'))
+                continue;                      // GNOME's own appear animation, or a spring on its scale (Stage's press, liquid v3)
+            const k = p._depthK ?? 1;
+            p._depthScaled = true;
+            if (Math.abs(k - 1) < 1e-6) {
+                // at rest: about the centre, untranslated (what Stage's click into place and DND expect to find)
+                const [px, py] = p.get_pivot_point();
+                if (px !== 0.5 || py !== 0.5)
+                    p.set_pivot_point(0.5, 0.5);
+                setTransIf(p, 0, 0);
+                setScaleIf(p, s, s);
+            } else {
+                // the size trails: about the top-left corner, the lift about the trailed box's centre by translation
+                const [px, py] = p.get_pivot_point();
+                if (px !== 0 || py !== 0)
+                    p.set_pivot_point(0, 0);
+                setScaleIf(p, k * s, k * s);
+                setTransIf(p, p.width * k * (1 - s) / 2, p.height * k * (1 - s) / 2);
             }
-            setScaleIf(p, s, s);
         }
     }
 
@@ -2087,31 +2189,65 @@ export default class SwipeDepth extends Extension {
                 });
         }
 
-        // 9. reduced motion: the close is a 120 ms fade-through too
+        // 9. reduced motion: the close is a 160 ms fade-through too. Vitre Motion Lab 2: with motion, the overview opened or
+        //    closed by a key or a click (Super, Esc, a window chosen) moves on the glide spring instead of GNOME's 250 ms
+        //    curve (the windows' position leads on it, their size follows on glide trail, see _applyPreviews); the app grid
+        //    keeps GNOME's own. The bodies are GNOME 51's with the ease replaced.
         this._override(ControlsManager.prototype, 'animateFromOverview', original =>
             function (callback) {
-                if (!engine?.active || !engine.attached || animationsOn())
+                if (!engine?.active || !engine.attached)
                     return original.call(this, callback);
-                engine._fade(0, () => original.call(this, callback));
+                if (!animationsOn()) {
+                    engine._fade(0, () => original.call(this, callback));
+                    return undefined;
+                }
+                // (the app grid, reduced motion, and a key while the fingers move the overview keep GNOME's own)
+                if (this._stateAdjustment.value > PICKER + 0.001 || !fullMotion() || this._stateAdjustment.gestureInProgress ||
+                    engine.gesture)
+                    return original.call(this, callback);
+                this._ignoreShowAppsButtonToggle = true;
+                engine.drive('glide');
+                this._stateAdjustment.remove_transition('value');
+                releaseEase(this._stateAdjustment, HIDDEN, 0, null, {role: 'glide', onStopped: () => {
+                    this.dash.showAppsButton.checked = false;
+                    this._ignoreShowAppsButtonToggle = false;
+                    callback?.();
+                }});
                 return undefined;
             });
+        if (typeof ControlsManager.prototype.animateToOverview === 'function') {
+            this._override(ControlsManager.prototype, 'animateToOverview', original =>
+                function (state, callback) {
+                    if (!engine?.active || !engine.attached || !fullMotion() || state !== PICKER ||
+                        this._stateAdjustment.gestureInProgress || engine.gesture)
+                        return original.call(this, state, callback);
+                    this._ignoreShowAppsButtonToggle = true;
+                    engine.drive('glide');
+                    this._stateAdjustment.value = HIDDEN;
+                    releaseEase(this._stateAdjustment, state, 0, null, {role: 'glide', onStopped: () => callback?.()});
+                    this.dash.showAppsButton.checked = false;
+                    this._ignoreShowAppsButtonToggle = false;
+                    return undefined;
+                });
+        }
     }
 }
 
 // Runs the release: the same ease GNOME would run, but the value follows a spring that starts at the visual progress and
 // the visual speed the fingers left with. Calls the stock ease on the prototype so another extension's temporary per-object
 // override (gesture-history) cannot take it over.
-function releaseEase(adjustment, target, v0, onComplete) {
+function releaseEase(adjustment, target, v0, onComplete, {role: roleName = 'track', onStopped = undefined} = {}) {
     const stockEase = St.Adjustment.prototype.ease;
     const slow = slowDown();
     let plan = null;
     try {
-        plan = planRelease(TUNE, adjustment.value, target, v0, slow, global.screen_height);
+        plan = planRelease(adjustment.value, target, v0, slow, global.screen_height, roleName, roleName === 'glide');
     } catch (e) {
         warnOnce('plan', `could not plan a release (${e.message}); GNOME's animation is used`);
     }
     if (!plan || !animationsOn() || !ReleaseTransition) {
-        stockEase.call(adjustment, target, {duration: plan ? 250 : 0, mode: Clutter.AnimationMode.EASE_OUT_CUBIC, onComplete});
+        // nothing to move, animations off, or no release transition class (GNOME's own ease as the last resort)
+        stockEase.call(adjustment, target, {duration: plan && animationsOn() ? 250 : 0, onComplete, onStopped});
         return;
     }
     const Original = Clutter.PropertyTransition;
@@ -2123,11 +2259,11 @@ function releaseEase(adjustment, target, v0, onComplete) {
         warnOnce('swap', `cannot build the release transition (${e.message}); GNOME's animation is used`);
     }
     if (!swapped) {
-        stockEase.call(adjustment, target, {duration: 250, mode: Clutter.AnimationMode.EASE_OUT_CUBIC, onComplete});
+        stockEase.call(adjustment, target, {duration: 250, onComplete, onStopped});
         return;
     }
     try {
-        stockEase.call(adjustment, target, {duration: plan.T, mode: Clutter.AnimationMode.LINEAR, onComplete});
+        stockEase.call(adjustment, target, {duration: plan.T, mode: Clutter.AnimationMode.LINEAR, onComplete, onStopped});
     } finally {
         try {
             Clutter.PropertyTransition = Original;
@@ -2140,7 +2276,7 @@ function releaseEase(adjustment, target, v0, onComplete) {
         transition._plan = plan;
         transition.set_duration(plan.T);
     } else if (transition) {
-        transition.progress_mode = Clutter.AnimationMode.EASE_OUT_CUBIC;
+        transition.progress_mode = Clutter.AnimationMode.EASE_OUT_QUAD;     // GNOME's default ease (the release could not be taken over)
         warnOnce('adopt', "the release transition was not created; GNOME's curve was restored");
     }
 }

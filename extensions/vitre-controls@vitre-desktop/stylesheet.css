@@ -2,8 +2,10 @@
  * desktop; there is no panel. All rules are scoped under .cc-menu (set only while this
  * extension is enabled), so with the extension off GNOME's Quick Settings styling in
  * a16-panels.css / the Liquid Glass stylesheet applies exactly as before.
- * Sizes are the reference points x 1.15 (see helpers.js GEO). Text is white (the reference's Control
- * Center uses white on glass), unlike the black-on-pale rule of the old Quick Settings.
+ * Sizes and values are the Vitre tokens (packages/polish-tokens-20261101/TOKENS.md; helpers.js GEO): 68 px modules on a
+ * 16 px gap, circles and pills = the pill radius, 2x2 tile r-3xl 32, sliders and submenus r-2xl 24, type in pt.
+ * One toggle language: every module is the same clear glass (G1); ON is an accent fill with a white glyph (the whole circle,
+ * or the disc of a pill), OFF is the glass itself with a white glyph and, on pills, a G1 disc.
  *
  * CASCADE NOTE (measured in the rig 2026-10-10): this GNOME Shell's St cascade lets the
  * EARLIER of two equal-specificity rules win, and the A16 rules in the Liquid Glass
@@ -42,16 +44,16 @@
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-grid.quick-settings-grid {
   padding: 0;
   margin: 0;
-  spacing-rows: 15px;
-  spacing-columns: 15px;
+  spacing-rows: 16px;
+  spacing-columns: 16px;
 }
 
 /* ---- L0: the module: glass shape, rim, white text ---------------------------------- */
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module {
-  background-color: rgba(255, 255, 255, 0.012) !important;
+  background-color: transparent !important;
   background-gradient-direction: none;
   border: none !important;
-  border-radius: 34.5px !important;
+  border-radius: 999px !important;
   box-shadow: none !important;
   color: #ffffff !important;
   padding: 0 !important;
@@ -61,14 +63,14 @@
   transition-duration: 0ms;
 }
 /* L1: kinds */
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-tile { border-radius: 30px !important; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-tile { border-radius: 32px !important; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-slider,
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-wide { border-radius: 26px !important; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-wide { border-radius: 24px !important; }
 /* L2: states */
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module:hover { background-color: rgba(255, 255, 255, 0.10) !important; }
 /* A13: the pressed look is animated by feedback.js (scale + glass tint), not by a CSS :active fill */
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module:focus {
-  box-shadow: inset 0 0 0 2px -st-accent-color, inset 0 0 0 3px rgba(255, 255, 255, 0.6) !important;
+  box-shadow: inset 0 0 0 2px -st-accent-color !important;
 }
 
 /* children never paint a second plate (inner toggle of a has-menu module, the content box) */
@@ -100,10 +102,10 @@
   background-color: transparent !important;
   color: #ffffff !important;
 }
-/* A13: the white disc of an ON circle is the .cc-fb-fill widget (crossfaded by feedback.js), not a CSS background */
+/* A13: the fill of an ON circle is the .cc-fb-fill widget (crossfaded by feedback.js), not a CSS background; the glyph stays white */
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-circle:checked .quick-toggle-icon,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-circle .quick-toggle:checked .quick-toggle-icon {
-  color: -st-accent-color !important;
+  color: #ffffff !important;
   background-color: transparent !important;
 }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-circle .quick-toggle-menu-button,
@@ -120,34 +122,34 @@
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle:checked,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle:focus,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle:ltr,
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle:rtl { padding-left: 14px !important; }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill > StBoxLayout > .cc-fb-disc { margin-left: 14px !important; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle:rtl { padding-left: 12px !important; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill > StBoxLayout > .cc-fb-disc { margin-left: 12px !important; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .cc-fb-disc { margin: 0 12px 0 0; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-icon {
   icon-size: 20px;
-  padding: 10px;
+  padding: 12px;
   margin: 0;
-  border-radius: 20px;
+  border-radius: 999px;
   background-color: transparent !important;
   color: #ffffff !important;
 }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill:checked .quick-toggle-icon,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle:checked .quick-toggle-icon {
   background-color: transparent !important;
-  color: -st-accent-color !important;
+  color: #ffffff !important;
 }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-title {
-  font-size: 12.65px;
+  font-size: 10pt;
   font-weight: 600;
   color: #ffffff !important;
 }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-subtitle {
-  font-size: 11.5px;
+  font-size: 9pt;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.8) !important;
+  color: rgba(255, 255, 255, 0.70) !important;
 }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-separator { width: 0; }
-/* the submenu button covers the text area to the right of the disc (153 - 14 - 40 = 99 px) and
+/* the submenu button covers the text area to the right of the disc (152 - 12 - 44 = 96 px) and
  * is invisible: the reference's pill has no chevron */
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-menu-button.cc-pill-open,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-menu-button.cc-pill-open:hover,
@@ -155,11 +157,11 @@
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-menu-button.cc-pill-open:rtl,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-pill .quick-toggle-menu-button.cc-pill-open:checked {
   min-width: 0;
-  width: 99px;
+  width: 96px;
   min-height: 0;
   padding: 0 !important;
   margin: 0 !important;
-  border-radius: 0 34.5px 34.5px 0;
+  border-radius: 0 999px 999px 0;
   background-color: transparent !important;
   box-shadow: none !important;
   color: transparent !important;
@@ -169,16 +171,26 @@
 
 /* ---- sliders (4x1 tiles) ------------------------------------------------------------ */
 /* ---- A13: hover / press feedback shapes ------------------------------------------------------- */
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-fb-fill,
+/* ON: accent glass. The fill keeps the glass's top highlight so ON and OFF are one material. */
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-fb-fill {
+  background-color: -st-accent-color;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-fb-glow,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-fb-knob { background-color: #ffffff; border-radius: 999px; }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-fb-dark { background-color: rgba(0, 0, 0, 0.25); border-radius: 999px; }
+/* OFF disc of a pill: G1 clear glass (tint, hairline, highlight) on the pill's glass */
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-fb-dark {
+  background-color: rgba(255, 255, 255, 0.10);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-slider:hover,
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-slider:active { background-color: rgba(255, 255, 255, 0.012) !important; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-slider:active { background-color: transparent !important; }
 
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-column { padding: 11px 14px 0 14px; spacing: 0; }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-title { font-size: 12.65px; font-weight: 600; color: #ffffff; }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-row { spacing: 10px; padding-bottom: 8px; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-column { padding: 12px 16px 0 16px; spacing: 0; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-title { font-size: 10pt; font-weight: 600; color: #ffffff; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-row { spacing: 8px; padding-bottom: 8px; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-row .slider-bin { padding: 0; margin: 0; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-row .slider,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-slider-row .slider:hover {
@@ -218,51 +230,58 @@
   height: 32px;
   min-width: 0;
   min-height: 0;
-  border-radius: 16px;
-  background-color: rgba(255, 255, 255, 0.28) !important;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   icon-size: 16px;
 }
 
 /* ---- Now Playing (2x2) -------------------------------------------------------------- */
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-nowplaying { padding: 14px !important; spacing: 0; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-module.cc-nowplaying { padding: 16px !important; spacing: 0; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-np-art {
-  width: 44px; height: 44px; border-radius: 10px;
-  background-color: rgba(255, 255, 255, 0.16);
+  width: 48px; height: 48px; border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-art.has-art { background-color: transparent; }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-title { font-size: 14.95px; font-weight: 600; color: #ffffff; }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-subtitle { font-size: 12.65px; font-weight: 400; color: rgba(255, 255, 255, 0.7); }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-art.has-art { background-color: transparent; box-shadow: none; }
+/* idle: no grey square; the art well is a G1 glass disc with a note, the same material as an OFF toggle disc */
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-art { width: 44px; height: 44px; border-radius: 999px; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-art-icon { icon-size: 20px; color: rgba(255, 255, 255, 0.85); }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-title { font-size: 11pt; font-weight: 600; color: #ffffff; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-subtitle { font-size: 10pt; font-weight: 400; color: rgba(255, 255, 255, 0.70); }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-title { color: rgba(255, 255, 255, 0.85); }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-np-controls { spacing: 0; padding-top: 8px; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-np-button {
   background-color: transparent !important; border: none; box-shadow: none; padding: 4px; margin: 0;
   border-radius: 12px; min-width: 0;
 }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-button:hover { background-color: rgba(255, 255, 255, 0.12) !important; }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-np-button:hover { background-color: rgba(255, 255, 255, 0.16) !important; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-np-glyph { width: 26px; height: 22px; color: #ffffff; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-np-prev .cc-np-glyph,
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-np-next .cc-np-glyph { width: 26px; height: 18px; }
 .cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-prev .cc-np-glyph,
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-next .cc-np-glyph { color: rgba(255, 255, 255, 0.45); }
-.cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-play .cc-np-glyph { color: rgba(255, 255, 255, 0.8); }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-next .cc-np-glyph { color: rgba(255, 255, 255, 0.40); }
+.cc-menu.cc-menu.cc-menu.cc-menu .cc-nowplaying:idle .cc-np-play .cc-np-glyph { color: rgba(255, 255, 255, 0.70); }
 
-/* ---- top-bar button while open: a 21 px (18.5 pt) glass pill ------------------------ */
+/* ---- top-bar button while open: a 20 px glass pill ------------------------------------ */
 /* The theme draws the highlight as an inset 1000px shadow inside a 6px transparent
- * border; a 3.5px margin top and bottom leaves 40 - 7 - 12 = 21 px of pill. */
+ * border; a 4px margin top and bottom leaves 40 - 8 - 12 = 20 px of pill. */
 #panel .panel-button.cc-button:active,
 #panel .panel-button.cc-button:checked,
 #panel .panel-button.cc-button:focus {
-  margin: 3.5px 0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 0 0 24px rgba(255, 255, 255, 0.22);
+  margin: 4px 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 0 0 1000px rgba(255, 255, 255, 0.22);
 }
 
-/* ---- submenu (Wi-Fi networks, Bluetooth devices, Power Mode, output): one glass tile ---- */
+/* ---- submenu (Wi-Fi networks, Bluetooth devices, Power Mode, output): one G2 glass tile, r-2xl ---- */
+/* the rim copies the modules' liquid rim (bright top, faint sides) with a hairline + a strong top highlight */
 .cc-menu.cc-menu.cc-menu.cc-menu .quick-toggle-menu {
-  background-color: rgba(30, 30, 34, 0.55) !important;
+  background-color: rgba(28, 28, 32, 0.60) !important;
   color: #ffffff !important;
-  border-radius: 26px;
+  border-radius: 24px;
   padding: 12px;
   border: none !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.62) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
 }
 .cc-menu.cc-menu.cc-menu.cc-menu .quick-toggle-menu .header,
 .cc-menu.cc-menu.cc-menu.cc-menu .quick-toggle-menu .header .title,

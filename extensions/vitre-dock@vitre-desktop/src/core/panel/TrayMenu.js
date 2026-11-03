@@ -32,6 +32,7 @@ import { NativeActorState } from './NativeActorState.js';
 import { isActorAlive, setBoxVertical } from '../Utils.js';
 import { paintMenuBubble } from '../../ui/shared/MenuShape.js';
 import { resolvePopupBubbleColors } from '../../ui/dock/DockThemeResolver.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const BUBBLE_RADIUS = 16;
@@ -396,7 +397,7 @@ export default class TrayMenu {
                                 const ty = targetPill._startY - b._startY;
                                 b.remove_transition('translation-x');
                                 b.remove_transition('translation-y');
-                                b.ease({ translation_x: tx, translation_y: ty, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+                                liquidEase(b, { translation_x: tx, translation_y: ty, duration: 200 });
                             }
                         }
                     }
@@ -445,7 +446,7 @@ export default class TrayMenu {
                         const b = allPills[p];
                         b.remove_transition('translation-x');
                         b.remove_transition('translation-y');
-                        b.ease({ translation_x: 0, translation_y: 0, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+                        liquidEase(b, { translation_x: 0, translation_y: 0, duration: 200 });
                     }
                 },
                 'drag-end', () => {

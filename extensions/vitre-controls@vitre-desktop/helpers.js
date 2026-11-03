@@ -7,28 +7,29 @@ export const pt = v => Math.round(v * K);
 
 // Control Center geometry, from plan A9 section 1.1 (the reference points in comments).
 export const GEO = {
-    unit: pt(60),           // 60 pt  -> 69
-    gap: pt(13),            // 13 pt  -> 15
+    // Vitre tokens (packages/polish-tokens-20261101/TOKENS.md): the reference points snapped to the 4 px grid and the radius scale
+    unit: 68,               // 60 pt x 1.15 = 69 -> 68
+    gap: 16,                // 13 pt -> 15 -> 16
     columns: 4,
-    rightMargin: pt(11.5),  // 11.5 pt -> 13
-    topGap: pt(12),         // 12 pt  -> 14
-    tileRadius: pt(26),     // 2x2 tile 26 pt -> 30
-    sliderRadius: pt(23),   // 4x1 tile 23 pt -> 26
-    disc: pt(34.5),         // 34.5 pt -> 40
-    discInset: pt(12.5),    // 12.5 pt -> 14
+    rightMargin: 12,        // 11.5 pt -> 13 -> 12
+    topGap: 12,             // 12 pt -> 14 -> 12
+    tileRadius: 32,         // 2x2 tile: r-3xl
+    sliderRadius: 24,       // 4x1 tile: r-2xl
+    disc: 44,               // 34.5 pt -> 40 -> 44: concentric in the 68 px pill with a 12 px inset ((68 - 44) / 2)
+    discInset: 12,          // 12.5 pt -> 14 -> 12
     textGap: pt(10),        // 10 pt -> 12
-    sliderTitleLeft: pt(12.5),
-    sliderTitleTop: pt(10),
+    sliderTitleLeft: 16,
+    sliderTitleTop: 12,
     track: pt(3.5),         // 3.5 pt -> 4
     roundButton: pt(28),    // 28 pt -> 32
     glyph: pt(17),          // 17 pt -> 20 (19.55)
     pillW: 0, pillH: 0, width: 0, rowPitch: 0,
 };
-GEO.pillW = 2 * GEO.unit + GEO.gap;             // 153
-GEO.pillH = GEO.unit;                           // 69
-GEO.width = 4 * GEO.unit + 3 * GEO.gap;         // 321
+GEO.pillW = 2 * GEO.unit + GEO.gap;             // 152
+GEO.pillH = GEO.unit;                           // 68
+GEO.width = 4 * GEO.unit + 3 * GEO.gap;         // 320
 GEO.rowPitch = GEO.unit + GEO.gap;              // 84
-GEO.circleRadius = GEO.unit / 2;                // 34.5
+GEO.circleRadius = GEO.unit / 2;                // 34: the pill
 
 // Roles of the GNOME / extension items, from their class name or title.
 export function roleOfItem({className, title, hasMenu}) {
@@ -84,15 +85,75 @@ export function kindOfRole(role, isSlider) {
     return 'circle';
 }
 
-// Order of the flow after the hero block (plan 3.1 mapping).
+// Order of the small modules (pills and circles) after the hero block (plan 3.1 mapping), then the extras.
 const FLOW_ORDER = ['power', 'stage', 'appwin', 'dark', 'desktop', 'focus'];
 const SLIDER_ORDER = ['display', 'sound', 'mic'];
 const EXTRA_ORDER = ['night', 'kbd', 'airplane', 'screenshot', 'rotate'];
 
+/* Pack small modules (pills 2x1, circles 1x1) into full rows of GEO.columns, keeping their order as far as no hole is left:
+ * a pill that does not fit in what is left of a row lets the next circle take the gap first. The last row never has a gap:
+ * its circles stretch to 2x1 capsules (the icon stays centred), a lone pill spans the row, and a lone circle takes a circle
+ * from the row above so both rows end full. Returns [{e, cs}] rows. */
+export function packRows(items) {
+    const queue = [...items];
+    const rows = [];
+    let row = [];
+    let free = GEO.columns;
+    const span = e => KIND_CELLS[e.kind].cs;
+    while (queue.length) {
+        let i = queue.findIndex(e => span(e) <= free);
+        if (i < 0) {
+            rows.push(row);
+            row = [];
+            free = GEO.columns;
+            continue;
+        }
+        const [e] = queue.splice(i, 1);
+        row.push({e, cs: span(e)});
+        free -= span(e);
+        if (free === 0) {
+            rows.push(row);
+            row = [];
+            free = GEO.columns;
+        }
+    }
+    if (row.length)
+        rows.push(row);
+    // a short row other than the last can only happen when nothing fitted its gap (pills only): stretch it like the last
+    const used = r => r.reduce((m, c) => m + c.cs, 0);
+    const last = rows.at(-1);
+    if (last && used(last) === 1 && rows.length > 1) {
+        const above = rows.at(-2);
+        const k = above.map(c => c.e.kind).lastIndexOf('circle');
+        if (k >= 0) {
+            const [c] = above.splice(k, 1);
+            last.unshift(c);
+        }
+    }
+    for (const r of rows) {
+        let gap = GEO.columns - used(r);
+        // circles grow from the end of the row backwards, one cell each
+        for (let k = r.length - 1; k >= 0 && gap > 0; k--) {
+            if (r[k].e.kind === 'circle' && r[k].cs === 1) {
+                r[k].cs = 2;
+                gap--;
+            }
+        }
+        // what is still left goes to the last module of the row (a lone pill spans the row; a lone capsule too)
+        if (gap > 0 && r.length)
+            r[r.length - 1].cs += gap;
+    }
+    return rows;
+}
+
 /**
- * Place visible modules on the 4-column grid.
+ * Place visible modules on the 4-column grid, with no hole anywhere.
  * entries: [{id, role, kind}] in GNOME's own child order (only visible ones).
  * Returns {cells: [{id, col, row, cs, rs}], rows}.
+ *
+ * Layout (top to bottom): the hero block (Now Playing 2x2 on the right; on its left two pills: Wi-Fi and Bluetooth, or
+ * whatever pills / pairs of circles come first when they are missing), the small modules packed in full rows, the sliders
+ * (one per row), then anything wide.
  */
 export function planGrid(entries) {
     const byRole = new Map();
@@ -111,62 +172,74 @@ export function planGrid(entries) {
         return e ?? null;
     };
 
-    const cells = [];
-    let row = 0;
-    // hero block: Wi-Fi/Bluetooth stacked on the left, Now Playing 2x2 on the right
-    const wifi = take('wifi') ?? take('wired');
-    const bt = take('bluetooth');
     const np = take('nowplaying');
-    const left = [wifi, bt].filter(Boolean);
-    if (np || left.length > 0) {
-        left.forEach((e, i) => cells.push({id: e.id, kind: e.kind, col: 0, row: row + i, cs: 2, rs: 1}));
-        if (np)
-            cells.push({id: np.id, kind: np.kind, col: 2, row, cs: 2, rs: 2});
-        row += np ? 2 : left.length;
+    const lead = [take('wifi') ?? take('wired'), take('bluetooth')].filter(Boolean);
+    const small = [];
+    for (const role of [...FLOW_ORDER, ...EXTRA_ORDER]) {
+        const e = take(role);
+        if (e)
+            small.push(e);
     }
-
-    // flow: fill rows of 4 columns
-    let col = 0;
-    const place = e => {
-        if (!e)
-            return;
-        const {cs, rs} = KIND_CELLS[e.kind];
-        if (col + cs > GEO.columns) {
-            col = 0;
-            row += 1;
-        }
-        cells.push({id: e.id, kind: e.kind, col, row, cs, rs});
-        col += cs;
-        if (col >= GEO.columns) {
-            col = 0;
-            row += 1;
-        }
-    };
-    const flushRow = () => {
-        if (col > 0) {
-            col = 0;
-            row += 1;
-        }
-    };
-    for (const role of FLOW_ORDER)
-        place(take(role));
-    flushRow();
-    // sliders: always full rows
+    const sliders = [];
     for (const role of SLIDER_ORDER) {
-        flushRow();
-        place(take(role));
+        const e = take(role);
+        if (e)
+            sliders.push(e);
     }
-    flushRow();
-    for (const role of EXTRA_ORDER)
-        place(take(role));
-    // anything else (unknown toggles, other extensions): circles first, wide rows last
     const others = [...byRole.values(), ...rest];
     for (const e of others.filter(x => x.kind === 'circle' || x.kind === 'pill'))
-        place(e);
-    flushRow();
-    for (const e of others.filter(x => x.kind === 'slider' || x.kind === 'wide' || x.kind === 'tile'))
-        place(e);
-    flushRow();
+        small.push(e);
+    const wide = others.filter(x => x.kind === 'slider' || x.kind === 'wide' || x.kind === 'tile');
+
+    const cells = [];
+    let row = 0;
+    if (np) {
+        // the 2x2 on the left of Now Playing: two pill rows; a missing pill is replaced by the next pill, else by two circles
+        const leftRows = lead.map(e => [{e, cs: 2}]);
+        const pool = [...small];
+        while (leftRows.length < 2) {
+            const p = pool.findIndex(x => x.kind === 'pill');
+            const circles = pool.filter(x => x.kind === 'circle');
+            if (p >= 0)
+                leftRows.push([{e: pool.splice(p, 1)[0], cs: 2}]);
+            else if (circles.length >= 2)
+                leftRows.push(circles.slice(0, 2).map(e => ({e: pool.splice(pool.indexOf(e), 1)[0], cs: 1})));
+            else
+                break;
+        }
+        if (leftRows.length < 2) {
+            // not enough to fill the left half: Now Playing takes the full width and everything else flows below it
+            small.unshift(...lead);
+            cells.push({id: np.id, kind: np.kind, col: 0, row, cs: GEO.columns, rs: 2});
+        } else {
+            small.length = 0;
+            small.push(...pool);
+            leftRows.forEach((r, i) => {
+                let col = 0;
+                for (const c of r) {
+                    cells.push({id: c.e.id, kind: c.e.kind, col, row: row + i, cs: c.cs, rs: 1});
+                    col += c.cs;
+                }
+            });
+            cells.push({id: np.id, kind: np.kind, col: 2, row, cs: 2, rs: 2});
+        }
+        row += 2;
+    } else {
+        small.unshift(...lead);
+    }
+
+    for (const r of packRows(small)) {
+        let col = 0;
+        for (const c of r) {
+            cells.push({id: c.e.id, kind: c.e.kind, col, row, cs: c.cs, rs: 1});
+            col += c.cs;
+        }
+        row += 1;
+    }
+    for (const e of [...sliders, ...wide]) {
+        cells.push({id: e.id, kind: e.kind, col: 0, row, cs: GEO.columns, rs: e.kind === 'tile' ? 2 : 1});
+        row += e.kind === 'tile' ? 2 : 1;
+    }
     const rows = cells.reduce((m, c) => Math.max(m, c.row + c.rs), 0);
     return {cells, rows};
 }

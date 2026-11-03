@@ -4,8 +4,15 @@
 #
 #   scenario 1  a user who already has a Dhruva/Ubuntu Dock setup and their own gtk.css: --check changes nothing; install puts every file
 #               in place, enables exactly the right extensions, migrates Dhruva's settings; uninstall restores files and settings exactly.
-#   scenario 2  installed twice (the README says to uninstall twice then): the state before the first install comes back.
-#               A third uninstall with nothing left to undo fails cleanly and changes nothing.
+#   scenario 2  installed twice without waiting: backups cannot collide, two uninstalls restore the original state, and a third fails cleanly.
+#   scenario 3  post-install Vitre and unrelated GNOME changes survive both an upgrade and ordinary uninstall.
+#   scenario 4  --factory-reset deliberately discards later changes to Vitre-owned keys.
+#   scenario 5  external XDG data/config roots are recorded, restored and cleaned up safely.
+#   scenario 6  an upgrade over a Vitre 0.2.0 install (a backup in the old format) keeps the user's Vitre choices, adds only new defaults,
+#               and both uninstalls restore Vitre's own settings without touching a setting that Vitre does not own.
+#   scenario 7  installed files keep the user's umask; only the backup is private.
+#   scenario 8  the base icon theme download is checked against the pinned SHA-256 (a wrong archive is never unpacked or run; the pinned
+#               archive installs; the same content compressed differently installs too).
 #
 # Needs (Ubuntu 26.10): gnome-shell, dbus-daemon (dbus-run-session), dconf-cli, dconf-service, dconf-gsettings-backend, libglib2.0-bin,
 # python3, and for the icon theme either network or VITRE_ICONS_SRC=<checkout of MacTahoe-icon-theme>.
@@ -114,17 +121,35 @@ assert_installed() {
   [ -z "$bad" ] && pass "$tag: every extension schema loads" || fail "$tag: schemas that do not load:$bad"
 
   bad=""
-  for n in themes/Vitre-Glass:"$HOME/.themes/Vitre-Glass" icons/Vitre-Icons:"$ICONS/Vitre-Icons" icons/Vitre-Cursor:"$ICONS/Vitre-Cursor" \
-           backgrounds/vitre:"$DATA/backgrounds/vitre"; do
+  for n in icons/Vitre-Icons:"$ICONS/Vitre-Icons" icons/Vitre-Cursor:"$ICONS/Vitre-Cursor" backgrounds/vitre:"$DATA/backgrounds/vitre"; do
     diff -rq --exclude=icon-theme.cache "$REPO/${n%%:*}" "${n#*:}" >/dev/null 2>&1 || bad="$bad ${n%%:*}"
   done
+  # Vitre-Glass and every accent colour variant next to it
+  local nthemes=0 t
+  for t in "$REPO"/themes/*/; do
+    t="${t%/}"; nthemes=$((nthemes + 1))
+    diff -rq "$t" "$HOME/.themes/$(basename "$t")" >/dev/null 2>&1 || bad="$bad themes/$(basename "$t")"
+  done
+  [ "$nthemes" -gt 1 ] || bad="$bad themes(no-accent-variants)"
   for f in "$REPO"/icons/hicolor/scalable/apps/*.svg; do
     cmp -s "$f" "$ICONS/hicolor/scalable/apps/$(basename "$f")" || bad="$bad hicolor/$(basename "$f")"
   done
   for v in gtk-4.0 gtk-3.0; do
     for f in "$REPO/gtk/$v"/*; do diff -rq "$f" "$CONF/$v/$(basename "$f")" >/dev/null 2>&1 || bad="$bad $v/$(basename "$f")"; done
   done
-  [ -z "$bad" ] && pass "$tag: theme, icons, cursor, wallpapers and GTK files in place" || fail "$tag: not in place or different:$bad"
+  [ -z "$bad" ] && pass "$tag: $nthemes themes, icons, cursor, wallpapers and GTK files in place" || fail "$tag: not in place or different:$bad"
+
+  # Vitre Settings: the app folder, a menu entry that launches the installed copy, the icons and the version file its About page reads
+  bad=""
+  diff -rq "$REPO/apps/vitre-settings" "$DATA/vitre-settings" >/dev/null 2>&1 || bad="$bad app-folder"
+  [ -x "$DATA/vitre-settings/org.vitre.Settings" ] || bad="$bad launcher-not-executable"
+  local entry="$DATA/applications/org.vitre.Settings.desktop"
+  [ "$(sed -n 's/^Exec=//p' "$entry" 2>/dev/null | head -1)" = "$DATA/vitre-settings/org.vitre.Settings" ] || bad="$bad menu-entry-Exec"
+  ! grep -q '@LAUNCHER@' "$entry" 2>/dev/null || bad="$bad menu-entry-placeholder"
+  if command -v desktop-file-validate >/dev/null; then desktop-file-validate "$entry" >/dev/null 2>&1 || bad="$bad desktop-file-validate"; fi
+  cmp -s "$REPO/icons/hicolor/symbolic/apps/org.vitre.Settings-symbolic.svg" "$ICONS/hicolor/symbolic/apps/org.vitre.Settings-symbolic.svg" || bad="$bad symbolic-icon"
+  cmp -s "$REPO/VERSION" "$DATA/vitre/VERSION" || bad="$bad version-file"
+  [ -z "$bad" ] && pass "$tag: Vitre Settings app, menu entry, icons and version file in place" || fail "$tag: Vitre Settings:$bad"
 
   bad=""
   for n in VitreBase VitreBase-dark VitreBase-light; do
@@ -253,12 +278,14 @@ assert_extension_lists "install" "$BEFORE_EN" "$BEFORE_DIS"
 assert_ini_loaded "install"
 assert_dock_migration "install" "$INSTALL_LOG"
 
-B1="$(ls -d "$DATA"/vitre-backup/[0-9]*[0-9]/ 2>/dev/null | sort | tail -1)"; B1="${B1%/}"
-if [ -n "$B1" ] && [ -s "$B1/installed.txt" ] && [ -s "$B1/dconf.ini" ] && [ -s "$B1/home.txt" ]; then
-  pass "backup folder has installed.txt, moved.txt and dconf.ini"
+B1="$(ls -dt "$DATA"/vitre-backup/[0-9]*-??????/ 2>/dev/null | head -1)"; B1="${B1%/}"
+if [ -n "$B1" ] && [ -s "$B1/installed.txt" ] && [ -s "$B1/roots.txt" ] && [ -s "$B1/settings/paths.txt" ]; then
+  pass "backup folder has file manifests, canonical roots and owned-key values"
 else
   fail "backup folder is incomplete: ${B1:-none}"
 fi
+expect_eq "backup directory is private" "700" "$(stat -c %a "$B1")"
+expect_eq "backup settings manifest is private" "600" "$(stat -c %a "$B1/settings/paths.txt")"
 expect_eq "install moved the user's own gtk.css, Vitre-Glass and Stage folder into the backup" "3" "$(wc -l < "${B1:-/dev/null}/moved.txt" 2>/dev/null | tr -d ' ')"
 # vitre-info.sh: exits 0, prints the version, changes nothing
 run vitre-info bash "$REPO/vitre-info.sh"
@@ -272,14 +299,16 @@ snap_files > "$W/after1.files"; snap_settings > "$W/after1.dconf"
 same "uninstall: every file is back as it was (incl. the user's gtk.css, Vitre-Glass and Stage folder)" "$W/before.files" "$W/after1.files"
 same "uninstall: every setting is back as it was" "$W/before.dconf" "$W/after1.dconf"
 expect_eq "uninstall: the user's gtk.css has its own text again" "/* the user's own gtk.css */" "$(cat "$CONF/gtk-4.0/gtk.css" 2>/dev/null)"
-[ -z "$(ls -d "$DATA"/vitre-backup/[0-9]*[0-9]/ 2>/dev/null)" ] && pass "uninstall renamed its backup to .undone" || fail "an un-undone backup is left"
+[ -z "$(ls -d "$DATA"/vitre-backup/[0-9]*-??????/ 2>/dev/null)" ] && pass "uninstall renamed its backup to .undone" || fail "an un-undone backup is left"
 endgroup
 
 # ---- scenario 2 -----------------------------------------------------------------------------------------------------------------------
-group "scenario 2: installed twice, uninstalled twice"
+group "scenario 2: collision-safe repeated install and complete undo"
 run install-2a bash "$INSTALL"; expect_eq "first install exits 0" "0" "$RC"
-sleep 2     # backups are named by the second; two installs in the same second would share one
+B2A="$(ls -dt "$DATA"/vitre-backup/[0-9]*-??????/ | head -1)"
 run install-2b bash "$INSTALL"; expect_eq "second install (over the first) exits 0" "0" "$RC"
+B2B="$(ls -dt "$DATA"/vitre-backup/[0-9]*-??????/ | head -1)"
+[ "$B2A" != "$B2B" ] && pass "same-second installs get distinct backup directories" || fail "two installs shared $B2A"
 assert_installed "second install"
 assert_extension_lists "second install" "$BEFORE_EN" "$BEFORE_DIS"
 run uninstall-2a bash "$UNINSTALL"; expect_eq "first uninstall exits 0" "0" "$RC"
@@ -288,20 +317,158 @@ snap_files > "$W/after2.files"; snap_settings > "$W/after2.dconf"
 same "two installs and two uninstalls: every file is back as it was" "$W/before.files" "$W/after2.files"
 same "two installs and two uninstalls: every setting is back as it was" "$W/before.dconf" "$W/after2.dconf"
 run uninstall-3 bash "$UNINSTALL"
-if [ "$RC" -eq 0 ]; then
-  fail "a third uninstall (nothing to undo) exited 0"
-elif grep -q 'no install backup found' "$LAST_LOG"; then
+if [ "$RC" -ne 0 ] && grep -q 'no install backup found' "$LAST_LOG"; then
   pass "a third uninstall (nothing to undo) exits $RC and says 'no install backup found'"
 else
-  # Known defect in uninstall.sh (found by this test): with no backup the `ls` inside `B="${1:-$(ls ...)}"` fails under set -e, so the
-  # script exits 2 silently and its own message is never printed. Not a failure here; fix: add `|| true` inside the substitution.
-  pass "a third uninstall (nothing to undo) exits $RC"
-  note "warning: it printed no message (uninstall.sh stops at the failing ls before reaching its 'no install backup found' line)"
-  if [ -n "$IN_GH" ]; then echo "::warning title=uninstall.sh::with no backup it exits $RC without printing 'no install backup found'"; fi
+  fail "a third uninstall did not fail cleanly"
 fi
 snap_files > "$W/after3.files"; snap_settings > "$W/after3.dconf"
 same "...and changes no file" "$W/before.files" "$W/after3.files"
 same "...and changes no setting" "$W/before.dconf" "$W/after3.dconf"
+endgroup
+
+# ---- scenario 3 -----------------------------------------------------------------------------------------------------------------------
+group "scenario 3: upgrades and ordinary uninstall preserve later choices"
+run install-4a bash "$INSTALL"; expect_eq "install before upgrade exits 0" "0" "$RC"
+dconf write /org/gnome/desktop/interface/gtk-theme "'UserCustom'"
+dconf write /org/gnome/desktop/wm/keybindings/switch-input-source "['<Super>space', '<Super>z']"
+run install-4b bash "$INSTALL"; expect_eq "upgrade exits 0" "0" "$RC"
+expect_eq "upgrade preserves a changed Vitre-owned setting" "'UserCustom'" "$(dc /org/gnome/desktop/interface/gtk-theme)"
+expect_eq "upgrade preserves an unrelated setting" "['<Super>space', '<Super>z']" "$(dc /org/gnome/desktop/wm/keybindings/switch-input-source)"
+run uninstall-4a bash "$UNINSTALL"; expect_eq "uninstall of upgrade exits 0" "0" "$RC"
+expect_eq "ordinary uninstall keeps the changed Vitre-owned setting" "'UserCustom'" "$(dc /org/gnome/desktop/interface/gtk-theme)"
+expect_eq "ordinary uninstall keeps the unrelated setting" "['<Super>space', '<Super>z']" "$(dc /org/gnome/desktop/wm/keybindings/switch-input-source)"
+run uninstall-4b bash "$UNINSTALL"; expect_eq "uninstall of original install exits 0" "0" "$RC"
+expect_eq "older transaction also preserves the changed Vitre-owned setting" "'UserCustom'" "$(dc /org/gnome/desktop/interface/gtk-theme)"
+expect_eq "older transaction also preserves the unrelated setting" "['<Super>space', '<Super>z']" "$(dc /org/gnome/desktop/wm/keybindings/switch-input-source)"
+endgroup
+
+# ---- scenario 4 -----------------------------------------------------------------------------------------------------------------------
+group "scenario 4: explicit factory reset"
+snap_settings > "$W/before-factory.dconf"
+run install-5 bash "$INSTALL"; expect_eq "install before factory reset exits 0" "0" "$RC"
+dconf write /org/gnome/desktop/interface/gtk-theme "'DiscardMe'"
+dconf write /org/gnome/desktop/wm/keybindings/switch-input-source "['<Super>x']"
+run uninstall-factory bash "$UNINSTALL" --factory-reset
+expect_eq "factory reset exits 0" "0" "$RC"
+snap_settings > "$W/after-factory.dconf"
+same "factory reset restores all owned keys to their pre-install values" "$W/before-factory.dconf" "$W/after-factory.dconf"
+endgroup
+
+# ---- scenario 5 -----------------------------------------------------------------------------------------------------------------------
+group "scenario 5: external XDG roots"
+export XDG_DATA_HOME="$W/external-data" XDG_CONFIG_HOME="$W/external-config"
+DATA="$XDG_DATA_HOME"; CONF="$XDG_CONFIG_HOME"; EXT="$DATA/gnome-shell/extensions"; ICONS="$DATA/icons"
+mkdir -p "$CONF/gtk-4.0"
+echo "/* external user gtk.css */" > "$CONF/gtk-4.0/gtk.css"
+run install-external bash "$INSTALL"; expect_eq "install with external XDG roots exits 0" "0" "$RC"
+[ -f "$EXT/vitre-stage@vitre-desktop/metadata.json" ] && pass "install used external XDG_DATA_HOME" || fail "extension missing from external data root"
+run uninstall-external bash "$UNINSTALL"; expect_eq "uninstall with external XDG roots exits 0" "0" "$RC"
+expect_eq "external user file is restored" "/* external user gtk.css */" "$(cat "$CONF/gtk-4.0/gtk.css" 2>/dev/null)"
+[ ! -e "$EXT/vitre-stage@vitre-desktop" ] && pass "installed files are removed outside HOME" || fail "external extension was left behind"
+endgroup
+
+# ---- scenario 6 -----------------------------------------------------------------------------------------------------------------------
+group "scenario 6: upgrade over a 0.2.0 install, then undo both"
+unset XDG_DATA_HOME XDG_CONFIG_HOME
+DATA="$HOME/.local/share"; CONF="$HOME/.config"; EXT="$DATA/gnome-shell/extensions"; ICONS="$DATA/icons"
+dconf reset -f /org/gnome/ >/dev/null 2>&1
+dconf write /org/gnome/desktop/interface/gtk-theme "'Yaru'"
+dconf write /org/gnome/desktop/interface/clock-format "'12h'"
+dconf write /org/gnome/shell/enabled-extensions "['ding@rastersoft.com']"
+snap_files > "$W/before6.files"
+# what Vitre 0.2.0 left: a backup folder in the old format (all of /org/gnome/ in dconf.ini, no per-key files), and its settings in dconf
+OLD="$DATA/vitre-backup/20261022-120000"
+mkdir -p "$OLD/files"
+dconf dump /org/gnome/ > "$OLD/dconf.ini"; : > "$OLD/installed.txt"; : > "$OLD/moved.txt"; echo "$HOME" > "$OLD/home.txt"
+dconf write /org/gnome/desktop/interface/gtk-theme "'Vitre-Glass'"
+dconf write /org/gnome/shell/extensions/vitre-dock/icon-size 72          # the user's own choice, made after installing 0.2.0
+dconf write /org/gnome/shell/extensions/vitre-dock/dock-position "'LEFT'"
+dconf reset /org/gnome/shell/extensions/vitre-dock/show-stack            # a key 0.3 introduced: not set yet
+run install-6 bash "$INSTALL"; expect_eq "upgrade over a 0.2.0 install exits 0" "0" "$RC"
+expect_eq "upgrade keeps the user's Vitre choice (Dock icon size)" "72" "$(dc /org/gnome/shell/extensions/vitre-dock/icon-size)"
+expect_eq "upgrade keeps the user's Vitre choice (Dock position)" "'LEFT'" "$(dc /org/gnome/shell/extensions/vitre-dock/dock-position)"
+expect_eq "upgrade adds a setting that is new (Downloads stack)" "true" "$(dc /org/gnome/shell/extensions/vitre-dock/show-stack)"
+assert_extension_lists "upgrade over 0.2.0" "['ding@rastersoft.com']" "[]"
+dconf write /org/gnome/desktop/interface/clock-format "'24h'"             # an unrelated change after the install
+run uninstall-6a bash "$UNINSTALL"; expect_eq "first uninstall (the upgrade) exits 0" "0" "$RC"
+expect_eq "the Vitre choice is still the user's after the first uninstall" "72" "$(dc /org/gnome/shell/extensions/vitre-dock/icon-size)"
+run uninstall-6b bash "$UNINSTALL"; expect_eq "second uninstall (the 0.2.0 backup) exits 0" "0" "$RC"
+grep -q 'Vitre is removed' "$LAST_LOG" && pass "the old-format backup was undone" || fail "the old-format backup was not undone: $(tail -2 "$LAST_LOG" | tr '\n' '|')"
+expect_eq "Vitre-owned setting is back (gtk-theme)" "'Yaru'" "$(dc /org/gnome/desktop/interface/gtk-theme)"
+expect_eq "Vitre Dock's settings are gone again (icon size)" "" "$(dc /org/gnome/shell/extensions/vitre-dock/icon-size)"
+expect_eq "a setting Vitre does not own keeps the later change (clock format)" "'24h'" "$(dc /org/gnome/desktop/interface/clock-format)"
+snap_files > "$W/after6.files"
+same "after both uninstalls every file is as before" "$W/before6.files" "$W/after6.files"
+[ -z "$(ls -d "$DATA"/vitre-backup/[0-9]*-??????/ 2>/dev/null)" ] && pass "no un-undone backup is left" || fail "an un-undone backup is left"
+endgroup
+
+# ---- scenario 7 -----------------------------------------------------------------------------------------------------------------------
+group "scenario 7: installed files keep the user's umask, the backup is private"
+OLDMASK="$(umask)"; umask 022
+run install-7 bash "$INSTALL"; expect_eq "install under umask 022 exits 0" "0" "$RC"
+B7="$(ls -dt "$DATA"/vitre-backup/[0-9]*-??????-??????/ | head -1)"; B7="${B7%/}"
+expect_eq "backup directory is 700" "700" "$(stat -c %a "$B7")"
+expect_eq "backup file list is 600" "600" "$(stat -c %a "$B7/installed.txt")"
+# cp -a keeps the modes the package has, so these are compared with the package, not with a fixed number
+expect_eq "an installed extension file has the package's mode" "$(stat -c %a "$REPO/extensions/vitre-stage@vitre-desktop/metadata.json")" "$(stat -c %a "$EXT/vitre-stage@vitre-desktop/metadata.json")"
+expect_eq "an installed extension folder has the package's mode" "$(stat -c %a "$REPO/extensions/vitre-stage@vitre-desktop")" "$(stat -c %a "$EXT/vitre-stage@vitre-desktop")"
+case "$(stat -c %a "$EXT/vitre-stage@vitre-desktop/schemas/gschemas.compiled")" in *[4-7]) pass "the compiled schemas are readable by others" ;; *) fail "the compiled schemas are private (umask leaked into the installer)" ;; esac
+expect_eq "the base icon theme index is 644" "644" "$(stat -c %a "$ICONS/VitreBase-dark/index.theme")"
+expect_eq "the Settings menu entry is 644" "644" "$(stat -c %a "$DATA/applications/org.vitre.Settings.desktop")"
+run uninstall-7 bash "$UNINSTALL"; expect_eq "uninstall exits 0" "0" "$RC"
+umask "$OLDMASK"
+endgroup
+
+# ---- scenario 8 -----------------------------------------------------------------------------------------------------------------------
+group "scenario 8: the base icon theme download is checked against the pinned SHA-256"
+PIN="$(sed -n 's/^MACTAHOE_ICONS_SHA256="\([0-9a-f]*\)".*/\1/p' "$INSTALL")"
+TARPIN="$(sed -n 's/^MACTAHOE_ICONS_TAR_SHA256="\([0-9a-f]*\)".*/\1/p' "$INSTALL")"
+REF="$(sed -n 's/^MACTAHOE_ICONS_REF="\([0-9a-f]*\)".*/\1/p' "$INSTALL")"
+[ "${#PIN}" -eq 64 ] && [ "${#TARPIN}" -eq 64 ] && pass "install.sh pins a SHA-256 for the archive and one for its content" || fail "install.sh has no pinned SHA-256"
+mkdir -p "$W/stub"
+cat > "$W/stub/curl" <<'EOS'
+#!/bin/sh
+# stands in for curl: copies $STUB_ARCHIVE to the -o file; the real network is never used
+out=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; esac; shift; done
+[ -n "$out" ] && cp "$STUB_ARCHIVE" "$out"
+EOS
+chmod +x "$W/stub/curl"
+snap_files > "$W/before8.files"; snap_settings > "$W/before8.dconf"
+# (a) a wrong archive that holds an install.sh which leaves a canary: it must be refused before it is unpacked or run
+mkdir -p "$W/bad/MacTahoe-icon-theme-bad"
+printf '#!/bin/sh\ntouch "%s"\n' "$W/CANARY" > "$W/bad/MacTahoe-icon-theme-bad/install.sh"; chmod +x "$W/bad/MacTahoe-icon-theme-bad/install.sh"
+tar -czf "$W/bad.tar.gz" -C "$W/bad" MacTahoe-icon-theme-bad
+run install-8bad env -u VITRE_ICONS_SRC PATH="$W/stub:$PATH" STUB_ARCHIVE="$W/bad.tar.gz" bash "$INSTALL"
+[ "$RC" -ne 0 ] && pass "a wrong archive stops the install (exit $RC)" || fail "a wrong archive did not stop the install"
+grep -q 'checksum did not match; refusing to execute it' "$LAST_LOG" && pass "...and says why" || fail "no checksum message: $(tail -2 "$LAST_LOG" | tr '\n' '|')"
+[ ! -e "$W/CANARY" ] && pass "...and the archive's install.sh never ran" || fail "the wrong archive's install.sh ran"
+[ ! -e "$ICONS/VitreBase-dark" ] && pass "...and no base icon theme was installed" || fail "a base icon theme was installed from a wrong archive"
+run uninstall-8bad bash "$UNINSTALL"; expect_eq "the stopped install can be undone" "0" "$RC"
+snap_files > "$W/after8bad.files"; snap_settings > "$W/after8bad.dconf"
+same "...and everything is back as before" "$W/before8.files" "$W/after8bad.files"
+same "...settings too" "$W/before8.dconf" "$W/after8bad.dconf"
+# (b) the pinned archive, rebuilt from a checkout (git archive | gzip -n -6 is how GitHub makes it), and (c) the same content compressed differently
+GOOD="${VITRE_ICONS_ARCHIVE:-}"
+if [ -z "$GOOD" ] && [ -n "${VITRE_ICONS_SRC:-}" ] && [ "$(git -C "$VITRE_ICONS_SRC" rev-parse HEAD 2>/dev/null)" = "$REF" ]; then
+  git -C "$VITRE_ICONS_SRC" archive --prefix="MacTahoe-icon-theme-$REF/" "$REF" | gzip -n -6 > "$W/good.tar.gz" && GOOD="$W/good.tar.gz"
+fi
+if [ -n "$GOOD" ]; then
+  expect_eq "the archive for the pinned ref matches the pinned SHA-256" "$PIN" "$(sha256sum "$GOOD" | cut -d' ' -f1)"
+  run install-8good env -u VITRE_ICONS_SRC PATH="$W/stub:$PATH" STUB_ARCHIVE="$GOOD" bash "$INSTALL"
+  expect_eq "the pinned archive installs" "0" "$RC"
+  [ -d "$ICONS/VitreBase-dark" ] && pass "...and the base icon theme is in place" || fail "...but the base icon theme is missing"
+  run uninstall-8good bash "$UNINSTALL"; expect_eq "uninstall exits 0" "0" "$RC"
+  gzip -dc "$GOOD" | gzip -n -9 > "$W/good9.tar.gz"
+  expect_eq "the decompressed content matches the second pin" "$TARPIN" "$(gzip -dc "$W/good9.tar.gz" | sha256sum | cut -d' ' -f1)"
+  run install-8gz env -u VITRE_ICONS_SRC PATH="$W/stub:$PATH" STUB_ARCHIVE="$W/good9.tar.gz" bash "$INSTALL"
+  expect_eq "the same content compressed differently installs" "0" "$RC"
+  run uninstall-8gz bash "$UNINSTALL"; expect_eq "uninstall exits 0" "0" "$RC"
+  snap_files > "$W/after8.files"; same "everything is back as before" "$W/before8.files" "$W/after8.files"
+else
+  note "skipped (b) and (c): no archive for the pinned ref (set VITRE_ICONS_ARCHIVE, or VITRE_ICONS_SRC to a git checkout at $REF)"
+  summary_line "- install-test: the pinned-archive install was not run here (no archive or checkout at the pinned ref)"
+fi
 endgroup
 
 finish "install-test"

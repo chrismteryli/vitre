@@ -1,6 +1,6 @@
-/* Liquid drip controller (plan A17): the glass field, the clock and the hand-over between the field (the
- * glass of the animation) and a surface's own glass and content. One controller per pop-out surface (Control
- * Center, Notification Center, the volume capsule, each top-bar menu). The surface supplies an adapter:
+/* Liquid pour controller (liquid v3): the glass field, the clock and the hand-over between the field (the glass of the
+ * motion) and a surface's own glass and content. One controller per pop-out surface (Control Center, Notification Center,
+ * the volume capsule, each top-bar menu, the Dock's menus, the fullscreen corner capsule). The surface supplies an adapter:
  *
  *   adapter.geometry(rest)          -> {pill: {x, y, w, h, keep}, pieces: [{id, x, y, w, h, r, row}]} in stage px,
  *                                      or null while the surface is not allocated yet
@@ -18,11 +18,11 @@
  *   adapter.immediate               optional: geometry is known at open(), start without waiting for a frame
  *   adapter.finish                  glass finish of the field (GLASS_FINISH for the clear look)
  *   adapter.blurRadius, adapter.brightness   optional
- *   adapter.handoffMs               optional: the surface's own glass fades in over this long after the bloom
+ *   adapter.handoffMs               optional: > 0 when the surface's own glass differs from the field's (a cross-fade hand-over)
  *
- * The motion itself (shapes as a function of time, the constants table DRIP) is dripMotion.js. Nothing here
- * is measured from the reference; it is Vitre's own design. Time comes from a Clutter.Timeline, which is NOT
- * scaled by St's slow-down factor (Just Perfection sets 0.8), or, in the rig, from advanceTo().
+ * The motion (edge springs on liquid.js, feel A Viscous) is dripMotion.js Pour. Time is the monotonic wall clock read once
+ * per frame of a Clutter.Timeline (NOT scaled by St's slow-down factor, which Just Perfection sets to 0.8), or, in the rig,
+ * advanceTo().
  */
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -33,7 +33,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {GlassField} from './glassField.js';
 import {DripField, ContentMask} from './dripField.js';
 import {MARGIN, GLASS_FINISH} from './glass.js';
-import {DRIP, buildContext, frameAt, DripClock, handoffFade, clamp01} from './dripMotion.js';
+import {Fade} from './liquid.js';
+import {DRIP, CONTENT_OUT, Pour, clamp01} from './dripMotion.js';
 
 export {DRIP};
 
@@ -46,7 +47,6 @@ const dripSlow = () => Math.max(1, Number(globalThis.__vitreMotionSlow) || ENV_S
 const DRIP_LIT = {tint: 0.22, color: [0.93, 0.95, 1.0], rimSide: 0.45, rimTop: 1.0, rimBottom: 0.85, rimWidth: 2.6};
 const GEOMETRY_TIMEOUT_MS = 500;       // a drip whose geometry stays invalid this long hands the surface back un-animated
 const RETARGET_EVERY_MS = 40;          // while a surface opens, its rectangles are read again this often (a widget that loads late moves)
-const RETARGET_FINAL_MS = 24;          // ... and in the last frames of the geometry they are followed exactly
 const PREWARM_FIRST_MS = 3500;         // the first parked field is built this long after the first controller is created ...
 const PREWARM_STEP_MS = 450;           // ... and every further controller waits this much longer than the one before (no login hitch)
 let menuSlots = 0;                     // Control Center, Notification Center and the HUD have a fixed slot; every menu takes the next one
@@ -143,14 +143,25 @@ export class Lifetimes {
 
 export const op255 = v => Math.round(255 * clamp01(v));
 
-// Animations on, no reduced motion, and no lock screen / greeter (the shell hides pop-outs there and a drip would
-// draw its glass over the lock screen's own chrome).
+// Animations on, and no lock screen / greeter (the shell hides pop-outs there and a pour would draw its glass over the lock
+// screen's own chrome). Reduced motion is allowed: the pour is then a 160 ms cross-fade in place (dripMotion.js Pour).
 export function motionAllowed() {
     const settings = St.Settings.get();
-    if (!settings.enable_animations || settings.reducedMotion === St.ReducedMotion.REDUCE)
+    if (!settings.enable_animations)
         return false;
     return !(Main.sessionMode.isLocked || Main.sessionMode.isGreeter);
 }
+
+export function reducedMotion() {
+    return St.Settings.get().reducedMotion === St.ReducedMotion.REDUCE;
+}
+
+// Sideways flow: with one top-bar pop-out open, opening another (GNOME closes the old one with FADE, then opens the new one with
+// FADE, in the same call) hands the old one's glass body to the new one, with its edge velocities, instead of a close and a
+// reopen. Shared by every extension that pours (menus, Control Center, Notification Center): one key on globalThis.
+const HANDOFF_KEY = '__vitreLiquidHandoff';
+const HANDOFF_WINDOW_US = 400 * 1000;       // a donor is taken only by an open that comes this soon after its switching close
+const MAX_STEP_MS = 34;                     // a frame the shell held (a first paint) slows the pour instead of skipping it
 
 export class DripController {
     // prewarm: the number of field shapes whose shader to compile shortly after creation (0 = none); prewarmIf: only when true
@@ -172,23 +183,22 @@ export class DripController {
                 return GLib.SOURCE_REMOVE;
             });
         }
-        this.callbacks = {onOpened: null, onClosed: null};
+        this.callbacks = {onOpened: null, onClosed: null, onInteractive: null};
         this._phase = 'closed';      // 'closed' | 'opening' | 'open' | 'closing'
         this._started = false;
-        this._ctx = null;
+        this._pour = null;
+        this._inherit = null;
         this._field = null;
         this._mask = null;
         this._maskBucket = 0;
         this._parked = null;
         this._fieldBox = null;
-        this._clock = new DripClock(DRIP.openMs);
         this._timeline = null;
         this._origin = 0;
         this._manual = false;
         this._now = 0;
+        this._last = 0;
         this._pendingSince = 0;
-        this._cap = 1;               // content cap: falls while closing, rises again on a reversal
-        this._lastCapNow = 0;
         this._lastFrame = null;
         this._lastPieces = [];
         this._measure = null;
@@ -199,7 +209,9 @@ export class DripController {
         this._broken = false;
         this._hideId = 0;
         this._retargetAt = -1e9;
-        this._speed = 1;
+        this._switching = false;     // this open takes over from another pop-out that is closing (sideways flow)
+        this._donated = null;        // this close gave its glass body away: {content: Fade} while its content fades in place
+        this._interactive = false;
         this._stats = {frames: 0, openCalls: 0, closeCalls: 0, latencyMs: null};
         this._openCalledAt = 0;
     }
@@ -212,13 +224,18 @@ export class DripController {
         return this._phase !== 'closed';
     }
 
-    // true from the open call until the drip has handed back (a close in flight counts)
+    // true from the open call until the pour has handed back (a close in flight counts)
     get busy() {
         return this._phase === 'opening' || this._phase === 'closing';
     }
 
+    // ms of motion time since the pour started (rig seam; the pour has no timeline position)
     get tau() {
-        return this._clock.tau;
+        return this._pour ? this._pour.t * 1000 : 0;
+    }
+
+    get _clock() {
+        return {tau: this.tau, mode: this._pour?.mode ?? 'idle'};
     }
 
     // ---- public ----------------------------------------------------------------------------------
@@ -228,7 +245,7 @@ export class DripController {
         if (this._destroyed)
             return;
         this._stats.openCalls++;
-        this._speed = speed > 0 ? speed : 1;
+        this._switching = speed !== 1;
         if (this._phase === 'opening' || this._phase === 'open')
             return;
         if (this._broken) {
@@ -241,15 +258,20 @@ export class DripController {
             this.callbacks.onOpened?.('instant');
             return;
         }
-        if (this._phase === 'closing') {
-            // reverse: continues from the current field state
-            this._clock.open(this._nowMs(), this._speed);
+        if (this._phase === 'closing' && this._pour && !this._donated) {
+            // reverse: the springs turn around from where they are, with their speed
+            this._dropDonorKey();
+            this._pour.open();
             this._phase = 'opening';
+            this._interactive = false;
+            this._startTimeline();
             return;
         }
+        if (this._phase === 'closing')
+            this._finishClose();         // a donor's content fade: it has nothing left on screen to reverse
         this._openCalledAt = GLibMonotonicMs();
         if (this.adapter.canDrip && !this.adapter.canDrip()) {
-            // the source pill is not on screen (panel hidden, indicator unmapped): nothing to drip from
+            // the source pill is not on screen (panel hidden, indicator unmapped): nothing to pour from
             this._phase = 'opening';
             this._begin();
             this._abortPending();
@@ -257,16 +279,14 @@ export class DripController {
         }
         this._phase = 'opening';
         this._started = false;
-        this._pendingSince = this._nowMs();
-        this._cap = 1;
-        this._ctx = null;
-        this._clock = new DripClock(DRIP.openMs);
+        this._interactive = false;
+        this._pour = null;
         this._begin();
         this._startTimeline();
-        this._lastCapNow = this._nowMs();
+        this._pendingSince = this._nowMs();
         // a surface whose geometry is known at once (the volume capsule) starts in this very frame
         if (this.adapter.immediate && this._tryStart(this._nowMs()))
-            this._applyGuarded(0, this._nowMs());
+            this._applyGuarded(this._nowMs());
     }
 
     // scale: DRIP.switchCloseScale when another top-bar pop-out is taking over
@@ -280,34 +300,34 @@ export class DripController {
             this._finishClose();
             return true;
         }
+        const switching = scale !== 1;
         if (this._phase === 'opening') {
             if (!this._started) {
                 // never started: nothing of the surface was shown yet
                 this._finishClose();
                 return true;
             }
-            this._clock.close(this._nowMs(), scale, this._contentNow());
-            this._phase = 'closing';
-            return true;
+        } else {
+            // 'open' (at rest): the pour takes over from the surface's own glass at its exact rectangles
+            const geometry = this.adapter.geometry(true);
+            if (!geometry || !geometry.pieces?.length) {
+                this._finishClose();
+                return true;
+            }
+            this._pour = new Pour(geometry, {handoff: this._handoff() > 0, reduced: reducedMotion()});
+            this._inherit = null;
+            if (!this._pour.reduced)
+                this._ensureField();
+            this._started = true;
+            this._begin();
         }
-        // 'open' (at rest): the field takes over from the surface's own glass at the final shapes
-        const geometry = this.adapter.geometry(true);
-        if (!geometry || !geometry.pieces?.length) {
-            this._finishClose();
-            return true;
-        }
-        this._ctx = buildContext(geometry, this._handoff());
-        this._ensureField();
-        this._clock = new DripClock(this._ctx.clockMs, this._ctx.warp);
-        this._clock.tau = this._clock.totalMs;
-        this._cap = 1;
-        this._started = true;
-        this._begin();
-        this._startTimeline();
-        this._lastCapNow = this._nowMs();
-        this._clock.close(this._nowMs(), scale, 1);
+        this._pour.close();
         this._phase = 'closing';
-        this._applyGuarded(this._clock.tau, this._nowMs());
+        this._interactive = false;
+        if (switching && !this._pour.reduced)
+            globalThis[HANDOFF_KEY] = {ctl: this, at: GLib.get_monotonic_time()};
+        this._startTimeline();
+        this._applyGuarded(this._nowMs());
         return true;
     }
 
@@ -318,7 +338,9 @@ export class DripController {
         this._guard(() => this._end());
         this._phase = 'closed';
         this._started = false;
-        this._ctx = null;
+        this._pour = null;
+        this._donated = null;
+        this._dropDonorKey();
     }
 
     destroy() {
@@ -336,15 +358,56 @@ export class DripController {
         this._destroyed = true;
     }
 
-    // true once the geometry is known and the drip clock runs (rig)
+    // true once the geometry is known and the pour runs (rig)
     get started() {
         return this._started;
     }
 
-    // an instant open (animations off, animate: false) leaves a settled surface: closing it later drips
+    // an instant open (animations off, animate: false) leaves a settled surface: closing it later pours
     markOpen() {
         if (this._phase === 'closed' && !this._destroyed)
             this._phase = 'open';
+    }
+
+    // ---- sideways flow ------------------------------------------------------------------------------
+
+    _dropDonorKey() {
+        if (globalThis[HANDOFF_KEY]?.ctl === this)
+            delete globalThis[HANDOFF_KEY];
+    }
+
+    // another pop-out takes this one's glass body: the field goes (the taker draws the body from this frame on) and the
+    // content fades out in place; the close finishes when it has.
+    _donate() {
+        const pour = this._pour;
+        if (!pour || this._phase !== 'closing' || this._donated)
+            return null;
+        const body = pour.body();
+        if (!body)
+            return null;
+        this._donated = {content: new Fade(pour.content.x, CONTENT_OUT, 0.5 / 255).set(0, CONTENT_OUT)};
+        this._dropDonorKey();
+        this._releaseMask();
+        if (this._field && !this._field._dead)
+            this._field.actor.opacity = 0;
+        return body;
+    }
+
+    _takeDonor() {
+        const d = globalThis[HANDOFF_KEY];
+        if (!d)
+            return null;
+        if (GLib.get_monotonic_time() - d.at > HANDOFF_WINDOW_US) {
+            delete globalThis[HANDOFF_KEY];
+            return null;
+        }
+        if (!this._switching || d.ctl === this)
+            return null;
+        try {
+            return d.ctl._donate?.() ?? null;
+        } catch (_e) {
+            return null;
+        }
     }
 
     // ---- rig seams -------------------------------------------------------------------------------------
@@ -357,7 +420,6 @@ export class DripController {
 
     // manual clock: move to time `ms` (the same clock domain as open()/close() calls, which stamp `_now`)
     advanceTo(ms) {
-        this._now = ms;
         this._tick(ms);
     }
 
@@ -371,7 +433,7 @@ export class DripController {
             this._field.actor.opacity = mode === 'coverage' ? 255 : Math.round(255 * (this._lastFrame?.fieldAlpha ?? 1));
         }
         if (this._lastFrame)
-            this._applyPieces(this._lastFrame, this._clock.tau, this._now);
+            this._applyPieces(this._lastFrame);
     }
 
     setLog(on) {
@@ -386,22 +448,23 @@ export class DripController {
         const fr = this._lastFrame;
         const box = this._fieldBox;
         return {
-            name: this.name, phase: this._phase, started: this._started, tau: this._clock.tau,
-            mode: this._clock.mode, total: this._ctx?.totalMs ?? null, k: fr?.k ?? null,
+            name: this.name, phase: this._phase, started: this._started, tau: this.tau,
+            mode: this._pour?.mode ?? 'idle', total: null, k: fr?.k ?? null,
             fieldAlpha: fr?.fieldAlpha ?? null, fieldOp: this._field?.actor.opacity ?? null,
             fieldVisible: this._field?.actor.visible ?? false,
             fieldBox: box ? {...box} : null, shapes: fr ? fr.shapes.map(s => ({...s})) : null,
-            pieces: this._lastPieces, cap: this._cap, latencyMs: this._stats.latencyMs,
-            frames: this._stats.frames, pill: this._ctx?.pill ?? null, pinched: fr?.pinched ?? false,
-            closeMs: this._clock._closeMs ?? null, parked: Boolean(this._parked) || (this._shared() && SHARED_FIELDS.length > 0),
+            pieces: this._lastPieces, cap: fr?.pieces?.[0]?.contentAlpha ?? null, latencyMs: this._stats.latencyMs,
+            frames: this._stats.frames, pill: this._pour?.pill ?? null, pinched: true, openness: fr?.openness ?? null,
+            reduced: this._pour?.reduced ?? false, donated: Boolean(this._donated), inherited: Boolean(this._inherit),
+            closeMs: null, parked: Boolean(this._parked) || (this._shared() && SHARED_FIELDS.length > 0),
         };
     }
 
     // ---- clock ----------------------------------------------------------------------------------------
 
-    // The drip clock is the monotonic wall clock read at every frame (a Clutter.Timeline only ticks us once per
-    // frame): a Timeline's own elapsed time counts from the frame clock's last timestamp, which is stale when the
-    // timeline starts out of an idle period (real input after a pause), and made the first frame skip ahead by the idle gap.
+    // The pour is stepped by the monotonic wall clock read at every frame (a Clutter.Timeline only ticks us once per frame):
+    // a Timeline's own elapsed time counts from the frame clock's last timestamp, which is stale when the timeline starts
+    // out of an idle period (real input after a pause), and made the first frame skip ahead by the idle gap.
     _wallMs() {
         return GLib.get_monotonic_time() / 1000 / dripSlow();
     }
@@ -418,6 +481,7 @@ export class DripController {
         const tl = new Clutter.Timeline({duration: 3600000, actor: Main.uiGroup});
         this._timeline = tl;
         this._origin = this._wallMs();
+        this._last = 0;
         tl.connectObject('new-frame', () => this._tick(this._wallMs() - this._origin), this);
         tl.start();
     }
@@ -438,12 +502,23 @@ export class DripController {
     _tick(now) {
         if (this._phase === 'closed' || this._phase === 'open')
             return;
+        const dt = Math.min(MAX_STEP_MS, Math.max(0, now - this._last)) / 1000;
+        this._last = now;
         this._now = now;
         if (this._started && !motionAllowed()) {
-            // animations were switched off or the screen locked mid-drip: settle at once
+            // animations were switched off or the screen locked mid-pour: settle at once
             if (this._phase === 'opening')
                 this._finishOpen();
             else if (this._phase === 'closing')
+                this._finishClose();
+            return;
+        }
+        if (this._donated) {
+            // this pop-out gave its glass away: its content fades in place, then it is closed
+            const c = this._donated.content;
+            c.step(dt);
+            this._guard(() => this._applyPieces({pieces: (this._pour?.pieces ?? []).map(p => ({id: p.id, contentAlpha: c.x, real: 0, started: true}))}));
+            if (c.rest)
                 this._finishClose();
             return;
         }
@@ -454,13 +529,15 @@ export class DripController {
                 return;
             }
         }
-        // The clock is advanced and its finish event consumed BEFORE the frame is applied, and the frame is applied under
-        // a guard: whatever the surface's adapter does wrong in one frame, the drip still ends on time and the surface is
-        // handed back (a stuck surface was the one way a fault here could outlive the fault).
-        const u = this._clock.update(now);
+        // The pour is stepped and its end read BEFORE the frame is applied, and the frame is applied under a guard: whatever the
+        // surface's adapter does wrong in one frame, the pour still ends and the surface is handed back (a stuck surface was the
+        // one way a fault here could outlive the fault).
+        let fr = null;
         let failed = false;
         try {
-            this._apply(u.tau, now);
+            this._retarget(now);
+            fr = this._pour.step(dt);
+            this._apply(fr, now);
         } catch (e) {
             failed = true;
             this._fault(e);
@@ -472,19 +549,26 @@ export class DripController {
                 this._finishOpen();
             else
                 this._finishClose();
-        } else if (u.finished === 'open') {
-            this._faults = 0;       // a drip that ran clean to its end: an earlier fault was a one-off
+            return;
+        }
+        if (this._phase === 'opening' && !this._interactive && fr.pieces.every(p => p.contentAlpha >= 0.5)) {
+            this._interactive = true;
+            this._guard(() => this.callbacks.onInteractive?.());
+        }
+        if (fr.mode === 'open') {
+            this._faults = 0;       // a pour that ran clean to its end: an earlier fault was a one-off
             this._finishOpen();
-        } else if (u.finished === 'close') {
+        } else if (fr.mode === 'closed') {
             this._faults = 0;
             this._finishClose();
         }
     }
 
-    // a frame applied outside the tick: on a failure the drip ends at once and hands the surface back
-    _applyGuarded(tau, now) {
+    // a frame applied outside the tick: on a failure the pour ends at once and hands the surface back
+    _applyGuarded(now) {
         try {
-            this._apply(tau, now);
+            if (this._pour)
+                this._apply(this._pour.frame(), now);
         } catch (e) {
             this._fault(e);
             if (this._phase === 'opening')
@@ -494,7 +578,7 @@ export class DripController {
         }
     }
 
-    // one frame callback failed: say so (a failure also ends that drip at once); two failing drips in a row degrade the controller
+    // one frame callback failed: say so (a failure also ends that pour at once); two failing pours in a row degrade the controller
     // to instant, so a permanent fault costs two log lines, never a stuck surface
     _fault(e) {
         this._faults++;
@@ -515,12 +599,16 @@ export class DripController {
         const geometry = this.adapter.geometry();
         if (!geometry || !geometry.pieces?.length)
             return false;
-        this._ctx = buildContext(geometry, this._handoff());
-        this._ensureField();
-        this._clock = new DripClock(this._ctx.clockMs, this._ctx.warp);
-        this._clock.open(now, this._speed ?? 1);
+        const reduced = reducedMotion();
+        const inherit = reduced ? null : this._takeDonor();
+        this._pour = new Pour(geometry, {handoff: this._handoff() > 0, reduced, inherit});
+        this._inherit = inherit;
+        if (!reduced)
+            this._ensureField();
+        this._pour.open();
         this._started = true;
-        this._retargetAt = -1e9;
+        this._last = now;
+        this._retargetAt = now;
         this._stats.latencyMs = GLibMonotonicMs() - this._openCalledAt;
         return true;
     }
@@ -634,9 +722,12 @@ export class DripController {
     _ensureField() {
         if (this._field)
             return;
-        const ctx = this._ctx;
-        const need0 = ctx.nShapes;
-        const {pill, pieces} = ctx;
+        const pour = this._pour;
+        const need0 = pour.nShapes;
+        const pill = pour.pill;
+        const pieces = pour.pieces.map(p => p.rect);
+        if (this._inherit?.box)
+            pieces.push(this._inherit.box);         // a body handed over sideways starts outside this surface's own rectangles
         let x0 = pill.x;
         let y0 = pill.y;
         let x1 = pill.x + pill.w;
@@ -647,6 +738,11 @@ export class DripController {
             x1 = Math.max(x1, p.x + p.w);
             y1 = Math.max(y1, p.y + p.h);
         }
+        // B16: an adapter whose surface opens UPWARD (the Dock's menus) hands its geometry over mirrored (y' = A - y) so the
+        // drip falls in that space; the field is placed and drawn back in the real one
+        const A = this.adapter.flipAxis;
+        if (Number.isFinite(A))
+            [y0, y1] = [A - y1, A - y0];
         const pad = FIELD_PAD + MARGIN;
         const fx = Math.floor(x0 - pad);
         const fy = Math.floor(y0 - pad);
@@ -759,44 +855,35 @@ export class DripController {
         return best;
     }
 
-    _apply(tau, now) {
-        const ctx = this._ctx;
-        if (!ctx)
+    _apply(fr, now) {
+        if (!fr)
             return;
-        this._retarget(tau, now);
-        const fr = frameAt(ctx, Math.min(tau, ctx.totalMs));
-        fr.fieldAlpha *= handoffFade(ctx, tau);       // the hand-over tail: the field fades out as the surface's own glass fades in
         this._lastFrame = fr;
-        // content cap: falls at 1 / contentOutMs while closing, recovers at the same rate on a reversal
-        const dt = Math.max(0, now - this._lastCapNow);
-        this._lastCapNow = now;
-        if (this._phase === 'closing') {
-            const scale = this._clock._contentOutMs ? this._clock._contentOutMs / DRIP.contentOutMs : 1;
-            this._cap = Math.max(0, this._cap - dt / (DRIP.contentOutMs * scale));
-        } else {
-            this._cap = Math.min(1, this._cap + dt / DRIP.contentOutMs);
-        }
         const field = this._field;
         if (field && !field._dead) {
             const bx = this._fieldBox.x;
             const by = this._fieldBox.y;
-            const shapes = fr.shapes.map(s => ({x: s.x - bx, y: s.y - by, w: s.w, h: s.h, r: s.r}));
+            const A = this.adapter.flipAxis;
+            const flip = Number.isFinite(A);
+            const shapes = fr.shapes.map(s => ({x: s.x - bx, y: (flip ? A - s.y : s.y) - by, w: s.w, h: s.h, r: s.r}));
             field.setShapes(shapes, fr.k);
             this._boost(field, fr.boost);
             field.actor.opacity = this._measure === 'coverage' ? 255 : Math.round(255 * fr.fieldAlpha);
         }
-        this._mask?.update(fr.shapes, fr.k, this.adapter.maskBox?.());
-        this._applyPieces(fr, tau, now);
-        this.adapter.frame?.(fr, tau, this._phase);
+        if (!fr.reduced && this._pour && !this._pour.reduced)
+            this._mask?.update(fr.shapes, fr.k, this.adapter.maskBox?.());
+        this._applyPieces(fr);
+        this.adapter.frame?.(fr, this.tau, this._phase);
         this._stats.frames++;
         if (this._log)
-            this._log.push({now: Math.round(now * 10) / 10, tau: Math.round(tau * 10) / 10, phase: this._phase,
+            this._log.push({now: Math.round(now * 10) / 10, tau: Math.round(this.tau * 10) / 10, phase: this._phase,
                 k: fr.k, fieldAlpha: fr.fieldAlpha, shapes: fr.shapes.map(s => [s.x, s.y, s.w, s.h, s.r].map(v => Math.round(v * 100) / 100)),
                 pieces: this._lastPieces.map(p => [p.id, p.real, p.content])});
     }
 
-    // The drop's finish: tint and rim lifted by DRIP.dropBoost x b (b: 1 -> 0 after the pinch-off). A drop is small and its glass is
-    // clear, so on a dark wall little more than a hairline of rim shows; the finished surface is not touched (b = 0 is the plain finish).
+    // The glass is lit while it moves: a light frosted tint and a bright rim, easing into the surface's own finish as the pour
+    // lands (b falls to 0 by then, a reading of the springs' state), so the hand-over is unchanged. Multiplying a dark menu tint
+    // made the moving glass darker still: on a dark wall only its outline showed, outline after outline.
     _boost(field, b) {
         if (!field._set)
             return;
@@ -805,10 +892,6 @@ export class DripController {
             return;
         field._boostQ = q;
         const f = this.adapter.finish ?? GLASS_FINISH;
-        // B21 (2026-10-15): while it moves the glass is
-        // LIT, as in the morph lab: a light frosted tint and a bright rim, easing into the surface's own finish as the bloom lands
-        // (b falls to 0 by then), so the hand-over is unchanged. Multiplying a dark menu tint made the moving drop darker still:
-        // on a dark wall only its outline showed, outline after outline, which read as stop-motion.
         const L = DRIP_LIT;
         const mix = (a, b) => a + (b - a) * q;
         field._set('u_tint', mix(f.tint, L.tint));
@@ -823,56 +906,39 @@ export class DripController {
         field._set('u_rw', mix(f.rimWidth, L.rimWidth));
     }
 
-    // The surface's rectangles can still move while it opens (the weather widget of the Notification Center loads late and shifts a few
-    // px): read them again now and then and let the field's final rectangles follow, so that the field ends exactly on the real glass and
-    // the hand-over has no step. Smoothed (half the distance per read) until the last frames of the geometry, which follow exactly.
-    _retarget(tau, now) {
-        const ctx = this._ctx;
-        if (!ctx || this._phase !== 'opening' || tau < (ctx.retargetFrom ?? DRIP.pinchMs) || !this.adapter.geometry)
-            return;
-        const final = tau >= ctx.totalMs - RETARGET_FINAL_MS;
-        if (!final && now - this._retargetAt < RETARGET_EVERY_MS)
+    // The surface's rectangles can still move while it opens (the weather widget of the Notification Center loads late and shifts a
+    // few px): they are read again now and then and the springs take the new targets, keeping their speed, so the glass ends
+    // exactly on the real surface and the hand-over has no step.
+    _retarget(now) {
+        if (!this._pour || this._phase !== 'opening' || !this.adapter.geometry || now - this._retargetAt < RETARGET_EVERY_MS)
             return;
         this._retargetAt = now;
         const g = this.adapter.geometry(true);
-        if (!g || !g.pieces || g.pieces.length !== ctx.pieces.length)
+        if (!g || !g.pieces || g.pieces.length !== this._pour.pieces.length)
             return;
-        const byId = new Map(g.pieces.map(p => [p.id, p]));
-        const step = final ? 1 : 0.5;
-        for (const p of ctx.pieces) {
-            const t = byId.get(p.id);
-            if (!t || ![t.x, t.y, t.w, t.h, t.r].every(Number.isFinite) || t.w < 1 || t.h < 1)
-                continue;
-            for (const key of ['x', 'y', 'w', 'h', 'r']) {
-                const d = t[key] - p[key];
-                p[key] = Math.abs(d) < 0.05 ? t[key] : p[key] + d * step;
-            }
-        }
+        this._pour.retarget(g.pieces);
     }
 
-    _applyPieces(fr, tau, now) {
-        const ctx = this._ctx;
-        const handoff = this._handoff();
+    _applyPieces(fr) {
+        const pieces = this._pour?.pieces ?? [];
         const out = [];
-        for (let i = 0; i < ctx.pieces.length; i++) {
-            const piece = ctx.pieces[i];
+        for (let i = 0; i < pieces.length; i++) {
             const fp = fr.pieces[i];
-            const doneTau = ctx.doneAt[i];
-            // the surface's own glass: a pure function of tau, in both directions
-            let real = handoff > 0 ? clamp01((tau - doneTau) / handoff) : (tau >= doneTau ? 1 : 0);
-            let content = Math.min(fp.contentAlpha, this._cap);      // a function of tau (dripMotion.frameAt); the same ramp for every piece
-            const clip = null;      // the content is cut by the ContentMask effect (the glass shape itself)
+            if (!fp)
+                continue;
+            let real = fp.real ?? 0;
+            let content = fp.contentAlpha;
             if (this._measure === 'coverage' || this._measure === 'field') {
                 real = 0;
                 content = 0;
             } else if (this._measure === 'content') {
                 real = 0;
             }
-            // no mask to cut the content (the surface has no mask actor): a piece that has not left the drop shows none
+            // no mask to cut the content (the surface has no mask actor): a piece that has not left the button shows none
             if (!this._mask && !fp.started)
                 content = 0;
-            out.push({id: piece.id, real, content, clip, solid: Boolean(piece.solid)});
-            this.adapter.setPiece(piece.id, {real, content, clip});
+            out.push({id: pieces[i].id, real, content, clip: null, solid: Boolean(pieces[i].rect?.solid)});
+            this.adapter.setPiece(pieces[i].id, {real, content, clip: null});
         }
         this._lastPieces = out;
     }
@@ -898,6 +964,10 @@ export class DripController {
         this._guard(() => this._destroyField());
         this._phase = 'open';
         this._guard(() => this._end());
+        if (!this._interactive) {
+            this._interactive = true;
+            this._guard(() => this.callbacks.onInteractive?.());
+        }
         this.callbacks.onOpened?.('finished');
     }
 
@@ -906,7 +976,9 @@ export class DripController {
         this._guard(() => this._destroyField());
         this._phase = 'closed';
         this._started = false;
-        this._ctx = null;
+        this._pour = null;
+        this._donated = null;
+        this._dropDonorKey();
         // hand the surface's own state back (rest) before the caller hides it, so the next open starts clean
         this._guard(() => this._end());
         this.callbacks.onClosed?.();

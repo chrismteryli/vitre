@@ -28,6 +28,9 @@ import { TimeoutTracker } from '../../core/TimeoutTracker.js';
 import { isActorAlive, setBoxVertical } from '../../core/Utils.js';
 import { setMagnifierPauseState } from '../magnifier/MagnifierState.js';
 import { dropDelegate, dropButton, dropAppId, applyThemeStyle } from './FolderMenuStyle.js';
+import {ease as springEase} from '../../liquid/liquidClock.js';
+// liquid v3: this file's motion is a surface leaving its source: the 'pour' role (liquid.js); opacity on the fade role
+const liquidEase = (actor, params) => springEase(actor, params, {role: 'pour'});
 
 
 const POSITION_GAP = 20;
@@ -296,11 +299,10 @@ export default class FolderMenu {
             this.menuContainer.set_position(posX, posY);
             this._isFirstPosition = false;
         } else {
-            this.menuContainer.ease({
+            liquidEase(this.menuContainer, {
                 x: posX,
                 y: posY,
-                duration: 80, 
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                duration: 80
             });
         }
     }
@@ -373,10 +375,9 @@ export default class FolderMenu {
             this.menuContainer.opacity = 0;
             this._updatePosition();
 
-            this.menuContainer.ease({
+            liquidEase(this.menuContainer, {
                 opacity: 255,
-                duration: 150,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                duration: 150
             });
 
             if (this._posTrackerId) {
@@ -438,10 +439,9 @@ export default class FolderMenu {
 
             if (isActorAlive(menuContainer) && actor.get_stage()) {
                 menuContainer.remove_all_transitions();
-                menuContainer.ease({
+                liquidEase(menuContainer, {
                     opacity: 0,
                     duration: 120,
-                    mode: Clutter.AnimationMode.EASE_IN_QUAD,
                     onStopped: dispose
                 });
             } else {

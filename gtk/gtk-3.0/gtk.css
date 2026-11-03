@@ -1,7 +1,7 @@
-/* A18 (GTK3): the reference design window + toolbar look over the the upstream theme GTK3 theme (user CSS beats the theme; no theme file is edited).
-   pt -> logical px with k = 1.15: 52 pt bar = 60 px, 14 pt disc = 16 px, 36 pt capsule = 41/42 px, 16 pt corner = 19 px circle,
-   13 pt title = 15 px, 11 pt subtitle = 13 px. GTK3 CSS has no var()/@media/filter, so the dark palette is baked in.
-   Values marked DERIVED are dark-mode values the light-mode measurement does not give. */
+/* Vitre (B6): the A18 window chrome rules that are the same in the light and the dark style. The rules that differ
+   per style (title button art, title and toolbar button colours) live in the theme now, at the end of each
+   gtk-3.0/gtk.css of every Vitre-Glass theme folder, so GTK 3 apps follow the style when the theme name changes. */
+
 
 /* ---- window layer ---- (RWC clips these windows at the frame rect and draws the 0 18pt 40pt shadow + hairline) */
 decoration { border-radius: 19px; margin: 10px; border-width: 0; box-shadow: 0 0 0 0.58px alpha(black, 0.20); }
@@ -20,78 +20,65 @@ paned.horizontal > separator, separator.sidebar, .sidebar separator.vertical, he
 headerbar { min-height: 60px; padding: 0 8px 0 0; border-bottom: none; box-shadow: none; }
 headerbar > box.left { padding: 0 0 0 0; }
 
-/* ---- Vitre window buttons, variant B "glass capsule" (dark title bar; proposal 2026-10-16, replaces the
-   traffic-light block). GTK3 counts only visible siblings for :last-child, but a shown separator.titlebutton after
-   the buttons would hide it: then a window without maximize shows minimize with a square end. ---- */
-headerbar button.titlebutton.close, headerbar button.titlebutton.minimize, headerbar button.titlebutton.maximize {
-  min-width: 24px; min-height: 20px; padding: 0; margin: 0; border: none; border-width: 0; border-radius: 0;
-  background-color: transparent; background-repeat: no-repeat; background-position: center; background-size: 24px 20px;
-  color: transparent; box-shadow: none; outline: none; text-shadow: none; -gtk-icon-shadow: none;
+
+/* ---- window buttons, capsule variant B sized to the header capsules (polish 2026-11-01) ----
+   The title-button box (box.left / box.right, which holds only the title buttons and their separator) is the 41 px glass
+   capsule on the 60 px band's centre line, 8 px from the window edge like the end buttons; the buttons are 36 x 41 segments
+   pulled together over GTK 3's fixed 6 px box spacing. Glyphs are recoloured from the button colour (one file each for light,
+   dark and backdrop; GTK 3 has no media queries, so the colours come from the theme's own @theme_fg_color). GTK 3 cannot
+   tell which visible button ends the row, so the hover fill is a bead inset in its segment (any layout, any separator).
+   These rules beat the per-style title-button art at the end of each Vitre-Glass theme (user CSS outranks the theme). ---- */
+headerbar > box.left, headerbar > box.right {
+  min-height: 41px; margin-top: 9px; margin-bottom: 10px; padding: 0; border-radius: 21px;
+  background-color: alpha(@theme_fg_color, 0.06);
+  box-shadow: inset 1px 0 alpha(@theme_fg_color, 0.16), inset -1px 0 alpha(@theme_fg_color, 0.16), inset 0 1px alpha(@theme_fg_color, 0.07), inset 0 -1px alpha(@theme_fg_color, 0.07);
 }
-headerbar button.titlebutton.close { margin-left: 22px; }
-headerbar button.titlebutton image { opacity: 0; background: none; padding: 0; margin: 0; min-width: 0; min-height: 0; }
-headerbar button.titlebutton.close { background-image: url("a18-assets/vc-close-left-dark.svg"); }
-headerbar button.titlebutton.close:last-child { background-image: url("a18-assets/vc-close-single-dark.svg"); }
-headerbar button.titlebutton.minimize { background-image: url("a18-assets/vc-minimize-mid-dark.svg"); }
-headerbar button.titlebutton.minimize:last-child { background-image: url("a18-assets/vc-minimize-right-dark.svg"); }
-headerbar button.titlebutton.maximize { background-image: url("a18-assets/vc-maximize-right-dark.svg"); }
-headerbar button.titlebutton.close:hover { background-image: url("a18-assets/vc-close-left-hover.svg"); }
-headerbar button.titlebutton.close:last-child:hover { background-image: url("a18-assets/vc-close-single-hover.svg"); }
-headerbar button.titlebutton.minimize:hover { background-image: url("a18-assets/vc-minimize-mid-hover.svg"); }
-headerbar button.titlebutton.minimize:last-child:hover { background-image: url("a18-assets/vc-minimize-right-hover.svg"); }
-headerbar button.titlebutton.maximize:hover { background-image: url("a18-assets/vc-maximize-right-hover.svg"); }
-headerbar button.titlebutton.close:active { background-image: url("a18-assets/vc-close-left-pressed.svg"); }
-headerbar button.titlebutton.close:last-child:active { background-image: url("a18-assets/vc-close-single-pressed.svg"); }
-headerbar button.titlebutton.minimize:active { background-image: url("a18-assets/vc-minimize-mid-pressed.svg"); }
-headerbar button.titlebutton.minimize:last-child:active { background-image: url("a18-assets/vc-minimize-right-pressed.svg"); }
-headerbar button.titlebutton.maximize:active { background-image: url("a18-assets/vc-maximize-right-pressed.svg"); }
-headerbar button.titlebutton.close:backdrop { background-image: url("a18-assets/vc-close-left-off-dark.svg"); }
-headerbar button.titlebutton.close:last-child:backdrop { background-image: url("a18-assets/vc-close-single-off-dark.svg"); }
-headerbar button.titlebutton.minimize:backdrop { background-image: url("a18-assets/vc-minimize-mid-off-dark.svg"); }
-headerbar button.titlebutton.minimize:last-child:backdrop { background-image: url("a18-assets/vc-minimize-right-off-dark.svg"); }
-headerbar button.titlebutton.maximize:backdrop { background-image: url("a18-assets/vc-maximize-right-off-dark.svg"); }
-headerbar button.titlebutton.close:backdrop:hover { background-image: url("a18-assets/vc-close-left-off-dark.svg"); }
-headerbar button.titlebutton.close:last-child:backdrop:hover { background-image: url("a18-assets/vc-close-single-off-dark.svg"); }
-headerbar button.titlebutton.minimize:backdrop:hover { background-image: url("a18-assets/vc-minimize-mid-off-dark.svg"); }
-headerbar button.titlebutton.minimize:last-child:backdrop:hover { background-image: url("a18-assets/vc-minimize-right-off-dark.svg"); }
-headerbar button.titlebutton.maximize:backdrop:hover { background-image: url("a18-assets/vc-maximize-right-off-dark.svg"); }
-headerbar separator.titlebutton { min-width: 0; min-height: 0; margin: 0; padding: 0; opacity: 0; background: none; }
+headerbar > box.left { margin-left: 8px; margin-right: 2px; }
+headerbar > box.right { margin-left: 2px; margin-right: 0; }
+headerbar:backdrop > box.left, headerbar:backdrop > box.right {
+  background-color: alpha(@theme_fg_color, 0.03);
+  box-shadow: inset 1px 0 alpha(@theme_fg_color, 0.08), inset -1px 0 alpha(@theme_fg_color, 0.08), inset 0 1px alpha(@theme_fg_color, 0.035), inset 0 -1px alpha(@theme_fg_color, 0.035);
+}
+headerbar button.titlebutton.close, headerbar button.titlebutton.minimize, headerbar button.titlebutton.maximize,
+headerbar button.titlebutton.close:backdrop, headerbar button.titlebutton.minimize:backdrop, headerbar button.titlebutton.maximize:backdrop,
+headerbar button.titlebutton.close:backdrop:hover, headerbar button.titlebutton.minimize:backdrop:hover, headerbar button.titlebutton.maximize:backdrop:hover {
+  min-width: 28px; min-height: 33px; padding: 0; margin: 0; border: 4px solid transparent; border-radius: 21px;
+  background-color: transparent; background-clip: padding-box; background-repeat: no-repeat; background-position: center; background-size: 18px 18px;
+  color: @theme_fg_color; box-shadow: none; outline: none; text-shadow: none; -gtk-icon-shadow: none;
+}
+headerbar button.titlebutton + button.titlebutton { margin-left: -6px; }
+headerbar > box.left > separator.titlebutton { margin: 0 0 0 -6px; }
+headerbar > box.right > separator.titlebutton { margin: 0 -6px 0 0; }
+headerbar button.titlebutton image { opacity: 0; background: none; padding: 0; margin: 0; min-width: 0; min-height: 0; -gtk-icon-transform: scale(0); }
+headerbar button.titlebutton.close, headerbar button.titlebutton.close:backdrop, headerbar button.titlebutton.close:backdrop:hover { background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")); }
+headerbar button.titlebutton.minimize, headerbar button.titlebutton.minimize:backdrop, headerbar button.titlebutton.minimize:backdrop:hover { background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")); }
+headerbar button.titlebutton.maximize, headerbar button.titlebutton.maximize:backdrop, headerbar button.titlebutton.maximize:backdrop:hover { background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")); }
+.maximized headerbar button.titlebutton.maximize, .maximized headerbar button.titlebutton.maximize:backdrop { background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")); }
+headerbar button.titlebutton.close:backdrop, headerbar button.titlebutton.minimize:backdrop, headerbar button.titlebutton.maximize:backdrop,
+headerbar button.titlebutton.close:backdrop:hover, headerbar button.titlebutton.minimize:backdrop:hover, headerbar button.titlebutton.maximize:backdrop:hover { color: alpha(@theme_fg_color, 0.40); }
+headerbar button.titlebutton.close:hover { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")), linear-gradient(to bottom, #ff7d83, #e5484d); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.minimize:hover { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.maximize:hover { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); background-size: 18px 18px, auto; }
+.maximized headerbar button.titlebutton.maximize:hover { background-image: -gtk-recolor(url("a18-assets/vc2-restore-symbolic.svg")), linear-gradient(to bottom, #5d90f5, #2563eb); }
+headerbar button.titlebutton.close:active { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-close-symbolic.svg")), linear-gradient(to bottom, #d9414a, #b8303a); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.minimize:active { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-minimize-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); background-size: 18px 18px, auto; }
+headerbar button.titlebutton.maximize:active { color: white; background-image: -gtk-recolor(url("a18-assets/vc2-maximize-symbolic.svg")), linear-gradient(to bottom, #3f78e6, #1c4fc4); background-size: 18px 18px, auto; }
+headerbar separator.titlebutton { min-width: 0; min-height: 0; padding: 0; opacity: 0; background: none; border: none; }
 
 /* ---- title + subtitle ---- */
-headerbar .title { font-size: 15px; font-weight: 600; color: alpha(#ffffff, 0.85); padding: 0 12px; }
-headerbar .subtitle { font-size: 13px; font-weight: 400; color: alpha(#ffffff, 0.50); padding: 0 12px; }
-headerbar:backdrop .title { color: alpha(#ffffff, 0.37); }
-headerbar:backdrop .subtitle { color: alpha(#ffffff, 0.22); }
 
 /* ---- glass capsules ---- */
-headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action) {
-  min-height: 41px; min-width: 41px; padding: 0 12px; margin: 9px 0 10px 2px; border-radius: 21px; border: none; border-width: 0; outline: none;
-  background-image: none; background-color: alpha(#ffffff, 0.09); color: #ffffff; text-shadow: none; -gtk-icon-shadow: none;
-  box-shadow: inset 0.58px 0 0 alpha(#ffffff, 0.20), inset -0.58px 0 0 alpha(#ffffff, 0.20), inset 0 0.58px 0 alpha(#ffffff, 0.07), inset 0 -0.58px 0 alpha(#ffffff, 0.07);
-}
 headerbar button.image-button:not(.titlebutton) { padding: 0; min-width: 42px; }
 headerbar button.suggested-action:not(.titlebutton), headerbar button.destructive-action:not(.titlebutton) { min-height: 41px; border-radius: 21px; padding: 0 16px; margin: 9px 0 10px 2px; }
 headerbar entry { min-height: 41px; border-radius: 21px; margin: 9px 0 10px 2px; }
-headerbar button:not(.titlebutton):hover { background-color: alpha(#ffffff, 0.16); }
-headerbar button:not(.titlebutton):checked, headerbar button:not(.titlebutton):active { background-color: alpha(#ffffff, 0.24); }
-headerbar:backdrop button:not(.titlebutton) {
-  background-color: alpha(#ffffff, 0.045);
-  box-shadow: inset 0.58px 0 0 alpha(#ffffff, 0.10), inset -0.58px 0 0 alpha(#ffffff, 0.10), inset 0 0.58px 0 alpha(#ffffff, 0.035), inset 0 -0.58px 0 alpha(#ffffff, 0.035);
-}
-headerbar .linked { margin: 9px 0 10px 2px; border-radius: 21px; background-color: alpha(#ffffff, 0.09);
-  box-shadow: inset 0.58px 0 0 alpha(#ffffff, 0.20), inset -0.58px 0 0 alpha(#ffffff, 0.20), inset 0 0.58px 0 alpha(#ffffff, 0.07), inset 0 -0.58px 0 alpha(#ffffff, 0.07); }
 headerbar .linked > button:not(.titlebutton):not(.suggested-action):not(.destructive-action) { margin: 0; min-height: 41px; background-color: transparent; box-shadow: none; border-radius: 0; min-width: 42px; padding: 0; }
 headerbar .linked > button:first-child:not(.suggested-action):not(.destructive-action) { border-radius: 21px 0 0 21px; }
 headerbar .linked > button:last-child:not(.suggested-action):not(.destructive-action) { border-radius: 0 21px 21px 0; }
 headerbar .linked > button:only-child:not(.suggested-action):not(.destructive-action) { border-radius: 21px; }
 headerbar .linked > button:first-child:nth-last-child(3):not(.suggested-action), headerbar .linked > button:nth-child(2):nth-last-child(2):not(.suggested-action), headerbar .linked > button:last-child:nth-child(3):not(.suggested-action) { min-width: 43px; }
-headerbar .linked > button:not(:first-child):not(.titlebutton):not(.suggested-action):not(.destructive-action) { box-shadow: inset 0.58px 0 0 alpha(#ffffff, 0.14); }
-headerbar .linked > button:not(.titlebutton):not(.suggested-action):not(.destructive-action):hover { background-color: alpha(#ffffff, 0.08); }
-headerbar:backdrop .linked { background-color: alpha(#ffffff, 0.045);
-  box-shadow: inset 0.58px 0 0 alpha(#ffffff, 0.10), inset -0.58px 0 0 alpha(#ffffff, 0.10), inset 0 0.58px 0 alpha(#ffffff, 0.035), inset 0 -0.58px 0 alpha(#ffffff, 0.035); }
 headerbar:backdrop .linked > button:not(.titlebutton):not(.suggested-action):not(.destructive-action) { background-color: transparent; }
 
-/* ---- window-level corner radius 24 px -> 19 px, generated from the upstream theme-Dark (tools/build_gtk3.py) ---- */
+
 .background.csd { border-radius: 0 0 19px 19px; }
 .background.csd > box.vertical > actionbar > revealer > box, .background.csd > box > box > box > actionbar > revealer > box, .background.csd stack revealer > actionbar > revealer > box { border-radius: 0 0 19px 19px; }
 separator:first-child + headerbar, separator:first-child + headerbar:backdrop, headerbar:first-child, headerbar:first-child:backdrop { border-top-left-radius: 19px; }

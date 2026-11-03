@@ -15,6 +15,15 @@
       <default>0.0</default>
       <summary>Perspective tilt of strip thumbnails, in degrees (0 = flat)</summary>
     </key>
+    <key name="strip-position" type="s">
+      <choices>
+        <choice value="bottom"/>
+        <choice value="left"/>
+      </choices>
+      <default>'bottom'</default>
+      <summary>Where the strip of parked windows sits</summary>
+      <description>bottom: one row in the Dock's band, left and right of the Dock (the full width stays for windows); left: the column at the left edge</description>
+    </key>
     <key name="toggle-stage-manager" type="as">
       <default>[]</default>
       <summary>Keyboard shortcut that turns Vitre Stage on and off</summary>

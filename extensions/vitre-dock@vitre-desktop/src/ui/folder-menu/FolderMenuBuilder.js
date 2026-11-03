@@ -38,6 +38,9 @@ import { createIndicatorBox } from '../dock/DockButtonBase.js';
 import AppContextMenu from '../context-menu/AppContextMenu.js';
 import { setBoxVertical, isActorAlive } from '../../core/Utils.js';
 import { iconConfigDir, deleteCustomFolderIcon, pickIconImage, cancelIconPicker } from './FolderIconFiles.js';
+import {ease as springEase} from '../../liquid/liquidClock.js';
+// liquid v3: this file's motion is a surface leaving its source: the 'pour' role (liquid.js); opacity on the fade role
+const liquidEase = (actor, params) => springEase(actor, params, {role: 'pour'});
 
 
 const APPS_PER_ROW = 5;
@@ -244,10 +247,9 @@ export class FolderMenuBuilder {
     _showHint(text) {
         if (text) this._hintLabel.text = text;
         this._hintLabel.remove_transition('opacity');
-        this._hintLabel.ease({
+        liquidEase(this._hintLabel, {
             opacity: text ? 255 : 0,
-            duration: HINT_FADE_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            duration: HINT_FADE_MS
         });
     }
 
@@ -352,7 +354,7 @@ export class FolderMenuBuilder {
         if (willOpen) {
             section.opacity = 0;
             section.visible = true;
-            section.ease({ opacity: 255, duration: SECTION_FADE_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+            liquidEase(section, { opacity: 255, duration: SECTION_FADE_MS });
         }
 
         this.folderMenu.gridMasterBox.visible = !willOpen;
@@ -589,11 +591,10 @@ export class FolderMenuBuilder {
 
             b.remove_transition('translation-x');
             b.remove_transition('translation-y');
-            b.ease({
+            liquidEase(b, {
                 translation_x: tx,
                 translation_y: ty,
-                duration: 190,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC
+                duration: 190
             });
         });
     }
@@ -913,11 +914,10 @@ export class FolderMenuBuilder {
                         b._targetTy = 0;
                         b.remove_transition('translation-x');
                         b.remove_transition('translation-y');
-                        b.ease({
+                        liquidEase(b, {
                             translation_x: 0,
                             translation_y: 0,
-                            duration: 200,
-                            mode: Clutter.AnimationMode.EASE_OUT_CUBIC
+                            duration: 200
                         });
                     });
                 };
@@ -947,13 +947,12 @@ export class FolderMenuBuilder {
                     btn.opacity = 0;
                     btn.set_scale(0.1, 0.1);
                     btn.translation_y = 12;
-                    btn.ease({
+                    liquidEase(btn, {
                         scale_x: 1.0,
                         scale_y: 1.0,
                         translation_y: 0,
                         opacity: 255,
-                        duration: ENTRY_DURATION_MS,
-                        mode: Clutter.AnimationMode.EASE_OUT_CUBIC
+                        duration: ENTRY_DURATION_MS
                     });
                 } else {
                     const oldPos = oldPositions.get(btn._appId);
@@ -962,11 +961,10 @@ export class FolderMenuBuilder {
                         if (Math.abs(oldPos.x - newX) > 1 || Math.abs(oldPos.y - newY) > 1) {
                             btn.translation_x = oldPos.x - newX;
                             btn.translation_y = oldPos.y - newY;
-                            btn.ease({
+                            liquidEase(btn, {
                                 translation_x: 0,
                                 translation_y: 0,
-                                duration: 240,
-                                mode: Clutter.AnimationMode.EASE_OUT_CUBIC
+                                duration: 240
                             });
                         }
                     } else {

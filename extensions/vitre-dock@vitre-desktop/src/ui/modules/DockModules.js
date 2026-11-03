@@ -31,6 +31,7 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { applyIconFilter } from '../DragDrop.js';
 import { buildClockModule } from './ClockModule.js';
 import { buildTrashModule } from './TrashModule.js';
+import { buildStackModule, beginStackRender, endStackRender, stackConfig, isLocalFolder, STACK_ITEM_KEY } from './StackModule.js';
 import { buildAppGridModule } from './AppGridModule.js';
 import ScrollManager from '../../core/ScrollManager.js';
 import { Settings } from '../../core/SettingsManager.js';
@@ -167,7 +168,9 @@ export function buildModules(dockUI, iconSize) {
         }
     };
 
-    const createBtn = (iconOrName, tooltipName, clickAction, folderPath = null) => {
+    // Vitre (B5): opts.noWindows = no running dot from Files windows (stacks), opts.id = a fixed module id, opts.moduleKey = the
+    // Dock item key this button belongs to (DockRenderer matches it exactly)
+    const createBtn = (iconOrName, tooltipName, clickAction, folderPath = null, opts = {}) => {
         const isString = Boolean(iconOrName && iconOrName.charCodeAt && iconOrName.startsWith);
         const isEmoji = isString && iconOrName.startsWith('emoji:');
         const isCustomFile = isString && !isEmoji && (iconOrName.startsWith('/') || iconOrName.startsWith('file://'));
@@ -236,6 +239,7 @@ export function buildModules(dockUI, iconSize) {
         appBox.set_pivot_point(0.5, 0.5);
 
         const getMatchingWindows = () => {
+            if (opts.noWindows) return [];
             let wins = [];
             const nWorkspaces = global.workspace_manager.get_n_workspaces();
 
@@ -301,6 +305,7 @@ export function buildModules(dockUI, iconSize) {
         btn.set_pivot_point(0.5, 0.5);
         btn.set_style('background-color: transparent;');
         btn._appBox = appBox;
+        btn._iconBin = iconBin; // Vitre (B5): the stack and the Trash change their picture
         btn._indicatorActor = dotBox;
 
         const dims = { iconSize, pad, expandedDim, collapsedDim, isVerticalDock: isVertical };
@@ -308,7 +313,8 @@ export function buildModules(dockUI, iconSize) {
 
         attachHoverBackground(dockUI, btn, appBox, isRunning && Settings.showRunningIndicators, indProps, dims);
 
-        const safeId = `dhruva-module-${tooltipName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+        const safeId = opts.id || `dhruva-module-${tooltipName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+        if (opts.moduleKey) btn._moduleKey = opts.moduleKey;
 
         btn._delegate = {
             app: {
@@ -412,8 +418,22 @@ export function buildModules(dockUI, iconSize) {
         }
     }
 
-    const folders = buildSystemFoldersModule(dockUI, createBtn, toggleAppWindow);
+    beginStackRender(dockUI);
+    const stackCfg = stackConfig(dockUI.settings);
+    const makeStack = spec => {
+        const btn = buildStackModule(dockUI, createBtn, { renderScale: actualMaxZoom, ...spec });
+        if (Settings.hoverZoom) applyIconFilter(btn);
+        return btn;
+    };
+    const folders = buildSystemFoldersModule(dockUI, createBtn, toggleAppWindow,
+        stackCfg.customFolders ? makeStack : null);
     systemModules.push(...folders);
+
+    // Vitre (B5): the Downloads stack (or the folder set in stack-folder), just before the Trash
+    if (stackCfg.show && isLocalFolder(stackCfg.folder)) {
+        systemModules.push(makeStack({ key: STACK_ITEM_KEY, path: stackCfg.folder }));
+    }
+    endStackRender(dockUI);
 
     if (Settings.showTrash) {
         systemModules.push(buildTrashModule(dockUI, createBtn, toggleAppWindow));

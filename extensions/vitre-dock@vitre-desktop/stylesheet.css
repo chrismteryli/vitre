@@ -430,3 +430,135 @@
     transition-duration: 120ms;
 }
 .dhruva-overflow-item:hover { background-color: rgba(255, 255, 255, 0.14); }
+/* Vitre (B5): stacks */
+.dhruva-stack-overlay {
+    background-color: transparent;
+}
+
+.dhruva-stack-item,
+.dhruva-stack-item:hover,
+.dhruva-stack-item:focus,
+.dhruva-stack-item:active {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+}
+
+.dhruva-stack-label {
+    color: rgba(28, 28, 32, 0.84);
+    -dhruva-pill-stroke: rgba(255, 255, 255, 0.16);
+}
+
+.dhruva-stack-item:hover .dhruva-stack-label,
+.dhruva-stack-item:focus .dhruva-stack-label {
+    color: -st-accent-color;
+    -dhruva-pill-stroke: rgba(255, 255, 255, 0.28);
+}
+
+.dhruva-stack-label-text {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 11px 5px 11px;
+}
+
+.dhruva-stack-open-circle {
+    background-color: rgba(28, 28, 32, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+}
+
+.dhruva-stack-item-open:hover .dhruva-stack-open-circle,
+.dhruva-stack-item-open:focus .dhruva-stack-open-circle {
+    background-color: -st-accent-color;
+}
+
+.dhruva-stack-open-icon {
+    color: #ffffff;
+}
+
+.dhruva-stack-picture-frame {
+    border: 2px solid rgba(255, 255, 255, 0.92);
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.dhruva-stack-grid-panel {
+    spacing: 10px;
+}
+
+.dhruva-stack-grid-header {
+    spacing: 12px;
+    padding: 0 4px 0 6px;
+}
+
+.dhruva-stack-grid-title {
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.dhruva-stack-grid-open {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    transition-duration: 120ms;
+}
+
+.dhruva-stack-grid-open:hover,
+.dhruva-stack-grid-open:focus {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.dhruva-stack-grid-open:active {
+    background-color: -st-accent-color;
+}
+
+.dhruva-stack-tile {
+    border-radius: 12px;
+    padding: 6px 4px 4px 4px;
+    background-color: transparent;
+    transition-duration: 120ms;
+}
+
+.dhruva-stack-tile:hover,
+.dhruva-stack-tile:focus {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.dhruva-stack-tile:active {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.dhruva-stack-tile-box {
+    spacing: 6px;
+}
+
+.dhruva-stack-tile-label {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 12px;
+    text-align: center;
+    height: 31px;
+}
+
+.dhruva-stack-grid-empty {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 14px;
+    padding: 24px 12px;
+}
+
+.context-menu-section-title {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 12px 2px 12px;
+}
+
+.context-menu-check {
+    color: rgba(255, 255, 255, 0.9);
+}

@@ -21,9 +21,6 @@ import { isActorAlive } from '../../core/Utils.js';
 import { Settings } from '../../core/SettingsManager.js';
 
 
-export function easeOutCirc(t) {
-    return Math.sqrt(1 - Math.pow(t - 1, 2));
-}
 
 export function getDockButtons(dockActor) {
     if (!isActorAlive(dockActor)) return [];

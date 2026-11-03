@@ -25,6 +25,7 @@ import { MusicPill } from '../modules/MusicPill.js';
 import { updateLayout } from './DockLayoutEngine.js';
 import { Settings } from '../../core/SettingsManager.js';
 import { buildModules } from '../modules/DockModules.js';
+import { stackConfig, stackReplacesDownloads, isLocalFolder, STACK_ITEM_KEY } from '../modules/StackModule.js';
 import WorkspaceFilter from '../../core/WorkspaceFilter.js';
 import { applyDynamicStyles } from './DockThemeResolver.js';
 import { setupMagnification } from '../magnifier/Magnifier.js';
@@ -53,7 +54,6 @@ const SYSTEM_MODULES = [
     ['pictures', 'folder-pictures'],
     ['videos', 'folder-videos'],
     ['music', 'folder-music'],
-    ['trash', 'user-trash'],
 ];
 
 const EDGE_PIVOTS = {
@@ -321,8 +321,10 @@ export function _computeDesiredState(dockUI) {
         endModuleKeys.push({ key: 'dhruva-desktop-module', type: 'desktop', entity: null });
     }
 
+    const stackOnDownloads = stackReplacesDownloads(dockUI.settings);
     for (let i = 0; i < SYSTEM_MODULES.length; i++) {
         const [modName, iconName] = SYSTEM_MODULES[i];
+        if (modName === 'downloads' && stackOnDownloads) continue;
         if (dockUI.settings.get_boolean(`show-${modName}`)) {
             endModuleKeys.push({ key: `dhruva-sys-${modName}`, type: 'module', entity: iconName });
         }
@@ -353,6 +355,15 @@ export function _computeDesiredState(dockUI) {
             entity: 'custom',
             folderData: f,
         });
+    }
+
+    // Vitre (B5): the stack, then the Trash at the end (after the drives and the folders the user added)
+    const stackCfg = stackConfig(dockUI.settings);
+    if (stackCfg.show && isLocalFolder(stackCfg.folder)) {
+        endModuleKeys.push({ key: STACK_ITEM_KEY, type: 'module', entity: 'stack' });
+    }
+    if (Settings.showTrash) {
+        endModuleKeys.push({ key: 'dhruva-sys-trash', type: 'module', entity: 'user-trash' });
     }
 
     if (showGridBtn && gridPos === 'END' && !extractGrid) {
@@ -668,6 +679,14 @@ function _modButtonName(modBtn) {
 }
 
 function _resolveModuleActor(item, sysModulesMap) {
+    // Vitre (B5): a button made for this very item (stacks, Trash) first; the guesses below matched the Trash by luck
+    for (const [modId, modBtn] of sysModulesMap.entries()) {
+        if (modBtn._moduleKey && modBtn._moduleKey === item.key) {
+            sysModulesMap.delete(modId);
+            return modBtn;
+        }
+    }
+
     if (item.entity === 'custom' && item.folderData) {
         const targetName = item.folderData.name || '';
         const match = item.key ? item.key.match(/custom-(\d+)/) : null;

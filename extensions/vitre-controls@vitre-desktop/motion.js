@@ -1,30 +1,18 @@
 /* Control Center open/close motion.
  *
- * drip-style `liquid` (default, plan A17): the pill drips into the modules (liquidDrip.js / dripMotion.js,
- * Vitre's own design, not measured from the reference); `classic`: the measured motion below, unchanged.
- *
- * reference motion, measured from the reference's frame-stepped recordings (plan A9 section 1.3):
+ * drip-style `liquid` (default): the button's glass pours into the modules (liquidDrip.js / dripMotion.js, liquid.js
+ * springs); with another top-bar pop-out open the glass flows over sideways. `classic`: the measured choreography below,
+ * its motion on liquid.js springs (liquid v3):
  *   open                        : instant, whole grid in one frame, no slide/scale/fade
- *   close (click away/Esc/icon) : opacity-only fade, 50 ms, linear, no movement
+ *   close (click away/Esc/icon) : opacity only, on the fade role's exit spring (reduced motion: the 160 ms cross-fade)
  *   close (another menu opens)  : instant, in the same frame as the other menu starts
- * GNOME's ease() multiplies durations by St's slow-down factor (Just Perfection sets
- * 0.8); the reference's timings are not scaled, so the duration is divided by it.
  */
-import Clutter from 'gi://Clutter';
-import St from 'gi://St';
 import {PopupAnimation} from 'resource:///org/gnome/shell/ui/boxpointer.js';
 
 import {motionAllowed} from './liquidDrip.js';
+import {role} from './liquid.js';
+import {animate, stopAnimate, motionMode} from './liquidClock.js';
 import {DRIP} from './dripMotion.js';
-
-export const CLOSE_FADE_MS = 50;
-
-export function easeDuration(ms) {
-    const settings = St.Settings.get();
-    if (!settings.enable_animations)
-        return 0;
-    return ms / Math.max(0.05, settings.slow_down_factor);
-}
 
 export function installMenuMotion(pointer, journal, isActive, drip = null) {
     if (!pointer._muteInput || !pointer._muteKeys || typeof pointer.remove_transition !== 'function')
@@ -35,6 +23,7 @@ export function installMenuMotion(pointer, journal, isActive, drip = null) {
     let disposed = false;
     const cancel = () => {
         generation++;
+        stopAnimate(pointer);
         pointer.remove_all_transitions();
         return generation;
     };
@@ -58,6 +47,9 @@ export function installMenuMotion(pointer, journal, isActive, drip = null) {
         if (liquid) {
             // liquid drip: the surface shows nothing until the drip hands each piece over; input is muted meanwhile
             this._muteInput.enabled = true;
+            drip.controller.callbacks.onInteractive = () => {
+                this._muteInput.enabled = false;
+            };
             drip.controller.callbacks.onOpened = () => {
                 this._muteInput.enabled = false;
             };
@@ -78,7 +70,7 @@ export function installMenuMotion(pointer, journal, isActive, drip = null) {
         const current = cancel();
         if (drip && drip.controller.phase !== 'closed') {
             if (animate !== PopupAnimation.NONE && drip.style.liquid && motionAllowed()) {
-                // liquid: retract into the pill (0.7x when another top-bar pop-out is taking over, i.e. FADE only)
+                // liquid: back into the pill; FADE only = another top-bar pop-out takes this glass body sideways
                 const switching = !(animate & PopupAnimation.SLIDE);
                 this._muteInput.enabled = true;
                 this._muteKeys.enabled = true;
@@ -94,16 +86,14 @@ export function installMenuMotion(pointer, journal, isActive, drip = null) {
             drip.controller.reset();
         }
         const userClose = Boolean(animate & PopupAnimation.SLIDE); // FULL; FADE alone = another menu took over
-        const duration = easeDuration(CLOSE_FADE_MS);
-        if (!userClose || duration <= 0 || St.Settings.get().reducedMotion === St.ReducedMotion.REDUCE) {
+        if (!userClose || motionMode() === 'off')
             return original.call(this, PopupAnimation.NONE, onComplete);
-        }
         this._muteInput.enabled = true;
         this._muteKeys.enabled = true;
-        this.ease({
-            opacity: 0, duration, mode: Clutter.AnimationMode.LINEAR,
-            onComplete: () => {
-                if (current !== generation || disposed)
+        animate(this, {opacity: 0}, {
+            fade: role('fade', {exit: true}),
+            onDone: finished => {
+                if (!finished || current !== generation || disposed)
                     return;
                 original.call(this, PopupAnimation.NONE, onComplete);
             },
@@ -111,6 +101,7 @@ export function installMenuMotion(pointer, journal, isActive, drip = null) {
     });
     journal.add(() => {
         disposed = true;
+        stopAnimate(pointer);
         drip?.controller.reset();
         pointer.remove_all_transitions();
         for (const [key, value] of Object.entries(saved))

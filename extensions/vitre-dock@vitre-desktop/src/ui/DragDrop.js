@@ -25,11 +25,14 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { isActorAlive } from '../core/Utils.js';
 import { Settings } from '../core/SettingsManager.js';
 import { playTrashEffect } from './effects/TrashEffect.js';
+import { isStackFileSource, openEntryWith } from './stacks/StackItems.js';
 import { resetMagnification } from './magnifier/MagnifierReset.js';
 import { applyRealtimeFrame } from './magnifier/MagnifierFrameEngine.js';
 import { getDockButtons, getFixedSlots } from './magnifier/MagnifierMath.js';
 import { stopDragLoop, startDragLoop } from './magnifier/MagnifierDragLoop.js';
 import { ensureExternalDrop, dockOrderKeys, isSlotButton, saveDockLayout, sourceDelegate } from './ExternalDrop.js';
+import {ease as liquidEase} from '../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
+import { swell, swallow, glideHome, rectOf } from './DropMotion.js';    // Vitre lab 2: the target swells, swallows; a drop glides home
 
 
 const DRAG_SWAP_THROTTLE_MS = 60;
@@ -87,7 +90,7 @@ export function moveWithSlide(box, moved, index, isVertical) {
 
         c.remove_transition(transitionName);
         c[prop] += delta;
-        c.ease({ [prop]: 0, duration: REORDER_SLIDE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC });
+        liquidEase(c, { [prop]: 0, duration: REORDER_SLIDE_MS });
     });
 }
 
@@ -123,6 +126,7 @@ function _setMergeHint(btn, dockUI) {
         if (btn.set_style) {
             btn.set_style('background-color: rgba(255, 255, 255, 0.16); border-radius: 10px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.34); transition-duration: 200ms;');
         }
+        swell(btn, true);
     }
 }
 
@@ -136,6 +140,7 @@ function _clearMergeHint(btn, dockUI) {
         btn._mergeHintStyle = null;
         btn._wantsToMerge = false;
         btn._reorderWaitTime = null;
+        swell(btn, false);
     }
 
     const mainActor = dockUI && dockUI.actor;
@@ -186,9 +191,13 @@ export function setupDragAndDrop(btn, app, dockUI) {
         },
         getDragActorSource: () => btn,
 
-        _handleMergeOrDrop: function (source) {
+        _handleMergeOrDrop: function (source, dragActor = null) {
             const sourceBtn = _sourceButton(source);
             if (btn._wantsToMerge && sourceBtn) {
+                // the dropped icon is swallowed by the target, which gives once it has (it may be a new folder by then)
+                const from = rectOf(dragActor);
+                const index = dockUI.boxActor.get_children().indexOf(btn);
+                const findTarget = () => (isActorAlive(btn) ? btn : dockUI.boxActor?.get_children()[index] ?? null);
                 const isDraggedFolder = sourceBtn._isFolder || sourceDelegate(source).isFolder;
                 const draggedId = (isDraggedFolder && sourceBtn._folderData) ? sourceBtn._folderData.id : _sourceId(source);
 
@@ -207,6 +216,7 @@ export function setupDragAndDrop(btn, app, dockUI) {
 
                 _clearMergeHint(btn, dockUI);
                 sourceBtn._wasMerged = true;
+                swallow(sourceBtn, from, btn, findTarget);
                 dockUI.queueRender('incremental');
                 return true;
             }
@@ -214,12 +224,17 @@ export function setupDragAndDrop(btn, app, dockUI) {
             return true;
         },
 
-        acceptDrop: function (source) {
+        acceptDrop: function (source, dragActor) {
+            // Vitre (B5): a file dragged out of a stack opens in this app
+            if (isStackFileSource(source)) return openEntryWith(app, source.entry);
             if (externalDrop.isExternal(source)) return false;
-            return this._handleMergeOrDrop(source);
+            const sourceBtn = _sourceButton(source);
+            if (sourceBtn) sourceBtn._dropFrom = rectOf(dragActor);
+            return this._handleMergeOrDrop(source, dragActor);
         },
 
         handleDragOver: (source) => {
+            if (isStackFileSource(source)) return app && app.get_app_info && app.get_app_info() ? DND.DragMotionResult.COPY_DROP : DND.DragMotionResult.NO_DROP;
             if (externalDrop.isExternal(source)) return DND.DragMotionResult.CONTINUE;
 
             const mainActor = dockUI.actor;
@@ -376,6 +391,7 @@ export function setupDragAndDrop(btn, app, dockUI) {
 
         if (btn._wasMerged) {
             btn._wasMerged = false;
+            btn._dropFrom = null;
             btn.opacity = 255;
             resetMagnification(mainActor, 180, false);
             return;
@@ -411,6 +427,15 @@ export function setupDragAndDrop(btn, app, dockUI) {
         btn.rotation_angle_y = 0;
         btn.rotation_angle_x = 0;
         btn._wasDragged = false;
+        // let go in the Dock: the icon glides from where it was let go into its slot (the button, looked up again each
+        // frame, shows when it has landed)
+        const dropFrom = btn._dropFrom;
+        btn._dropFrom = null;
+        if (isInsideMain && dropFrom && entityKey) {
+            const keyOf = b => (b._isFolder ? `folder:${b._folderData?.id}` : b._delegate?.app?.get_id?.());
+            glideHome(btn, dropFrom, () => (isActorAlive(btn) && btn.get_parent() ? btn
+                : dockUI.boxActor?.get_children().find(b => keyOf(b) === entityKey) ?? null));
+        }
 
         if (isInsideMain && entityId && !btn._isFolder && !dockUI.appManager.hasApp(app)) {
             dockUI.appManager.addApp(app);

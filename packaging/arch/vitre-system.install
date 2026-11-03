@@ -1,0 +1,55 @@
+# pacman install script of vitre-system (the Vitre boot splash)
+#
+# post_install makes Vitre the selected Plymouth theme and remembers the previous one; pre_remove puts the previous one back. The
+# splash lives in the initramfs, so the initramfs is rebuilt with mkinitcpio, but only when the plymouth hook is in HOOKS (without the
+# hook the initramfs has no splash and a rebuild would change nothing). Nothing here can fail the transaction.
+
+_vitre_has_hook() {
+  grep -qsE '^[[:space:]]*HOOKS=.*plymouth' /etc/mkinitcpio.conf /etc/mkinitcpio.conf.d/*.conf 2>/dev/null
+}
+
+_vitre_rebuild() {
+  if _vitre_has_hook && command -v mkinitcpio >/dev/null 2>&1; then
+    mkinitcpio -P || echo "vitre-system: mkinitcpio failed; rebuild the initramfs by hand to see the splash" >&2
+  else
+    echo "vitre-system: the plymouth hook is not in HOOKS (/etc/mkinitcpio.conf), so the splash will not show." >&2
+    echo "vitre-system: add plymouth after base and udev, then run: mkinitcpio -P" >&2
+  fi
+}
+
+post_install() {
+  command -v plymouth-set-default-theme >/dev/null 2>&1 || return 0
+  mkdir -p /var/lib/vitre
+  plymouth-set-default-theme 2>/dev/null > /var/lib/vitre/plymouth-previous-theme || :
+  if plymouth-set-default-theme vitre; then
+    _vitre_rebuild
+  else
+    echo "vitre-system: could not select the Vitre splash; run: plymouth-set-default-theme vitre" >&2
+  fi
+}
+
+post_upgrade() {
+  command -v plymouth-set-default-theme >/dev/null 2>&1 || return 0
+  # the splash files changed: rebuild while Vitre is still the selected splash
+  if [ "$(plymouth-set-default-theme 2>/dev/null || :)" = "vitre" ]; then
+    _vitre_rebuild
+  fi
+}
+
+pre_remove() {
+  command -v plymouth-set-default-theme >/dev/null 2>&1 || return 0
+  local prev="" current
+  [ -f /var/lib/vitre/plymouth-previous-theme ] && prev="$(sed -n 1p /var/lib/vitre/plymouth-previous-theme)"
+  current="$(plymouth-set-default-theme 2>/dev/null || :)"
+  # only when Vitre is still the selected splash: a choice the administrator made since then is left alone
+  if [ "$current" = "vitre" ]; then
+    if [ -n "$prev" ] && [ "$prev" != "vitre" ] && [ -d "/usr/share/plymouth/themes/$prev" ]; then
+      plymouth-set-default-theme "$prev" || :
+    else
+      plymouth-set-default-theme --reset || :
+    fi
+    _vitre_rebuild
+  fi
+  rm -f /var/lib/vitre/plymouth-previous-theme
+  rmdir /var/lib/vitre 2>/dev/null || :
+}

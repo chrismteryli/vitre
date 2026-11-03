@@ -1,0 +1,8 @@
+{
+    "parentMode": "user",
+    "stylesheetName": "Vitre/gnome-shell.css",
+    "themeResourceName": "theme/Vitre/gnome-shell-theme.gresource",
+    "iconsResourceName": "theme/Vitre/gnome-shell-icons.gresource",
+    "colorScheme": "prefer-dark",
+    "enabledExtensions": "@ENABLED_EXTENSIONS@"
+}

@@ -4,7 +4,7 @@
  *
  * Every PanelMenu.Button in the panel whose menu is a PopupMenu gets its BoxPointer open / close handed to a
  * drip controller (menuDrip.js). New buttons are picked up when they are added to the bar; disabling puts every
- * method back exactly as it was. drip-style `classic` (or animations off / reduced motion): nothing is changed,
+ * method back exactly as it was. Reduced motion: a 160 ms cross-fade in place. drip-style `classic` (or animations off): nothing is changed,
  * GNOME's and Liquid Glass's own menu animation runs as before.
  */
 import GLib from 'gi://GLib';
@@ -12,6 +12,7 @@ import GLib from 'gi://GLib';
 import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 
 import {DripStyle} from './dripStyle.js';
 import {ManagedMenu} from './menuDrip.js';
@@ -48,6 +49,33 @@ export default class LiquidMenus extends Extension {
         // view and in search, extensions' own menus) is taken over the first time it opens: the same drip, out of its source
         this._injections = new InjectionManager();
         const self = this;
+        // Top-bar menus stay inside the screen edges, not the work area: the Stage strip reserves the left of the work
+        // area, and GNOME would push a menu from the left of the top bar out past the strip (2026-10-26).
+        this._injections.overrideMethod(BoxPointer.BoxPointer.prototype, '_reposition', original => function (...args) {
+            const src = this._sourceActor;
+            if (!src || !Main.panel?.contains?.(src))
+                return original.apply(this, args);
+            const lm = Main.layoutManager;
+            const own = Object.prototype.hasOwnProperty.call(lm, 'getWorkAreaForMonitor');
+            const prev = lm.getWorkAreaForMonitor;
+            lm.getWorkAreaForMonitor = function (i) {
+                const wa = prev.call(this, i);
+                const m = this.monitors[i];
+                if (!wa || !m)
+                    return wa;
+                wa.x = m.x;
+                wa.width = m.width;
+                return wa;
+            };
+            try {
+                return original.apply(this, args);
+            } finally {
+                if (own)
+                    lm.getWorkAreaForMonitor = prev;
+                else
+                    delete lm.getWorkAreaForMonitor;
+            }
+        });
         this._injections.overrideMethod(PopupMenu.PopupMenu.prototype, 'open', original => function (...args) {
             try {
                 self._adopt(this, args[0]);

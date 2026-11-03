@@ -2,11 +2,14 @@
 //
 // Three parts:
 //  1. the finger -> overview-progress map (dead zone, then linear), per gesture anchor;
-//  2. the release: a critically damped spring that starts at the progress the finger left and the speed it had, the same
-//     family as gesture-history v2 (A5): e(t) = (e0 + (v0 + w e0) t) exp(-w t); the estimator and the spring below are
-//     copied from vitre-gesture-history@vitre-desktop/releaseMotion.js (the constants come from the caller's table);
-//  3. the followers of the depth model (plans/a20-concepts/depth-src/model.cjs): a lagged copy of the progress for the
-//     wallpaper, the second-order pile follower, the window lift, the landing pop, the shadow rebound.
+//  2. the release: the liquid engine's track spring (liquid.js, feel A Viscous) that starts at the progress the finger
+//     left and the speed it had, and rests when the remaining step is under a quarter pixel (the estimator is the same
+//     as vitre-gesture-history's releaseMotion.js);
+//  3. the followers of the depth model are engine springs too (see DepthEngine.tick): the wallpaper on the fade role, the
+//     lift as a trailing copy of the release (track x viscosity), the piles on the bead role, the landing pop and the
+//     shadow rebound as bead kicks sized by the release speed.
+
+import {Plan, Spring, role, epsFor} from './liquid.js';
 
 export const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 export const smooth = (a, b, x) => {
@@ -14,6 +17,7 @@ export const smooth = (a, b, x) => {
     return u * u * (3 - 2 * u);
 };
 export const lerp = (a, b, t) => a + (b - a) * t;
+
 
 // -- 1. finger -> progress ---------------------------------------------------------------------------------------------
 
@@ -62,9 +66,6 @@ export function slopeOf(remap, f) {
 export const WINDOW_MS = 50;
 export const SPEED_WINDOW_MS = 40;
 export const MIN_STALE_MS = 16;
-export const TOL_PX = 0.5;
-export const MIN_T_MS = 40;
-export const MAX_T_MS = 1500;
 
 function median(values) {
     const a = values.slice().sort((x, y) => x - y);
@@ -133,88 +134,41 @@ export function estimateReleaseVelocity(data, releaseTime, gnomeVelocity = 0) {
     return end;
 }
 
-export function springOmega(tune, e0, v0, slowDown) {
-    const slow = Number.isFinite(slowDown) && slowDown > 0 ? slowDown : 1;
-    return Math.max(tune.omegaRef, tune.cStiff * Math.abs(v0) / Math.abs(e0)) / slow;
-}
-
-export function springError(t, e0, v0, w) {
-    return (e0 + (v0 + w * e0) * t) * Math.exp(-w * t);
-}
-
-/** normalized progress 0..1 (value = start + (target - start) * progress); exactly 1 for t >= T */
-export function springProgress(t, e0, v0, w, T) {
-    if (!(t > 0))
-        return 0;
-    if (t >= T)
-        return 1;
-    return 1 - springError(t, e0, v0, w) / e0;
-}
-
-export function springDuration(e0, v0, w, basePx) {
-    const tol = TOL_PX / basePx;
-    let last = 0;
-    for (let t = 0; t <= 4000; t += 1) {
-        if (Math.abs(springError(t, e0, v0, w)) > tol)
-            last = t;
-    }
-    return Math.min(MAX_T_MS, Math.max(MIN_T_MS, Math.ceil(last + 1)));
-}
-
-export function planRelease(tune, start, target, v0, slowDown, basePx) {
+/**
+ * The release: the track spring from `start` (moving at v0, progress per ms) to `target`. Times in motion ms; `slowDown` > 1
+ * (rig films) stretches them, a slow-down below 1 (Just Perfection's speed-up) does not touch the spring (its role is its feel).
+ * `roleName`: 'track' for a gesture's release, 'glide' for the overview opened or closed by a key or a click (Vitre Motion
+ * Lab 2: the windows on glide). `stopAt`: the value is never carried past the target on the way up (the overview state
+ * past the window picker is the app grid; on the way down the adjustment itself stops at 0).
+ * Returns {e0, v0, T, start, target, at(t), progress(t)} (progress: 0..1 of start -> target, exactly 1 for t >= T) or null.
+ */
+export function planRelease(start, target, v0, slowDown, basePx, roleName = 'track', stopAt = false) {
     const e0 = start - target;
     if (![e0, v0, basePx].every(Number.isFinite) || Math.abs(e0) < 1e-6 || !(basePx > 0))
         return null;
-    const w = springOmega(tune, e0, v0, slowDown);
-    const T = springDuration(e0, v0, w, basePx);
-    return {e0, v0, w, T, start, target};
+    const slow = Number.isFinite(slowDown) && slowDown > 1 ? slowDown : 1;
+    const plan = new Plan({from: start, to: target, v0: v0 * 1000, p: role(roleName), eps: epsFor(basePx)});
+    const T = Math.max(1, Math.ceil(plan.T * 1000 * slow));
+    const up = target > start;
+    const at = t => {
+        if (t >= T)
+            return target;
+        const x = plan.at(t / slow / 1000);
+        return stopAt && up ? Math.min(target, x) : x;
+    };
+    return {e0, v0, T, start, target, role: roleName, at, progress: t => (at(t) - start) / (target - start)};
 }
+
+// the peak of a bead spring kicked from rest with unit speed (a kick of 1 / BEAD_PEAK peaks at 1)
+function kickPeak(p) {
+    const s = new Spring(0, p, 1e-9);
+    s.kick(1);
+    let m = 0;
+    for (let i = 0; i < 2000; i++)
+        m = Math.max(m, s.step(1 / 1000));
+    return m;
+}
+export const BEAD_PEAK = kickPeak(role('bead'));
+export const BEAD_TRAIL_PEAK = kickPeak(role('bead', {trail: true}));
 
 // -- 3. the followers of the depth model -----------------------------------------------------------------------------------
-
-/** value at time t - lagMs from a short history of {t, p} (ms); clamps at the oldest sample */
-export function lagged(history, t, lagMs) {
-    const want = t - lagMs;
-    if (history.length === 0)
-        return 0;
-    if (want <= history[0].t)
-        return history[0].p;
-    for (let i = history.length - 1; i > 0; i--) {
-        const a = history[i - 1], b = history[i];
-        if (want >= a.t) {
-            const u = b.t > a.t ? (want - a.t) / (b.t - a.t) : 1;
-            return a.p + (b.p - a.p) * clamp(u);
-        }
-    }
-    return history[history.length - 1].p;
-}
-
-/** single positive bump (t/tau) e^(1 - t/tau): 0 at 0, 1 at t = tau, monotone decay afterwards (never negative) */
-export function bump(t, delay, tau) {
-    const x = (t - delay) / tau;
-    if (x <= 0)
-        return 0;
-    return x * Math.exp(1 - x);
-}
-
-/** the concept's shadow-depth rebound: 0 until `a` ms after the release, one smooth lobe, 0 again at `b` ms */
-export function shadowRebound(msSinceRelease, a = 100, b = 620) {
-    if (msSinceRelease <= a || msSinceRelease >= b)
-        return 0;
-    const x = (msSinceRelease - a) / (b - a);
-    return (1 - Math.cos(2 * Math.PI * x)) / 2;
-}
-
-/** second-order follower g'' = wn^2 (target - g) - 2 zeta wn g' (state in/out), semi-implicit Euler with small steps */
-export function stepFollower(s, target, dtMs, wn, zeta) {
-    let remain = Math.min(250, Math.max(0, dtMs)) / 1000;      // never more than 500 steps, whatever the caller passes
-    const h = 0.0005;
-    while (remain > 1e-9) {
-        const dt = Math.min(h, remain);
-        const a = wn * wn * (target - s.g) - 2 * zeta * wn * s.v;
-        s.v += a * dt;
-        s.g += s.v * dt;
-        remain -= dt;
-    }
-    return s;
-}

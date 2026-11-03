@@ -8,7 +8,8 @@
  * same spot (the app has already destroyed the menu, so there is no content to fade).
  *
  * One controller serves every app menu (there is one open at a time; a new one ends the old one's drip at once).
- * drip-style `classic`, animations off or reduced motion: nothing happens, the menus appear as GNOME shows them.
+ * drip-style `classic` or animations off: nothing happens, the menus appear as GNOME shows them. Reduced motion: the
+ * menu cross-fades in place over 160 ms (the pour's reduced mode).
  */
 import Meta from 'gi://Meta';
 

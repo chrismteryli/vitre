@@ -85,9 +85,14 @@ class NowPlayingTile extends St.BoxLayout {
         this._source = new MprisSource();
         this._player = null;
 
-        // blank rounded square until a player supplies cover art
+        // the art well: cover art when a player supplies it; idle, a glass disc with a note (polish-tokens)
+        this._artIcon = new St.Icon({
+            style_class: 'cc-np-art-icon', icon_name: 'audio-x-generic-symbolic',
+            x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER, x_expand: true, y_expand: true,
+        });
         this._art = new St.Bin({
             style_class: 'cc-np-art', x_align: Clutter.ActorAlign.START, y_align: Clutter.ActorAlign.START,
+            child: this._artIcon,
         });
         this.add_child(this._art);
         this.add_child(new St.Widget({y_expand: true}));
@@ -157,11 +162,13 @@ class NowPlayingTile extends St.BoxLayout {
         this._artUrl = url;
         if (url?.startsWith('file://')) {
             // St clips a CSS background image to the border radius
-            this._art.set_style(`background-image: url("${url}"); background-size: 44px 44px;`);
+            this._art.set_style(`background-image: url("${url}"); background-size: 48px 48px;`);
             this._art.add_style_class_name('has-art');
+            this._artIcon.visible = false;
         } else {
             this._art.set_style('');
             this._art.remove_style_class_name('has-art');
+            this._artIcon.visible = true;
         }
     }
 

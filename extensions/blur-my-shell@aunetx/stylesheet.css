@@ -83,7 +83,16 @@
 .contrasted-panel .panel-button:hover,
 .contrasted-panel .panel-button:hover .clock {
     color: #ffffff;
-    background-color: rgba(0, 0, 0, 0.8);
+    background-color: rgba(42, 42, 42, 0.85);
+}
+
+.contrasted-panel .panel-button:active,
+.contrasted-panel .panel-button:checked,
+.contrasted-panel .panel-button:focus,
+.contrasted-panel .panel-button:active .clock,
+.contrasted-panel .panel-button:checked .clock {
+    color: #ffffff;
+    background-color: rgba(64, 64, 64, 0.9);
 }
 
 .contrasted-panel .clock-display {
@@ -240,7 +249,12 @@ StBoxLayout > StWidget > #dash.transparent-dash > .dash-background,
     background-color: transparent !important;
 }
 
-/* Hover on icon box */
+/* Hover on icon box, and the focused app as Dash to Dock highlights it */
+.transparent-dash .overview-tile.focused .overview-icon,
+.transparent-dash .app-well-app.focused .overview-icon,
+#dash.transparent-dash .overview-tile.focused .overview-icon,
+#dash.transparent-dash .app-well-app.focused .overview-icon,
+.multimonitor-dock.transparent-dash .overview-tile.focused .overview-icon,
 .transparent-dash .overview-tile:hover .overview-icon,
 .transparent-dash .overview-tile:focus .overview-icon,
 .transparent-dash .app-well-app:hover .overview-icon,
@@ -454,7 +468,12 @@ StBoxLayout > StWidget > #dash.light-dash > .dash-background,
     background-color: transparent !important;
 }
 
-/* Hover on icon box */
+/* Hover on icon box, and the focused app as Dash to Dock highlights it */
+.light-dash .overview-tile.focused .overview-icon,
+.light-dash .app-well-app.focused .overview-icon,
+#dash.light-dash .overview-tile.focused .overview-icon,
+#dash.light-dash .app-well-app.focused .overview-icon,
+.multimonitor-dock.light-dash .overview-tile.focused .overview-icon,
 .light-dash .dash-item-container .overview-tile:hover .overview-icon,
 .light-dash .dash-item-container .overview-tile:focus .overview-icon,
 .light-dash .dash-item-container .app-well-app:hover .overview-icon,
@@ -668,7 +687,12 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
     background-color: transparent !important;
 }
 
-/* Hover on icon box */
+/* Hover on icon box, and the focused app as Dash to Dock highlights it */
+.dark-dash .overview-tile.focused .overview-icon,
+.dark-dash .app-well-app.focused .overview-icon,
+#dash.dark-dash .overview-tile.focused .overview-icon,
+#dash.dark-dash .app-well-app.focused .overview-icon,
+.multimonitor-dock.dark-dash .overview-tile.focused .overview-icon,
 .dark-dash .dash-item-container .overview-tile:hover .overview-icon,
 .dark-dash .dash-item-container .overview-tile:focus .overview-icon,
 .dark-dash .dash-item-container .app-well-app:hover .overview-icon,
@@ -1020,8 +1044,12 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 
 .bms-popup-background-light .switcher-list .item-box:focus,
 .bms-popup-background-light .switcher-list .item-box:selected,
+.bms-popup-background-light .switcher-list .item-box:highlighted,
+.bms-popup-background-light .switcher-list .item-box:checked,
 .bms-popup-surface-light .switcher-list .item-box:focus,
-.bms-popup-surface-light .switcher-list .item-box:selected {
+.bms-popup-surface-light .switcher-list .item-box:selected,
+.bms-popup-surface-light .switcher-list .item-box:highlighted,
+.bms-popup-surface-light .switcher-list .item-box:checked {
   background-color: rgba(0, 0, 0, 0.12) !important;
 }
 
@@ -1910,24 +1938,47 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
     background-color: st-mix(-st-accent-fg-color, -st-accent-color, 30%);
 }
 
-.bms-popup-background-transparent StEntry {
+.bms-popup-background-transparent .popup-menu-content StEntry,
+.bms-popup-background-transparent .quick-settings StEntry,
+.bms-popup-background-transparent .quick-toggle-menu StEntry,
+.bms-popup-background-transparent .message StEntry,
+.bms-popup-background-transparent .modal-dialog StEntry,
+.bms-popup-background-transparent .run-dialog StEntry,
+.bms-popup-background-transparent .clipboard-dialog StEntry {
     background-color: rgba(255, 255, 255, 0.08) !important;
     color: rgba(255, 255, 255, 0.7) !important;
 }
 
-.bms-popup-background-transparent StEntry:focus {
+.bms-popup-background-transparent .popup-menu-content StEntry:focus,
+.bms-popup-background-transparent .quick-settings StEntry:focus,
+.bms-popup-background-transparent .quick-toggle-menu StEntry:focus,
+.bms-popup-background-transparent .message StEntry:focus,
+.bms-popup-background-transparent .modal-dialog StEntry:focus,
+.bms-popup-background-transparent .run-dialog StEntry:focus,
+.bms-popup-background-transparent .clipboard-dialog StEntry:focus {
     color: rgba(255, 255, 255, 0.9) !important;
     background-color: rgba(255, 255, 255, 0.1) !important;
-    box-shadow: inset 0 0 0 2px rgba(53, 132, 228, 0.5) !important;
-    box-shadow: inset 0 0 0 2px st-transparentize(st-mix(-st-accent-color, rgba(255, 255, 255, 0.9), 60%), 0.2) !important;
+    box-shadow: none !important;
 }
 
-.bms-popup-background-transparent StEntry:insensitive {
+.bms-popup-background-transparent .popup-menu-content StEntry:insensitive,
+.bms-popup-background-transparent .quick-settings StEntry:insensitive,
+.bms-popup-background-transparent .quick-toggle-menu StEntry:insensitive,
+.bms-popup-background-transparent .message StEntry:insensitive,
+.bms-popup-background-transparent .modal-dialog StEntry:insensitive,
+.bms-popup-background-transparent .run-dialog StEntry:insensitive,
+.bms-popup-background-transparent .clipboard-dialog StEntry:insensitive {
     background-color: rgba(255, 255, 255, 0.05) !important;
     color: rgba(255, 255, 255, 0.5) !important;
 }
 
-.bms-popup-background-transparent StEntry StLabel.hint-text {
+.bms-popup-background-transparent .popup-menu-content StEntry StLabel.hint-text,
+.bms-popup-background-transparent .quick-settings StEntry StLabel.hint-text,
+.bms-popup-background-transparent .quick-toggle-menu StEntry StLabel.hint-text,
+.bms-popup-background-transparent .message StEntry StLabel.hint-text,
+.bms-popup-background-transparent .modal-dialog StEntry StLabel.hint-text,
+.bms-popup-background-transparent .run-dialog StEntry StLabel.hint-text,
+.bms-popup-background-transparent .clipboard-dialog StEntry StLabel.hint-text {
     color: rgba(255, 255, 255, 0.5) !important;
 }
 .bms-popup-background-light .message:second-in-stack,
@@ -2329,25 +2380,84 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
     background-color: st-mix(-st-accent-fg-color, -st-accent-color, 20%);
 }
 
-.bms-popup-background-light StEntry {
+.bms-popup-background-light .popup-menu-content StEntry,
+.bms-popup-background-light .quick-settings StEntry,
+.bms-popup-background-light .quick-toggle-menu StEntry,
+.bms-popup-background-light .message StEntry,
+.bms-popup-background-light .modal-dialog StEntry,
+.bms-popup-background-light .run-dialog StEntry,
+.bms-popup-background-light .clipboard-dialog StEntry {
     color: rgba(0, 0, 0, 0.85) !important;
     background-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-.bms-popup-background-light StEntry:focus {
+.bms-popup-background-light .popup-menu-content StEntry:focus,
+.bms-popup-background-light .quick-settings StEntry:focus,
+.bms-popup-background-light .quick-toggle-menu StEntry:focus,
+.bms-popup-background-light .message StEntry:focus,
+.bms-popup-background-light .modal-dialog StEntry:focus,
+.bms-popup-background-light .run-dialog StEntry:focus,
+.bms-popup-background-light .clipboard-dialog StEntry:focus {
     color: rgba(0, 0, 0, 0.85) !important;
     background-color: rgba(0, 0, 0, 0.1) !important;
-    box-shadow: inset 0 0 0 2px rgba(28, 113, 216, 0.5) !important;
-    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, 0.2) !important;
 }
 
-.bms-popup-background-light StEntry:insensitive {
+.bms-popup-background-light .popup-menu-content StEntry:insensitive,
+.bms-popup-background-light .quick-settings StEntry:insensitive,
+.bms-popup-background-light .quick-toggle-menu StEntry:insensitive,
+.bms-popup-background-light .message StEntry:insensitive,
+.bms-popup-background-light .modal-dialog StEntry:insensitive,
+.bms-popup-background-light .run-dialog StEntry:insensitive,
+.bms-popup-background-light .clipboard-dialog StEntry:insensitive {
     color: rgba(0, 0, 0, 0.4) !important;
     background-color: rgba(0, 0, 0, 0.05) !important;
 }
 
-.bms-popup-background-light StEntry StLabel.hint-text {
+.bms-popup-background-light .popup-menu-content StEntry StLabel.hint-text,
+.bms-popup-background-light .quick-settings StEntry StLabel.hint-text,
+.bms-popup-background-light .quick-toggle-menu StEntry StLabel.hint-text,
+.bms-popup-background-light .message StEntry StLabel.hint-text,
+.bms-popup-background-light .modal-dialog StEntry StLabel.hint-text,
+.bms-popup-background-light .run-dialog StEntry StLabel.hint-text,
+.bms-popup-background-light .clipboard-dialog StEntry StLabel.hint-text {
     color: rgba(0, 0, 0, 0.4) !important;
+}
+
+.bms-popup-background-light .switcher-list .item-box,
+.bms-popup-background-light .switcher-list .item-box:hover,
+.bms-popup-background-light .switcher-list .item-box:focus,
+.bms-popup-background-light .switcher-list .item-box:active,
+.bms-popup-background-light .switcher-list .item-box:selected,
+.bms-popup-background-light .switcher-list .item-box:highlighted,
+.bms-popup-background-light .switcher-list .item-box:checked {
+    color: rgba(0, 0, 0, 0.85) !important;
+}
+
+.bms-popup-background-light .switcher-list .item-box:insensitive {
+    color: rgba(0, 0, 0, 0.4) !important;
+    background-color: transparent !important;
+}
+
+.bms-popup-background-light .switcher-list .separator {
+    background-color: rgba(0, 0, 0, 0.12);
+}
+
+.bms-popup-background-light .switcher-arrow {
+    border-color: rgba(0, 0, 0, 0.62);
+    color: rgba(0, 0, 0, 0.62);
+}
+
+.bms-popup-background-light .switcher-arrow:highlighted {
+    border-color: rgba(0, 0, 0, 0.85);
+    color: rgba(0, 0, 0, 0.85);
+}
+
+.bms-popup-background-light .ws-switcher-indicator {
+    background-color: rgba(0, 0, 0, 0.38);
+}
+
+.bms-popup-background-light .ws-switcher-indicator:active {
+    background-color: rgba(0, 0, 0, 0.85);
 }
 .bms-popup-background-dark .message:second-in-stack,
 .bms-popup-surface-dark .message:second-in-stack {
@@ -2747,24 +2857,46 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
     background-color: st-mix(-st-accent-fg-color, -st-accent-color, 30%);
 }
 
-.bms-popup-background-dark StEntry {
+.bms-popup-background-dark .popup-menu-content StEntry,
+.bms-popup-background-dark .quick-settings StEntry,
+.bms-popup-background-dark .quick-toggle-menu StEntry,
+.bms-popup-background-dark .message StEntry,
+.bms-popup-background-dark .modal-dialog StEntry,
+.bms-popup-background-dark .run-dialog StEntry,
+.bms-popup-background-dark .clipboard-dialog StEntry {
     background-color: rgba(255, 255, 255, 0.1) !important;
     color: rgba(255, 255, 255, 0.7) !important;
 }
 
-.bms-popup-background-dark StEntry:focus {
+.bms-popup-background-dark .popup-menu-content StEntry:focus,
+.bms-popup-background-dark .quick-settings StEntry:focus,
+.bms-popup-background-dark .quick-toggle-menu StEntry:focus,
+.bms-popup-background-dark .message StEntry:focus,
+.bms-popup-background-dark .modal-dialog StEntry:focus,
+.bms-popup-background-dark .run-dialog StEntry:focus,
+.bms-popup-background-dark .clipboard-dialog StEntry:focus {
     color: rgba(255, 255, 255, 0.9) !important;
     background-color: rgba(255, 255, 255, 0.1) !important;
-    box-shadow: inset 0 0 0 2px rgba(53, 132, 228, 0.5) !important;
-    box-shadow: inset 0 0 0 2px st-transparentize(st-mix(-st-accent-color, rgba(255, 255, 255, 0.9), 60%), 0.2) !important;
 }
 
-.bms-popup-background-dark StEntry:insensitive {
+.bms-popup-background-dark .popup-menu-content StEntry:insensitive,
+.bms-popup-background-dark .quick-settings StEntry:insensitive,
+.bms-popup-background-dark .quick-toggle-menu StEntry:insensitive,
+.bms-popup-background-dark .message StEntry:insensitive,
+.bms-popup-background-dark .modal-dialog StEntry:insensitive,
+.bms-popup-background-dark .run-dialog StEntry:insensitive,
+.bms-popup-background-dark .clipboard-dialog StEntry:insensitive {
     background-color: rgba(255, 255, 255, 0.05) !important;
     color: rgba(255, 255, 255, 0.5) !important;
 }
 
-.bms-popup-background-dark StEntry StLabel.hint-text {
+.bms-popup-background-dark .popup-menu-content StEntry StLabel.hint-text,
+.bms-popup-background-dark .quick-settings StEntry StLabel.hint-text,
+.bms-popup-background-dark .quick-toggle-menu StEntry StLabel.hint-text,
+.bms-popup-background-dark .message StEntry StLabel.hint-text,
+.bms-popup-background-dark .modal-dialog StEntry StLabel.hint-text,
+.bms-popup-background-dark .run-dialog StEntry StLabel.hint-text,
+.bms-popup-background-dark .clipboard-dialog StEntry StLabel.hint-text {
     color: rgba(255, 255, 255, 0.5) !important;
 }
 .bms-popup-background-transparent .quick-settings .quick-slider,
@@ -2937,44 +3069,42 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 * `.overview-components-transparent`
 */
 
-.overview-components-transparent .workspace-thumbnail {
+.overview-components-transparent #overviewGroup .workspace-thumbnail {
     border: 1px solid rgba(100, 100, 100, 0.35);
 }
 
-.overview-components-transparent .search-entry,
-.overview-components-transparent .search-entry:focus {
+.overview-components-transparent #overviewGroup .search-entry,
+.overview-components-transparent #overviewGroup .search-entry:focus {
     color: white !important;
     background-color: rgba(0, 0, 0, 0) !important;
     border-color: transparent;
-    box-shadow: none;
+    box-shadow: none !important;
 }
 
-.overview-components-transparent .search-entry:focus {
+.overview-components-transparent #overviewGroup .search-entry:focus {
     background-color: rgba(230, 230, 230, 0.08) !important;
-    box-shadow: inset 0 0 0 2px rgba(53, 132, 228, 0.8) !important;
-    box-shadow: inset 0 0 0 2px st-transparentize(st-mix(-st-accent-color, #ffffff, 60%), 0.2) !important;
 }
 
-.overview-components-transparent .search-entry .search-entry-icon,
-.overview-components-transparent .search-entry StLabel.hint-text {
+.overview-components-transparent #overviewGroup .search-entry .search-entry-icon,
+.overview-components-transparent #overviewGroup .search-entry StLabel.hint-text {
     color: rgba(255, 255, 255, 0.65) !important;
 }
 
 .overview-components-transparent #appDisplay .overview-tile,
 .overview-components-transparent #appDisplay .overview-icon,
-.overview-components-transparent .overview-tile,
-.overview-components-transparent .overview-icon,
-.overview-components-transparent .grid-search-result,
-.overview-components-transparent .list-search-result,
-.overview-components-transparent .search-provider-icon,
+.overview-components-transparent #overviewGroup .overview-tile,
+.overview-components-transparent #overviewGroup .overview-icon,
+.overview-components-transparent #overviewGroup .grid-search-result,
+.overview-components-transparent #overviewGroup .list-search-result,
+.overview-components-transparent #overviewGroup .search-provider-icon,
 /* prevents the extension from interfering with Just Perfection */
 .overview-components-transparent.just-perfection .search-section-content {
     background-color: transparent !important;
 }
 
-.overview-components-transparent .workspace-thumbnail,
-.overview-components-transparent .search-section-content,
-.overview-components-transparent .page-navigation-arrow {
+.overview-components-transparent #overviewGroup .workspace-thumbnail,
+.overview-components-transparent #overviewGroup .search-section-content,
+.overview-components-transparent #overviewGroup .page-navigation-arrow {
     background-color: rgba(0, 0, 0, 0) !important;
 }
 
@@ -2982,22 +3112,22 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-transparent #appDisplay .overview-tile:focus,
 .overview-components-transparent #appDisplay .overview-tile:selected,
 .overview-components-transparent #appDisplay .overview-tile:highlighted,
-.overview-components-transparent .overview-tile:hover,
-.overview-components-transparent .overview-tile:focus,
-.overview-components-transparent .overview-tile:selected,
-.overview-components-transparent .overview-tile:highlighted,
-.overview-components-transparent .grid-search-result:hover,
-.overview-components-transparent .grid-search-result:focus,
-.overview-components-transparent .grid-search-result:selected,
-.overview-components-transparent .grid-search-result:highlighted,
-.overview-components-transparent .list-search-result:hover,
-.overview-components-transparent .list-search-result:focus,
-.overview-components-transparent .list-search-result:selected,
-.overview-components-transparent .list-search-result:highlighted,
-.overview-components-transparent .search-provider-icon:hover,
-.overview-components-transparent .search-provider-icon:focus,
-.overview-components-transparent .page-navigation-arrow:hover,
-.overview-components-transparent .page-navigation-arrow:focus {
+.overview-components-transparent #overviewGroup .overview-tile:hover,
+.overview-components-transparent #overviewGroup .overview-tile:focus,
+.overview-components-transparent #overviewGroup .overview-tile:selected,
+.overview-components-transparent #overviewGroup .overview-tile:highlighted,
+.overview-components-transparent #overviewGroup .grid-search-result:hover,
+.overview-components-transparent #overviewGroup .grid-search-result:focus,
+.overview-components-transparent #overviewGroup .grid-search-result:selected,
+.overview-components-transparent #overviewGroup .grid-search-result:highlighted,
+.overview-components-transparent #overviewGroup .list-search-result:hover,
+.overview-components-transparent #overviewGroup .list-search-result:focus,
+.overview-components-transparent #overviewGroup .list-search-result:selected,
+.overview-components-transparent #overviewGroup .list-search-result:highlighted,
+.overview-components-transparent #overviewGroup .search-provider-icon:hover,
+.overview-components-transparent #overviewGroup .search-provider-icon:focus,
+.overview-components-transparent #overviewGroup .page-navigation-arrow:hover,
+.overview-components-transparent #overviewGroup .page-navigation-arrow:focus {
     background-color: rgba(230, 230, 230, 0.08) !important;
 }
 
@@ -3006,48 +3136,48 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-transparent #appDisplay .overview-tile:drop,
 .overview-components-transparent #appDisplay .overview-tile:selected:hover,
 .overview-components-transparent #appDisplay .overview-tile:highlighted:hover,
-.overview-components-transparent .overview-tile:active,
-.overview-components-transparent .overview-tile:focus:hover,
-.overview-components-transparent .overview-tile:drop,
-.overview-components-transparent .overview-tile:selected:hover,
-.overview-components-transparent .overview-tile:highlighted:hover,
-.overview-components-transparent .grid-search-result:active,
-.overview-components-transparent .grid-search-result:focus:hover,
-.overview-components-transparent .grid-search-result:selected:hover,
-.overview-components-transparent .grid-search-result:highlighted:hover,
-.overview-components-transparent .list-search-result:active,
-.overview-components-transparent .list-search-result:focus:hover,
-.overview-components-transparent .list-search-result:selected:hover,
-.overview-components-transparent .list-search-result:highlighted:hover,
-.overview-components-transparent .search-provider-icon:active,
-.overview-components-transparent .search-provider-icon:focus:hover,
-.overview-components-transparent .page-navigation-arrow:active,
-.overview-components-transparent .page-navigation-arrow:focus:hover {
+.overview-components-transparent #overviewGroup .overview-tile:active,
+.overview-components-transparent #overviewGroup .overview-tile:focus:hover,
+.overview-components-transparent #overviewGroup .overview-tile:drop,
+.overview-components-transparent #overviewGroup .overview-tile:selected:hover,
+.overview-components-transparent #overviewGroup .overview-tile:highlighted:hover,
+.overview-components-transparent #overviewGroup .grid-search-result:active,
+.overview-components-transparent #overviewGroup .grid-search-result:focus:hover,
+.overview-components-transparent #overviewGroup .grid-search-result:selected:hover,
+.overview-components-transparent #overviewGroup .grid-search-result:highlighted:hover,
+.overview-components-transparent #overviewGroup .list-search-result:active,
+.overview-components-transparent #overviewGroup .list-search-result:focus:hover,
+.overview-components-transparent #overviewGroup .list-search-result:selected:hover,
+.overview-components-transparent #overviewGroup .list-search-result:highlighted:hover,
+.overview-components-transparent #overviewGroup .search-provider-icon:active,
+.overview-components-transparent #overviewGroup .search-provider-icon:focus:hover,
+.overview-components-transparent #overviewGroup .page-navigation-arrow:active,
+.overview-components-transparent #overviewGroup .page-navigation-arrow:focus:hover {
     background-color: rgba(230, 230, 230, 0.12) !important;
 }
 
 .overview-components-transparent #appDisplay .overview-tile:focus:active,
 .overview-components-transparent #appDisplay .overview-tile:selected:active,
 .overview-components-transparent #appDisplay .overview-tile:highlighted:active,
-.overview-components-transparent .overview-tile:focus:active,
-.overview-components-transparent .overview-tile:selected:active,
-.overview-components-transparent .overview-tile:highlighted:active,
-.overview-components-transparent .grid-search-result:focus:active,
-.overview-components-transparent .grid-search-result:selected:active,
-.overview-components-transparent .grid-search-result:highlighted:active,
-.overview-components-transparent .list-search-result:focus:active,
-.overview-components-transparent .list-search-result:selected:active,
-.overview-components-transparent .list-search-result:highlighted:active,
-.overview-components-transparent .search-provider-icon:focus:active,
-.overview-components-transparent .page-navigation-arrow:focus:active {
+.overview-components-transparent #overviewGroup .overview-tile:focus:active,
+.overview-components-transparent #overviewGroup .overview-tile:selected:active,
+.overview-components-transparent #overviewGroup .overview-tile:highlighted:active,
+.overview-components-transparent #overviewGroup .grid-search-result:focus:active,
+.overview-components-transparent #overviewGroup .grid-search-result:selected:active,
+.overview-components-transparent #overviewGroup .grid-search-result:highlighted:active,
+.overview-components-transparent #overviewGroup .list-search-result:focus:active,
+.overview-components-transparent #overviewGroup .list-search-result:selected:active,
+.overview-components-transparent #overviewGroup .list-search-result:highlighted:active,
+.overview-components-transparent #overviewGroup .search-provider-icon:focus:active,
+.overview-components-transparent #overviewGroup .page-navigation-arrow:focus:active {
     background-color: rgba(230, 230, 230, 0.15) !important;
 }
 
 /* App Folders */
 .overview-components-transparent #appDisplay .overview-tile.app-folder,
 .overview-components-transparent #appDisplay .app-folder,
-.overview-components-transparent .overview-tile.app-folder,
-.overview-components-transparent .app-folder {
+.overview-components-transparent #overviewGroup .overview-tile.app-folder,
+.overview-components-transparent #overviewGroup .app-folder {
     background-color: rgba(0, 0, 0, 0) !important;
     border: none !important;
     border-color: transparent !important;
@@ -3086,82 +3216,79 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 */
 
 .search-entry.overview-components-light,
-.overview-components-light .search-entry,
+.overview-components-light #overviewGroup .search-entry,
 .search-entry.overview-components-light:focus,
-.overview-components-light .search-entry:focus {
+.overview-components-light #overviewGroup .search-entry:focus {
     color: rgba(0, 0, 0, 0.85) !important;
     background-color: rgba(255, 255, 255, 0.58) !important;
-    box-shadow: none;
 }
 
 .search-entry.overview-components-light:focus,
-.overview-components-light .search-entry:focus {
+.overview-components-light #overviewGroup .search-entry:focus {
     border-color: transparent;
     background-color: rgba(255, 255, 255, 0.78) !important;
-    box-shadow: inset 0 0 0 2px rgba(53, 132, 228, 0.8) !important;
-    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, 0.2) !important;
 }
 
 .search-entry.overview-components-light .search-entry-icon,
-.overview-components-light .search-entry .search-entry-icon,
+.overview-components-light #overviewGroup .search-entry .search-entry-icon,
 .search-entry.overview-components-light StLabel.hint-text,
-.overview-components-light .search-entry StLabel.hint-text {
+.overview-components-light #overviewGroup .search-entry StLabel.hint-text {
     color: rgba(0, 0, 0, 0.65) !important;
 }
 
 .overview-components-light #appDisplay .overview-tile,
 .overview-components-light #appDisplay .overview-icon,
-.overview-components-light .overview-tile,
-.overview-components-light .overview-icon,
-.overview-components-light .grid-search-result,
-.overview-components-light .list-search-result,
-.overview-components-light .search-provider-icon,
+.overview-components-light #overviewGroup .overview-tile,
+.overview-components-light #overviewGroup .overview-icon,
+.overview-components-light #overviewGroup .grid-search-result,
+.overview-components-light #overviewGroup .list-search-result,
+.overview-components-light #overviewGroup .search-provider-icon,
 /* prevents the extension from interfering with Just Perfection */
 .overview-components-light.just-perfection .search-section-content {
     background-color: transparent !important;
 }
 
-.overview-components-light .workspace-thumbnail {
+.overview-components-light #overviewGroup .workspace-thumbnail {
     background-color: rgba(255, 255, 255, 0.07) !important;
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.overview-components-light .search-section-content,
-.overview-components-light .page-navigation-arrow {
+.overview-components-light #overviewGroup .search-section-content,
+.overview-components-light #overviewGroup .page-navigation-arrow {
     background-color: rgba(255, 255, 255, 0.58) !important;
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.overview-components-light .search-statusbox,
-.overview-components-light .search-statustext {
+.overview-components-light #overviewGroup .search-statusbox,
+.overview-components-light #overviewGroup .search-statustext {
     /* The spinner and status text sit over the wallpaper, outside result cards. */
     color: rgba(250, 250, 251, 0.8);
 }
 
 /* Text styling inside search section content */
-.overview-components-light .search-section-content,
-.overview-components-light .search-section-content StLabel,
-.overview-components-light .list-search-result,
-.overview-components-light .list-search-result StLabel,
-.overview-components-light .list-search-result-title,
-.overview-components-light .search-provider-icon,
-.overview-components-light .search-provider-icon StLabel,
-.overview-components-light .list-search-provider-details,
-.overview-components-light .page-navigation-arrow > StIcon {
+.overview-components-light #overviewGroup .search-section-content,
+.overview-components-light #overviewGroup .search-section-content StLabel,
+.overview-components-light #overviewGroup .list-search-result,
+.overview-components-light #overviewGroup .list-search-result StLabel,
+.overview-components-light #overviewGroup .list-search-result-title,
+.overview-components-light #overviewGroup .search-provider-icon,
+.overview-components-light #overviewGroup .search-provider-icon StLabel,
+.overview-components-light #overviewGroup .list-search-provider-details,
+.overview-components-light #overviewGroup .page-navigation-arrow > StIcon {
     color: rgba(0, 0, 0, 0.85) !important;
 }
 
-.overview-components-light .list-search-result .list-search-result-description {
+.overview-components-light #overviewGroup .list-search-result .list-search-result-description {
     color: rgba(0, 0, 0, 0.55) !important;
 }
 
 /* Hover and active states */
 .overview-components-light #appDisplay .overview-tile:hover,
 .overview-components-light #appDisplay .overview-tile:focus,
-.overview-components-light .overview-tile:hover,
-.overview-components-light .overview-tile:focus,
-.overview-components-light .grid-search-result:hover,
-.overview-components-light .grid-search-result:focus,
+.overview-components-light #overviewGroup .overview-tile:hover,
+.overview-components-light #overviewGroup .overview-tile:focus,
+.overview-components-light #overviewGroup .grid-search-result:hover,
+.overview-components-light #overviewGroup .grid-search-result:focus,
 .overview-components-light #dash .overview-tile:hover .overview-icon,
 .overview-components-light #dash .overview-tile:focus .overview-icon,
 .overview-components-light #dash .show-apps:hover .overview-icon,
@@ -3174,43 +3301,43 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 }
 
 /* (Light mode) Use darker states in search result lists */
-.overview-components-light .list-search-result:hover,
-.overview-components-light .search-provider-icon:hover {
+.overview-components-light #overviewGroup .list-search-result:hover,
+.overview-components-light #overviewGroup .search-provider-icon:hover {
     background-color: rgba(0, 0, 0, 0.13) !important;
 }
 
-.overview-components-light .list-search-result:focus,
-.overview-components-light .list-search-result:highlighted,
-.overview-components-light .search-provider-icon:focus {
+.overview-components-light #overviewGroup .list-search-result:focus,
+.overview-components-light #overviewGroup .list-search-result:highlighted,
+.overview-components-light #overviewGroup .search-provider-icon:focus {
     background-color: rgba(0, 0, 0, 0.13) !important;
 }
 
-.overview-components-light .list-search-result:active,
-.overview-components-light .list-search-result:selected,
-.overview-components-light .list-search-result:focus:hover,
-.overview-components-light .list-search-result:selected:hover,
-.overview-components-light .list-search-result:highlighted:hover,
-.overview-components-light .list-search-result:focus:active,
-.overview-components-light .list-search-result:selected:active,
-.overview-components-light .list-search-result:highlighted:active,
-.overview-components-light .search-provider-icon:active,
-.overview-components-light .search-provider-icon:focus:hover,
-.overview-components-light .search-provider-icon:focus:active {
+.overview-components-light #overviewGroup .list-search-result:active,
+.overview-components-light #overviewGroup .list-search-result:selected,
+.overview-components-light #overviewGroup .list-search-result:focus:hover,
+.overview-components-light #overviewGroup .list-search-result:selected:hover,
+.overview-components-light #overviewGroup .list-search-result:highlighted:hover,
+.overview-components-light #overviewGroup .list-search-result:focus:active,
+.overview-components-light #overviewGroup .list-search-result:selected:active,
+.overview-components-light #overviewGroup .list-search-result:highlighted:active,
+.overview-components-light #overviewGroup .search-provider-icon:active,
+.overview-components-light #overviewGroup .search-provider-icon:focus:hover,
+.overview-components-light #overviewGroup .search-provider-icon:focus:active {
     background-color: rgba(0, 0, 0, 0.19) !important;
 }
 
-.overview-components-light .page-navigation-arrow:hover,
-.overview-components-light .page-navigation-arrow:focus {
+.overview-components-light #overviewGroup .page-navigation-arrow:hover,
+.overview-components-light #overviewGroup .page-navigation-arrow:focus {
     background-color: rgba(255, 255, 255, 0.78) !important;
 }
 
 /* Highlighted / selected search results */
 .overview-components-light #appDisplay .overview-tile:selected,
 .overview-components-light #appDisplay .overview-tile:highlighted,
-.overview-components-light .overview-tile:selected,
-.overview-components-light .overview-tile:highlighted,
-.overview-components-light .grid-search-result:selected,
-.overview-components-light .grid-search-result:highlighted {
+.overview-components-light #overviewGroup .overview-tile:selected,
+.overview-components-light #overviewGroup .overview-tile:highlighted,
+.overview-components-light #overviewGroup .grid-search-result:selected,
+.overview-components-light #overviewGroup .grid-search-result:highlighted {
     background-color: rgba(255, 255, 255, 0.19) !important;
 }
 
@@ -3219,15 +3346,15 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-light #appDisplay .overview-tile:drop,
 .overview-components-light #appDisplay .overview-tile:selected:hover,
 .overview-components-light #appDisplay .overview-tile:highlighted:hover,
-.overview-components-light .overview-tile:active,
-.overview-components-light .overview-tile:focus:hover,
-.overview-components-light .overview-tile:drop,
-.overview-components-light .overview-tile:selected:hover,
-.overview-components-light .overview-tile:highlighted:hover,
-.overview-components-light .grid-search-result:active,
-.overview-components-light .grid-search-result:focus:hover,
-.overview-components-light .grid-search-result:selected:hover,
-.overview-components-light .grid-search-result:highlighted:hover,
+.overview-components-light #overviewGroup .overview-tile:active,
+.overview-components-light #overviewGroup .overview-tile:focus:hover,
+.overview-components-light #overviewGroup .overview-tile:drop,
+.overview-components-light #overviewGroup .overview-tile:selected:hover,
+.overview-components-light #overviewGroup .overview-tile:highlighted:hover,
+.overview-components-light #overviewGroup .grid-search-result:active,
+.overview-components-light #overviewGroup .grid-search-result:focus:hover,
+.overview-components-light #overviewGroup .grid-search-result:selected:hover,
+.overview-components-light #overviewGroup .grid-search-result:highlighted:hover,
 .overview-components-light #dash .overview-tile:active .overview-icon,
 .overview-components-light #dash .overview-tile:focus:hover .overview-icon,
 .overview-components-light #dash .overview-tile:drop .overview-icon,
@@ -3239,21 +3366,21 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
     background-color: rgba(255, 255, 255, 0.25) !important;
 }
 
-.overview-components-light .page-navigation-arrow:active,
-.overview-components-light .page-navigation-arrow:focus:hover {
+.overview-components-light #overviewGroup .page-navigation-arrow:active,
+.overview-components-light #overviewGroup .page-navigation-arrow:focus:hover {
     background-color: rgba(255, 255, 255, 0.9) !important;
 }
 
 .overview-components-light #appDisplay .overview-tile:focus:active,
 .overview-components-light #appDisplay .overview-tile:selected:active,
 .overview-components-light #appDisplay .overview-tile:highlighted:active,
-.overview-components-light .overview-tile:focus:active,
-.overview-components-light .overview-tile:selected:active,
-.overview-components-light .overview-tile:highlighted:active,
-.overview-components-light .grid-search-result:focus:active,
-.overview-components-light .grid-search-result:selected:active,
-.overview-components-light .grid-search-result:highlighted:active,
-.overview-components-light .page-navigation-arrow:focus:active,
+.overview-components-light #overviewGroup .overview-tile:focus:active,
+.overview-components-light #overviewGroup .overview-tile:selected:active,
+.overview-components-light #overviewGroup .overview-tile:highlighted:active,
+.overview-components-light #overviewGroup .grid-search-result:focus:active,
+.overview-components-light #overviewGroup .grid-search-result:selected:active,
+.overview-components-light #overviewGroup .grid-search-result:highlighted:active,
+.overview-components-light #overviewGroup .page-navigation-arrow:focus:active,
 .overview-components-light #dash .show-apps:checked .overview-icon:hover,
 .overview-components-light .multimonitor-dock .show-apps:checked .overview-icon:hover {
     background-color: rgba(255, 255, 255, 0.38) !important;
@@ -3262,8 +3389,8 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 /* App Folders */
 .overview-components-light #appDisplay .overview-tile.app-folder,
 .overview-components-light #appDisplay .app-folder,
-.overview-components-light .overview-tile.app-folder,
-.overview-components-light .app-folder {
+.overview-components-light #overviewGroup .overview-tile.app-folder,
+.overview-components-light #overviewGroup .app-folder {
     background-color: rgba(255, 255, 255, 0.05) !important;
     border: none !important;
     border-color: transparent !important;
@@ -3273,10 +3400,10 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-light #appDisplay .overview-tile.app-folder StLabel,
 .overview-components-light #appDisplay .app-folder,
 .overview-components-light #appDisplay .app-folder StLabel,
-.overview-components-light .overview-tile.app-folder,
-.overview-components-light .overview-tile.app-folder StLabel,
-.overview-components-light .app-folder,
-.overview-components-light .app-folder StLabel {
+.overview-components-light #overviewGroup .overview-tile.app-folder,
+.overview-components-light #overviewGroup .overview-tile.app-folder StLabel,
+.overview-components-light #overviewGroup .app-folder,
+.overview-components-light #overviewGroup .app-folder StLabel {
     color: rgba(255, 255, 255, 0.9) !important;
 }
 
@@ -3284,17 +3411,17 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-light #appDisplay .overview-tile.app-folder:focus,
 .overview-components-light #appDisplay .app-folder:hover,
 .overview-components-light #appDisplay .app-folder:focus,
-.overview-components-light .overview-tile.app-folder:hover,
-.overview-components-light .overview-tile.app-folder:focus,
-.overview-components-light .app-folder:hover,
-.overview-components-light .app-folder:focus {
+.overview-components-light #overviewGroup .overview-tile.app-folder:hover,
+.overview-components-light #overviewGroup .overview-tile.app-folder:focus,
+.overview-components-light #overviewGroup .app-folder:hover,
+.overview-components-light #overviewGroup .app-folder:focus {
     background-color: rgba(255, 255, 255, 0.13) !important;
 }
 
 .overview-components-light #appDisplay .overview-tile.app-folder:active,
 .overview-components-light #appDisplay .app-folder:active,
-.overview-components-light .overview-tile.app-folder:active,
-.overview-components-light .app-folder:active {
+.overview-components-light #overviewGroup .overview-tile.app-folder:active,
+.overview-components-light #overviewGroup .app-folder:active {
     background-color: rgba(255, 255, 255, 0.19) !important;
 }
 
@@ -3331,48 +3458,45 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 */
 
 .search-entry.overview-components-dark,
-.overview-components-dark .search-entry,
+.overview-components-dark #overviewGroup .search-entry,
 .search-entry.overview-components-dark:focus,
-.overview-components-dark .search-entry:focus {
+.overview-components-dark #overviewGroup .search-entry:focus {
     color: white !important;
     background-color: rgba(255, 255, 255, 0.07) !important;
-    box-shadow: none;
 }
 
 .search-entry.overview-components-dark:focus,
-.overview-components-dark .search-entry:focus {
+.overview-components-dark #overviewGroup .search-entry:focus {
     border-color: transparent;
     background-color: rgba(255, 255, 255, 0.12) !important;
-    box-shadow: inset 0 0 0 2px rgba(53, 132, 228, 0.8) !important;
-    box-shadow: inset 0 0 0 2px st-transparentize(st-mix(-st-accent-color, #ffffff, 60%), 0.2) !important;
 }
 
 .search-entry.overview-components-dark .search-entry-icon,
-.overview-components-dark .search-entry .search-entry-icon,
+.overview-components-dark #overviewGroup .search-entry .search-entry-icon,
 .search-entry.overview-components-dark StLabel.hint-text,
-.overview-components-dark .search-entry StLabel.hint-text {
+.overview-components-dark #overviewGroup .search-entry StLabel.hint-text {
     color: rgba(255, 255, 255, 0.65) !important;
 }
 
-.overview-components-dark .list-search-result .list-search-result-description {
+.overview-components-dark #overviewGroup .list-search-result .list-search-result-description {
     color: rgba(255, 255, 255, 0.5) !important;
 }
 
 .overview-components-dark #appDisplay .overview-tile,
 .overview-components-dark #appDisplay .overview-icon,
-.overview-components-dark .overview-tile,
-.overview-components-dark .overview-icon,
-.overview-components-dark .grid-search-result,
-.overview-components-dark .list-search-result,
-.overview-components-dark .search-provider-icon,
+.overview-components-dark #overviewGroup .overview-tile,
+.overview-components-dark #overviewGroup .overview-icon,
+.overview-components-dark #overviewGroup .grid-search-result,
+.overview-components-dark #overviewGroup .list-search-result,
+.overview-components-dark #overviewGroup .search-provider-icon,
 /* prevents the extension from interfering with Just Perfection */
 .overview-components-dark.just-perfection .search-section-content {
     background-color: transparent !important;
 }
 
-.overview-components-dark .workspace-thumbnail,
-.overview-components-dark .search-section-content,
-.overview-components-dark .page-navigation-arrow {
+.overview-components-dark #overviewGroup .workspace-thumbnail,
+.overview-components-dark #overviewGroup .search-section-content,
+.overview-components-dark #overviewGroup .page-navigation-arrow {
     background-color: rgba(255, 255, 255, 0.07) !important;
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -3381,26 +3505,26 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-dark #appDisplay .overview-tile:focus,
 .overview-components-dark #appDisplay .overview-tile:selected,
 .overview-components-dark #appDisplay .overview-tile:highlighted,
-.overview-components-dark .overview-tile:hover,
-.overview-components-dark .overview-tile:focus,
-.overview-components-dark .overview-tile:selected,
-.overview-components-dark .overview-tile:highlighted,
-.overview-components-dark .grid-search-result:hover,
-.overview-components-dark .grid-search-result:focus,
-.overview-components-dark .grid-search-result:selected,
-.overview-components-dark .grid-search-result:highlighted,
-.overview-components-dark .list-search-result:hover,
-.overview-components-dark .list-search-result:focus,
-.overview-components-dark .list-search-result:selected,
-.overview-components-dark .list-search-result:highlighted,
-.overview-components-dark .search-provider-icon:hover,
-.overview-components-dark .search-provider-icon:focus,
+.overview-components-dark #overviewGroup .overview-tile:hover,
+.overview-components-dark #overviewGroup .overview-tile:focus,
+.overview-components-dark #overviewGroup .overview-tile:selected,
+.overview-components-dark #overviewGroup .overview-tile:highlighted,
+.overview-components-dark #overviewGroup .grid-search-result:hover,
+.overview-components-dark #overviewGroup .grid-search-result:focus,
+.overview-components-dark #overviewGroup .grid-search-result:selected,
+.overview-components-dark #overviewGroup .grid-search-result:highlighted,
+.overview-components-dark #overviewGroup .list-search-result:hover,
+.overview-components-dark #overviewGroup .list-search-result:focus,
+.overview-components-dark #overviewGroup .list-search-result:selected,
+.overview-components-dark #overviewGroup .list-search-result:highlighted,
+.overview-components-dark #overviewGroup .search-provider-icon:hover,
+.overview-components-dark #overviewGroup .search-provider-icon:focus,
 .overview-components-dark #dash .overview-tile:hover .overview-icon,
 .overview-components-dark #dash .overview-tile:focus .overview-icon,
 .overview-components-dark #dash .show-apps:hover .overview-icon,
 .overview-components-dark #dash .show-apps:focus .overview-icon,
-.overview-components-dark .page-navigation-arrow:hover,
-.overview-components-dark .page-navigation-arrow:focus {
+.overview-components-dark #overviewGroup .page-navigation-arrow:hover,
+.overview-components-dark #overviewGroup .page-navigation-arrow:focus {
     background-color: rgba(255, 255, 255, 0.13) !important;
 }
 
@@ -3409,23 +3533,23 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-dark #appDisplay .overview-tile:drop,
 .overview-components-dark #appDisplay .overview-tile:selected:hover,
 .overview-components-dark #appDisplay .overview-tile:highlighted:hover,
-.overview-components-dark .overview-tile:active,
-.overview-components-dark .overview-tile:focus:hover,
-.overview-components-dark .overview-tile:drop,
-.overview-components-dark .overview-tile:selected:hover,
-.overview-components-dark .overview-tile:highlighted:hover,
-.overview-components-dark .grid-search-result:active,
-.overview-components-dark .grid-search-result:focus:hover,
-.overview-components-dark .grid-search-result:selected:hover,
-.overview-components-dark .grid-search-result:highlighted:hover,
-.overview-components-dark .list-search-result:active,
-.overview-components-dark .list-search-result:focus:hover,
-.overview-components-dark .list-search-result:selected:hover,
-.overview-components-dark .list-search-result:highlighted:hover,
-.overview-components-dark .search-provider-icon:active,
-.overview-components-dark .search-provider-icon:focus:hover,
-.overview-components-dark .page-navigation-arrow:active,
-.overview-components-dark .page-navigation-arrow:focus:hover,
+.overview-components-dark #overviewGroup .overview-tile:active,
+.overview-components-dark #overviewGroup .overview-tile:focus:hover,
+.overview-components-dark #overviewGroup .overview-tile:drop,
+.overview-components-dark #overviewGroup .overview-tile:selected:hover,
+.overview-components-dark #overviewGroup .overview-tile:highlighted:hover,
+.overview-components-dark #overviewGroup .grid-search-result:active,
+.overview-components-dark #overviewGroup .grid-search-result:focus:hover,
+.overview-components-dark #overviewGroup .grid-search-result:selected:hover,
+.overview-components-dark #overviewGroup .grid-search-result:highlighted:hover,
+.overview-components-dark #overviewGroup .list-search-result:active,
+.overview-components-dark #overviewGroup .list-search-result:focus:hover,
+.overview-components-dark #overviewGroup .list-search-result:selected:hover,
+.overview-components-dark #overviewGroup .list-search-result:highlighted:hover,
+.overview-components-dark #overviewGroup .search-provider-icon:active,
+.overview-components-dark #overviewGroup .search-provider-icon:focus:hover,
+.overview-components-dark #overviewGroup .page-navigation-arrow:active,
+.overview-components-dark #overviewGroup .page-navigation-arrow:focus:hover,
 .overview-components-dark #dash .overview-tile:active .overview-icon,
 .overview-components-dark #dash .overview-tile:focus:hover .overview-icon,
 .overview-components-dark #dash .overview-tile:drop .overview-icon,
@@ -3440,17 +3564,17 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-dark #appDisplay .overview-tile:focus:active,
 .overview-components-dark #appDisplay .overview-tile:selected:active,
 .overview-components-dark #appDisplay .overview-tile:highlighted:active,
-.overview-components-dark .overview-tile:focus:active,
-.overview-components-dark .overview-tile:selected:active,
-.overview-components-dark .overview-tile:highlighted:active,
-.overview-components-dark .grid-search-result:focus:active,
-.overview-components-dark .grid-search-result:selected:active,
-.overview-components-dark .grid-search-result:highlighted:active,
-.overview-components-dark .list-search-result:focus:active,
-.overview-components-dark .list-search-result:selected:active,
-.overview-components-dark .list-search-result:highlighted:active,
-.overview-components-dark .search-provider-icon:focus:active,
-.overview-components-dark .page-navigation-arrow:focus:active,
+.overview-components-dark #overviewGroup .overview-tile:focus:active,
+.overview-components-dark #overviewGroup .overview-tile:selected:active,
+.overview-components-dark #overviewGroup .overview-tile:highlighted:active,
+.overview-components-dark #overviewGroup .grid-search-result:focus:active,
+.overview-components-dark #overviewGroup .grid-search-result:selected:active,
+.overview-components-dark #overviewGroup .grid-search-result:highlighted:active,
+.overview-components-dark #overviewGroup .list-search-result:focus:active,
+.overview-components-dark #overviewGroup .list-search-result:selected:active,
+.overview-components-dark #overviewGroup .list-search-result:highlighted:active,
+.overview-components-dark #overviewGroup .search-provider-icon:focus:active,
+.overview-components-dark #overviewGroup .page-navigation-arrow:focus:active,
 .overview-components-dark #dash .show-apps:checked .overview-icon:hover,
 .overview-components-dark .multimonitor-dock .show-apps:checked .overview-icon:hover {
     background-color: rgba(255, 255, 255, 0.24) !important;
@@ -3459,8 +3583,8 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 /* App Folders */
 .overview-components-dark #appDisplay .overview-tile.app-folder,
 .overview-components-dark #appDisplay .app-folder,
-.overview-components-dark .overview-tile.app-folder,
-.overview-components-dark .app-folder {
+.overview-components-dark #overviewGroup .overview-tile.app-folder,
+.overview-components-dark #overviewGroup .app-folder {
     background-color: rgba(255, 255, 255, 0.05) !important;
     border: none !important;
     border-color: transparent !important;
@@ -3470,17 +3594,17 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 .overview-components-dark #appDisplay .overview-tile.app-folder:focus,
 .overview-components-dark #appDisplay .app-folder:hover,
 .overview-components-dark #appDisplay .app-folder:focus,
-.overview-components-dark .overview-tile.app-folder:hover,
-.overview-components-dark .overview-tile.app-folder:focus,
-.overview-components-dark .app-folder:hover,
-.overview-components-dark .app-folder:focus {
+.overview-components-dark #overviewGroup .overview-tile.app-folder:hover,
+.overview-components-dark #overviewGroup .overview-tile.app-folder:focus,
+.overview-components-dark #overviewGroup .app-folder:hover,
+.overview-components-dark #overviewGroup .app-folder:focus {
     background-color: rgba(255, 255, 255, 0.13) !important;
 }
 
 .overview-components-dark #appDisplay .overview-tile.app-folder:active,
 .overview-components-dark #appDisplay .app-folder:active,
-.overview-components-dark .overview-tile.app-folder:active,
-.overview-components-dark .app-folder:active {
+.overview-components-dark #overviewGroup .overview-tile.app-folder:active,
+.overview-components-dark #overviewGroup .app-folder:active {
     background-color: rgba(255, 255, 255, 0.19) !important;
 }
 
@@ -3853,43 +3977,85 @@ StBoxLayout > StWidget > #dash.dark-dash > .dash-background,
 }
 
 .panel-light-text #panel .panel-button.screen-recording-indicator {
-    color: #f6f5f4;
-    box-shadow: inset 0 0 0 100px rgba(192, 28, 40, 0.8);
-}
-
-.panel-light-text #panel .panel-button.screen-recording-indicator:active,
-.panel-light-text #panel .panel-button.screen-recording-indicator:focus,
-.panel-light-text #panel .panel-button.screen-recording-indicator:checked {
+    color: #fafafb;
     box-shadow: inset 0 0 0 100px #c01c28;
 }
 
-.panel-light-text #panel .panel-button.screen-recording-indicator:active:hover,
-.panel-light-text #panel .panel-button.screen-recording-indicator:focus:hover,
-.panel-light-text #panel .panel-button.screen-recording-indicator:checked:hover {
-    box-shadow: inset 0 0 0 100px rgba(192, 28, 40, 0.95);
+.panel-light-text #panel .panel-button.screen-recording-indicator:focus,
+.panel-light-text #panel .panel-button.screen-recording-indicator:hover {
+    box-shadow: inset 0 0 0 100px #d61f2d;
 }
 
-.panel-light-text #panel .panel-button.screen-recording-indicator:hover {
-    box-shadow: inset 0 0 0 100px rgba(192, 28, 40, 0.9);
+.panel-light-text #panel .panel-button.screen-recording-indicator:active,
+.panel-light-text #panel .panel-button.screen-recording-indicator:checked {
+    box-shadow: inset 0 0 0 100px #e02a37;
+}
+
+.panel-light-text #panel .panel-button.screen-recording-indicator:active:hover,
+.panel-light-text #panel .panel-button.screen-recording-indicator:checked:hover {
+    box-shadow: inset 0 0 0 100px #e13340;
 }
 
 .panel-light-text #panel .panel-button.screen-sharing-indicator {
-    color: #282828;
-    box-shadow: inset 0 0 0 100px rgba(255, 120, 0, 0.8);
-}
-
-.panel-light-text #panel .panel-button.screen-sharing-indicator:active,
-.panel-light-text #panel .panel-button.screen-sharing-indicator:focus,
-.panel-light-text #panel .panel-button.screen-sharing-indicator:checked {
+    color: #fafafb;
     box-shadow: inset 0 0 0 100px #ff7800;
 }
 
-.panel-light-text #panel .panel-button.screen-sharing-indicator:active:hover,
-.panel-light-text #panel .panel-button.screen-sharing-indicator:focus:hover,
-.panel-light-text #panel .panel-button.screen-sharing-indicator:checked:hover {
-    box-shadow: inset 0 0 0 100px rgba(255, 120, 0, 0.95);
+.panel-light-text #panel .panel-button.screen-sharing-indicator:focus,
+.panel-light-text #panel .panel-button.screen-sharing-indicator:hover {
+    box-shadow: inset 0 0 0 100px #ff861a;
 }
 
-.panel-light-text #panel .panel-button.screen-sharing-indicator:hover {
-    box-shadow: inset 0 0 0 100px rgba(255, 120, 0, 0.9);
+.panel-light-text #panel .panel-button.screen-sharing-indicator:active,
+.panel-light-text #panel .panel-button.screen-sharing-indicator:checked {
+    box-shadow: inset 0 0 0 100px #ff902e;
+}
+
+.panel-light-text #panel .panel-button.screen-sharing-indicator:active:hover,
+.panel-light-text #panel .panel-button.screen-sharing-indicator:checked:hover {
+    box-shadow: inset 0 0 0 100px #ff9638;
+}
+
+/*
+* `.bms-panel-overview-light-theme`, keeps panel text and icons dark in overview when using light theme
+*/
+
+.bms-panel-overview-light-theme #panel:overview .panel-button,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display,
+.bms-panel-overview-light-theme #panel:overview .panel-button .clock,
+.bms-panel-overview-light-theme #panel:overview .panel-button .system-status-icon {
+    color: rgba(0, 0, 0, 0.8) !important;
+    text-shadow: none !important;
+    icon-shadow: none !important;
+}
+
+.bms-panel-overview-light-theme #panel:overview .panel-button.screen-recording-indicator,
+.bms-panel-overview-light-theme #panel:overview .panel-button.screen-sharing-indicator {
+    color: #f6f5f4 !important;
+}
+
+.bms-panel-overview-light-theme #panel:overview .panel-button#panelActivities .workspace-dot {
+    background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+.bms-panel-overview-light-theme #panel:overview .panel-button:hover,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:hover .clock {
+    box-shadow: inset 0 0 0 100px rgba(0, 0, 0, 0.10) !important;
+}
+
+.bms-panel-overview-light-theme #panel:overview .panel-button:active,
+.bms-panel-overview-light-theme #panel:overview .panel-button:focus,
+.bms-panel-overview-light-theme #panel:overview .panel-button:checked,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:active .clock,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:focus .clock,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:checked .clock {
+    box-shadow: inset 0 0 0 100px rgba(0, 0, 0, 0.15) !important;
+}
+
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:hover,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:active,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:focus,
+.bms-panel-overview-light-theme #panel:overview .panel-button.clock-display:checked {
+    box-shadow: none !important;
 }

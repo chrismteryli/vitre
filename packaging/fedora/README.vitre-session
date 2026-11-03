@@ -1,0 +1,56 @@
+Vitre session for Fedora and Arch
+=================================
+
+What this package adds
+  * "Vitre" in the session menu on the login screen (/usr/share/wayland-sessions/vitre.desktop). Your normal GNOME session stays
+    installed and selectable.
+  * /usr/share/gnome-shell/modes/vitre.json: the GNOME Shell session mode. It lists the extensions to load (the distribution's tray
+    icon and tiling extensions, then the Vitre ones; a uuid that is not installed is skipped) and inherits everything else from GNOME's
+    "user" mode.
+  * The shell theme, in one layer: GNOME's own stylesheet, with Vitre-Glass (/usr/share/themes/Vitre-Glass/gnome-shell) on top of it
+    through the user-theme extension, whose name key is set in the Vitre defaults. This is what a per-user install of Vitre does on
+    Fedora and Arch. (The .debs for Ubuntu put a second layer underneath, a Vitre shell theme resource built on Yaru's stylesheets.)
+  * /etc/dconf/profile/vitre, /etc/dconf/db/vitre.d/00-vitre and 10-gnome-parity: system defaults (theme, icons, cursor, wallpaper, fonts,
+    keybindings and the settings of the extensions; 10-gnome-parity repeats the behaviour Vitre was tuned with on Ubuntu: start in the
+    desktop instead of the Overview, hot corners off, tap to click, Alt+Tab switching windows, and a few more). Only the Vitre session
+    reads them: /usr/bin/vitre-session sets DCONF_PROFILE=vitre, your normal GNOME session does not.
+  * A per-user step, vitre-user-setup.service, started by the Vitre session only. It links the Vitre GTK stylesheets
+    (/usr/share/vitre/gtk-3.0 and gtk-4.0) into ~/.config/gtk-3.0 and ~/.config/gtk-4.0 once, never over a file that is already there.
+    GTK 4 and libadwaita read their stylesheet only from the user's config folder, which is why this step exists.
+
+The order of the dconf profile
+  user-db:user      your own settings: a value you set yourself always wins (dconf reset <key> gives the default back)
+  system-db:local   machine-wide settings of this computer's administrator
+  system-db:site    machine-wide settings of a site or organisation
+  system-db:vitre   the Vitre defaults
+  First match wins. dconf warns in every program when a database named in the profile does not exist, so the package creates
+  /etc/dconf/db/local.d and site.d (empty, with a README.vitre note) when neither the folder nor the database exists, and runs
+  "dconf update". An existing database is never touched; on removal the folders go again only while the note is the only file in them.
+
+What reaches your normal GNOME session
+  * The GTK links above: GTK 3 and GTK 4 applications read ~/.config/gtk-3.0 and gtk-4.0 in every session, so after the first Vitre
+    login they show the Vitre style in your normal session too. /usr/lib/vitre/vitre-user-setup --remove takes the links out again.
+  * Settings you change while in the Vitre session are saved in your own account, which both sessions read. The Vitre defaults
+    themselves never reach the other session.
+
+How to go back
+  Pick your normal GNOME session on the login screen. To remove Vitre completely, remove vitre-desktop, vitre-session and the
+  other vitre-* packages (and vitre-system if you installed it, which puts the previous boot splash back). Run
+  /usr/lib/vitre/vitre-user-setup --remove first if you want the GTK links gone as well.
+
+Differences from the Ubuntu packages
+  * No Ubuntu session extensions (ubuntu-dock is not wanted anyway: the Vitre Dock is the only dock); the tray icon extension
+    (appindicatorsupport) and tiling-assistant are listed if you have them.
+  * 10-gnome-parity is 10-ubuntu-parity without its Ubuntu-only parts (the favourite applications, which name Ubuntu apps, and the
+    settings of Ubuntu's desktop icons extension). It gives the Vitre session the values Ubuntu's per-desktop overrides give the Ubuntu
+    session. To get GNOME's own behaviour back for a key, set it in /etc/dconf/db/local.d (read above the Vitre defaults) or in your own
+    settings.
+  * No Yaru layer under the shell theme (see above).
+  * vitre-system carries the boot splash only. Neither distribution has a login screen theme switch that a package can use.
+
+If you used Vitre's per-user install before
+  The per-user install (install.sh) puts copies of the extensions in ~/.local/share/gnome-shell/extensions, the theme in ~/.themes and
+  the settings in your own dconf database. In the Vitre session your copies win over the packaged ones (the same uuid is found in your
+  folder first), so you would keep running the old files after an upgrade. Before the first login to the Vitre session, run
+  uninstall.sh of the per-user package: it removes those copies and puts the settings it changed back. The packaged Vitre session
+  does not need the per-user install at all.

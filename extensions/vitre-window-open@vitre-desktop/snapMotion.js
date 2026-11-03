@@ -1,6 +1,6 @@
 // Vitre snap motion (2026-10-16; reworked 2026-10-22 on the fullscreen motion's model): a window that is tiled, maximized,
 // restored, pulled out of its tile, sent to another monitor or made fullscreen flows from its old frame to its new one on the
-// Vitre stretch spring (vitre-menus dripMotion.js STRETCH: period 400 ms, damping 0.86). Spring, clock and content handling
+// liquid.js glide spring (liquid v3, feel A Viscous; the trailing edges on glide x viscosity). Spring, clock and content handling
 // are the ones of vitre-fullscreen-spaces' fullscreenMotion.js, so a snap and a fullscreen change move alike:
 //
 // - The motion starts with the key press or the click: the window grows or shrinks toward its new frame while it still shows
@@ -10,11 +10,15 @@
 //   fullscreen (the work area, the monitor), for tiling-assistant's tiles (its own rectangles, read only) and for a restore
 //   (the frame the window had before it was maximized). Otherwise (another monitor, mutter's own edge tiling) the window holds
 //   still until the app has drawn, then moves.
-// - The edge that travels furthest leads, the others follow by up to 34 ms; the last 80 ms of every edge ease exactly onto the
-//   new frame, so the motion ends on whole pixels with the window untransformed: no step when the real window takes over.
+// - Vitre Motion Lab 2: the window is carried, not scaled. Its position (x, y) is on the glide spring and leads, its size
+//   (w, h) on the glide trail spring (response x viscosity), so it stretches a little with speed and relaxes on its own.
+//   Every spring rests under a quarter pixel, so the motion ends on the new frame with the window untransformed.
 // - A change while it still moves (snap again; tiling-assistant sends two or three for one key) turns from where the window is
 //   drawn, with its speed. A window in the user's hand (a maximized or tiled window dragged out of place) follows the pointer
-//   exactly while its size eases to the new one.
+//   exactly while it returns to its own size on the glide spring (where mutter puts it under the pointer is its end).
+// - The snap preview (GNOME's and tiling-assistant's tile preview) pours out of a 6 px sliver at the screen edge into the
+//   tile on the pour spring (the far edge leads, the near edge trails on pour x viscosity) and drains back into it on the
+//   pour exit spring (TilePour below).
 // - The first frames after any change advance at most 17 ms each: a frame the shell holds right after a change (the app's new
 //   buffer, a restack) slows the motion there instead of skipping ahead.
 // - Reduced motion: no travel. The window holds until the app has drawn, then the new window fades in at its place under a
@@ -41,28 +45,26 @@ import Mtk from 'gi://Mtk';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import {InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 import {ExtensionState} from 'resource:///org/gnome/shell/misc/extensionUtils.js';
 
+import {Plan, Spring, role, feel, REDUCED, EPS_PX, EPS_OPACITY} from './liquid.js';
+import {Ticker, motionMode, animate, stopAnimate} from './liquidClock.js';
+
 const SNAP = {
-    responseMs: 400,        // the Vitre stretch spring: period (ms) ...                     } as fullscreenMotion.js
-    damping: 0.86,          // ... and damping ratio                                          }
-    lagMs: 34,              // the edge that moves least follows the edge that moves most by this much
-    settle: 0.004,          // an edge is done when it stays within this share of its travel ...
-    landMs: 80,             // ... and its last 80 ms ease exactly onto the target
+    // the motion: liquid.js 'glide': x and y on glide (they lead), w and h on glide trail; every spring rests under a
+    // quarter pixel
     hold: 0.9,              // the app has not drawn its new size yet: the window waits this far along
-    swapInMs: [45, 30],     // once it has drawn ([shrinking, growing]): the new content comes in under the old picture ...
-    swapOutMs: [130, 100],  // ... then the picture fades out (an enlarged old picture goes sooner)
-    refadeMs: 140,          // pictures of older states (a change before) fade out over this long
+    swapInMs: [45, 30],     // once it has drawn ([shrinking, growing]): the new content comes in under the old picture for this
+                            // long, then the picture fades out on the fade role's exit spring; pictures of older states too
     near: 24,               // a drawn size this close to the expected frame is the frame (size steps, gaps)
     interimMs: 220,         // an in-between size with nothing after it is taken as the frame after this long
     waitMs: 1500,           // an app that never draws its new size is let go after this long (motion time)
     movedUs: 100000,        // a frame that only moved, with no known target, is taken as the target after this long (real)
     startTicks: 6,          // the first frames after a change advance at most capMs each: the shell's own work right
     capMs: 17,              // ... after a change can hold a frame; the motion slows there instead of skipping
-    fadeInMs: 80,           // reduced motion: the new window fades in at its place over this long ...
-    fadeFromMs: 60,         // ... while the picture of the old one fades out from here ...
-    fadeMs: 160,            // ... to here
+    // reduced motion: the new window fades in at its place while the picture of the old one fades out, on the 160 ms spring
     staticWaitMs: 450,      // reduced motion: the longest the old frame is held for the app
     watchdogMs: 4000,       // nothing of this runs longer (real time)
 };
@@ -74,70 +76,27 @@ const slowNow = () => Math.max(1, Number(globalThis.__vitreMotionSlow) || ENV_SL
 const SPACES = 'vitre-fullscreen-spaces@vitre-desktop';
 
 const clamp01 = v => Math.min(1, Math.max(0, v));
-const smoothstep = (a, b, v) => {
-    const s = clamp01((v - a) / (b - a));
-    return s * s * (3 - 2 * s);
-};
 
-// ---- the spring (the same as fullscreenMotion.js) ----------------------------------------------------------------------
+// ---- the spring (liquid.js Plans: the engine's spring as a function of motion time) -----------------------------------
 
-const W0 = 2 * Math.PI / SNAP.responseMs;      // rad per ms
-const ZW = SNAP.damping * W0;
-const WD = W0 * Math.sqrt(1 - SNAP.damping * SNAP.damping);
-
-// displacement from the target `tau` ms after a start at displacement `a` with speed `u` (px per ms) ...
-function springDisp(a, u, tau) {
-    if (tau <= 0)
-        return a;
-    const b = (u + ZW * a) / WD;
-    return Math.exp(-ZW * tau) * (a * Math.cos(WD * tau) + b * Math.sin(WD * tau));
+// one channel of the moving rectangle (x, y, w or h): from `s` (at speed `u`, px per ms) to `g` on spring params `p`, from t0 (ms)
+function makeEdge(s, g, u, t0, p = role('glide')) {
+    const plan = new Plan({from: s, to: g, v0: u * 1000, p, eps: EPS_PX});
+    return {s, g, u, t0, plan, end: plan.T * 1000, off: 0};
 }
 
-// ... and the speed then
-function springSpeed(a, u, tau) {
-    if (tau < 0)
-        return 0;
-    const b = (u + ZW * a) / WD;
-    return Math.exp(-ZW * tau) * ((b * WD - ZW * a) * Math.cos(WD * tau) - (a * WD + ZW * b) * Math.sin(WD * tau));
-}
-
-let _settleMs = 0;
-function settleMs() {
-    if (!_settleMs) {
-        let last = 0;
-        for (let t = 0; t <= 3000; t++) {
-            if (Math.abs(springDisp(1, 0, t)) > SNAP.settle)
-                last = t;
-        }
-        _settleMs = last + 1;
-    }
-    return _settleMs;
-}
-
-// one edge of the moving rectangle: from `s` (at speed `u`) to `g`, starting `lag` ms after `t0`; exactly `g` from t0 + end on
-const makeEdge = (s, g, u, t0, lag) => ({s, g, u, t0, lag, end: lag + settleMs()});
-
-function edgeAt(e, t) {
-    const local = t - e.t0;
-    if (local >= e.end)
-        return e.g;
-    const x = e.g + springDisp(e.s - e.g, e.u, local - e.lag);
-    return x + (e.g - x) * smoothstep(e.end - SNAP.landMs, e.end, local);
-}
-
-// the edge's speed at t (px per ms), exact, so a change that follows another within the same frame keeps the window's speed
-function edgeSpeed(e, t) {
-    const local = t - e.t0;
-    const x = e.g + springDisp(e.s - e.g, e.u, local - e.lag);
-    const v = springSpeed(e.s - e.g, e.u, local - e.lag);
-    const a = e.end - SNAP.landMs;
-    const k = clamp01((local - a) / SNAP.landMs);
-    const land = k * k * (3 - 2 * k);
-    const dLand = k > 0 && k < 1 ? 6 * k * (1 - k) / SNAP.landMs : 0;
-    return v * (1 - land) + (e.g - x) * dLand;
-}
-
+// `off`: a shift of the position (a window in the hand follows the pointer), added to the spring's own path
+const edgeAt = (e, t) => e.plan.at(Math.max(0, t - e.t0) / 1000) + (e.off ?? 0);
+// the edge's speed at t (px per ms), so a change that follows another within the same frame keeps the window's speed
+const edgeSpeed = (e, t) => e.plan.vel(Math.max(0, t - e.t0) / 1000) / 1000;
 const edgeDone = (e, t) => t - e.t0 >= e.end;
+
+// a fade (0..1) as a function of motion time: from a0 to `to` on params p, starting `wait` ms after t0
+function makeFade(a0, to, t0, p, wait = 0) {
+    return {t0, wait, a0, plan: new Plan({from: a0, to, p, eps: EPS_OPACITY})};
+}
+const fadeAt = (f, t) => t - f.t0 < f.wait ? f.a0 : f.plan.at((t - f.t0 - f.wait) / 1000);
+const fadeDone = (f, t) => t - f.t0 >= f.wait + f.plan.T * 1000;
 
 // ---- geometry ---------------------------------------------------------------------------------------------------------
 
@@ -146,6 +105,9 @@ const edgesOf = r => [r.x, r.y, r.x + r.w, r.y + r.h];
 const fromEdges = ([l, t, r, b]) => ({x: l, y: t, w: Math.max(1, r - l), h: Math.max(1, b - t)});
 const near = (a, b, eps = 1) => Boolean(a && b) && edgesOf(a).every((v, i) => Math.abs(v - edgesOf(b)[i]) <= eps);
 const sameSize = (a, b, eps = 0.5) => Boolean(a && b) && Math.abs(a.w - b.w) <= eps && Math.abs(a.h - b.h) <= eps;
+// the moving rectangle's channels: position leads, size trails (Vitre Motion Lab 2)
+const chOf = r => [r.x, r.y, r.w, r.h];
+const fromCh = ([x, y, w, h]) => ({x, y, w: Math.max(1, w), h: Math.max(1, h)});
 const lerpRect = (a, b, s) => fromEdges(edgesOf(a).map((v, i) => v + (edgesOf(b)[i] - v) * s));
 const area = r => r.w * r.h;
 const alive = a => Boolean(a) && a.get_stage?.() !== null;
@@ -162,6 +124,216 @@ function foreign(r) {
     }
 }
 
+// ---- the snap preview: glass that pours out of the screen edge (Vitre Motion Lab 2, snap) ----------------------------------
+// GNOME's TilePreview (windowManager.js) and tiling-assistant's subclass of it open and close with ease() on x, y, width,
+// height and opacity. That ease is taken here (on the class GNOME exports, so tiling-assistant's previews inherit it): the
+// preview keeps its look (the theme's .tile-preview) and its geometry moves on four edge springs. Opening, it starts as a
+// SLIVER_PX sliver at the screen edge beside the tile and pours into the tile: the far edge (away from the screen edge) and
+// the bottom on the pour spring, the near edge and the top on pour x viscosity (it stretches out of the edge and relaxes).
+// Closing, it drains back into the sliver on the pour exit springs (never bouncing) and is hidden there. An open while it
+// drains turns it round with its speed; a preview that moves to another tile flows there. Reduced motion: the preview is at
+// the tile at once and cross-fades on the 160 ms spring. Animations off: GNOME's own ease (a cut). Any other ease of a
+// preview (an opacity fade of tiling-assistant's layout previews) runs on the fade role's spring.
+const SLIVER_PX = 6;
+const TILE_KEYS = ['L', 'T', 'R', 'B'];
+
+// the edge of the monitor the tile sits against: a tile across the whole width comes from the top or the bottom
+function tileSide(r, mon, work) {
+    if (r.w >= mon.w * 0.9)
+        return r.y - work.y <= mon.y + mon.h - (r.y + r.h) ? 'top' : 'bottom';
+    return r.x - mon.x <= mon.x + mon.w - (r.x + r.w) ? 'left' : 'right';
+}
+
+function sliverOf(side, r, mon, work) {
+    switch (side) {
+    case 'left':
+        return {L: mon.x, T: r.y, R: mon.x + SLIVER_PX, B: r.y + r.h};
+    case 'right':
+        return {L: mon.x + mon.w - SLIVER_PX, T: r.y, R: mon.x + mon.w, B: r.y + r.h};
+    case 'top':
+        return {L: r.x, T: work.y, R: r.x + r.w, B: work.y + SLIVER_PX};
+    default:
+        return {L: r.x, T: mon.y + mon.h - SLIVER_PX, R: r.x + r.w, B: mon.y + mon.h};
+    }
+}
+
+// which edges lead (pour) and which trail (pour x viscosity) for a tile against `side` (the lab: the bottom and the widths
+// lead, the top and the edge at the source trail)
+function tileLeads(side) {
+    switch (side) {
+    case 'left':
+        return {L: false, T: false, R: true, B: true};
+    case 'right':
+        return {L: true, T: false, R: false, B: true};
+    case 'top':
+        return {L: true, T: false, R: true, B: true};
+    default:
+        return {L: true, T: true, R: true, B: false};
+    }
+}
+
+class TilePour {
+    // take(preview, params): an ease() call of a tile preview; true when taken (the caller runs GNOME's ease otherwise)
+    take(preview, params) {
+        const mode = motionMode();
+        if (mode === 'off' || params.repeatCount || params.autoReverse)
+            return false;
+        const geo = ['x', 'y', 'width', 'height'].some(k => k in params);
+        const st = preview._vitrePour ??= this._state(preview);
+        if (!geo && params.opacity === 0 && st.springs && st.to && st.open && mode === 'full') {
+            this._drain(preview, st, params);
+            return true;
+        }
+        if (!geo || mode === 'reduced') {
+            this._stop(st, false);
+            st.open = geo;
+            for (const [k, v] of Object.entries({x: params.x, y: params.y, width: params.width, height: params.height})) {
+                if (v !== undefined)
+                    preview[k] = v;
+            }
+            if (geo) {
+                // (springs that exist are put where the preview is, so a later full-motion close drains from there)
+                st.to = {L: preview.x, T: preview.y, R: preview.x + preview.width, B: preview.y + preview.height};
+                if (st.springs)
+                    this._snapTo(st, st.to);
+            }
+            if ('opacity' in params) {
+                animate(preview, {opacity: params.opacity}, {fade: role('fade', {exit: params.opacity < preview.opacity}),
+                    onDone: finished => {
+                        params.onStopped?.(finished);
+                        if (finished)
+                            params.onComplete?.();
+                    }});
+            } else {
+                params.onStopped?.(true);
+                params.onComplete?.();
+            }
+            return true;
+        }
+        this._pour(preview, st, params);
+        return true;
+    }
+
+    _state(preview) {
+        const st = {springs: null, side: null, open: false, from: null, to: null, ticker: null, params: null};
+        preview.connect('destroy', () => this._stop(st, false));
+        return st;
+    }
+
+    _snapTo(st, g) {
+        st.springs ??= Object.fromEntries(TILE_KEYS.map(k => [k, new Spring(g[k], role('pour'), EPS_PX)]));
+        for (const k of TILE_KEYS)
+            st.springs[k].snap(g[k]);
+    }
+
+    _geometry(preview, r) {
+        const idx = preview._monitorIndex >= 0 ? preview._monitorIndex : global.display.get_current_monitor();
+        const m = Main.layoutManager.monitors[idx] ?? Main.layoutManager.primaryMonitor;
+        const mon = {x: m.x, y: m.y, w: m.width, h: m.height};
+        const wa = Main.layoutManager.getWorkAreaForMonitor(m.index);
+        const work = {x: wa.x, y: wa.y, w: wa.width, h: wa.height};
+        const side = tileSide(r, mon, work);
+        return {side, sliver: sliverOf(side, r, mon, work)};
+    }
+
+    // the preview opens (or moves) toward the tile in params
+    _pour(preview, st, params) {
+        const r = {x: params.x ?? preview.x, y: params.y ?? preview.y, w: params.width ?? preview.width, h: params.height ?? preview.height};
+        const {side, sliver} = this._geometry(preview, r);
+        // from the sliver, unless it is on screen (open, or draining into this same edge): then it turns or flows with its speed
+        const visible = st.springs && preview.visible && (st.open || st.side === side) && st.ticker?.running !== false;
+        this._stop(st, false);
+        preview.remove_all_transitions();
+        stopAnimate(preview);
+        if (!visible || !st.springs)
+            this._snapTo(st, sliver);
+        st.side = side;
+        st.open = true;
+        st.params = params;
+        preview.opacity = params.opacity ?? 255;       // the glass is there from the first frame, as a sliver
+        const lead = role('pour'), trail = role('pour', {trail: true}), leads = tileLeads(side);
+        const to = {L: r.x, T: r.y, R: r.x + r.w, B: r.y + r.h};
+        for (const k of TILE_KEYS)
+            st.springs[k].set(to[k], leads[k] ? lead : trail);
+        st.from = this._now(st);
+        st.to = to;
+        this._run(preview, st, () => true);
+    }
+
+    // drains into its sliver on the exit springs, then GNOME's close finishes (hide, reset)
+    _drain(preview, st, params) {
+        const r = {x: st.to.L, y: st.to.T, w: st.to.R - st.to.L, h: st.to.B - st.to.T};
+        const {sliver} = this._geometry(preview, r);
+        const side = st.side;
+        this._stop(st, false);
+        preview.remove_all_transitions();
+        st.open = false;
+        st.params = params;
+        const pe = role('pour', {exit: true});
+        const trail = {r: pe.r * feel().visc, z: pe.z};
+        const leads = tileLeads(side);
+        for (const k of TILE_KEYS)
+            st.springs[k].set(sliver[k], leads[k] ? pe : trail);
+        st.from = this._now(st);
+        st.to = sliver;
+        // the lab hides the glass once it is 99 % home (the last of the sliver is under a pixel of travel)
+        this._run(preview, st, () => this._progress(st) < 0.99);
+    }
+
+    _now(st) {
+        return Object.fromEntries(TILE_KEYS.map(k => [k, st.springs[k].x]));
+    }
+
+    _progress(st) {
+        let d0 = 0, d = 0;
+        for (const k of TILE_KEYS) {
+            d0 += Math.abs(st.to[k] - st.from[k]);
+            d += Math.abs(st.to[k] - st.springs[k].x);
+        }
+        return d0 < 1e-6 ? 1 : 1 - d / d0;
+    }
+
+    _apply(preview, st) {
+        const {L, T, R, B} = this._now(st);
+        preview.set_position(L, T);
+        preview.set_size(Math.max(1, R - L), Math.max(1, B - T));
+    }
+
+    _run(preview, st, more) {
+        const params = st.params;
+        this._apply(preview, st);
+        const ticker = st.ticker = new Ticker(dt => {
+            if (st.ticker !== ticker)
+                return false;
+            for (const k of TILE_KEYS)
+                st.springs[k].step(dt);
+            this._apply(preview, st);
+            if (TILE_KEYS.some(k => !st.springs[k].rest) && more())
+                return true;
+            st.ticker = null;
+            if (!st.open) {
+                preview.opacity = 0;
+                st.springs = null;     // drained: the next open starts from a sliver
+            }
+            st.params = null;
+            params.onStopped?.(true);
+            params.onComplete?.();
+            return false;
+        }, {actor: preview});
+        ticker.start();
+    }
+
+    // stops the motion where it is; the call it ran for ends not finished (as a removed transition)
+    _stop(st, finished) {
+        const t = st.ticker, params = st.params;
+        st.ticker = null;
+        st.params = null;
+        t?.stop();
+        if (t && params)
+            params.onStopped?.(finished);
+    }
+}
+
 export class SnapMotion {
     constructor(owner) {
         this._owner = owner;    // the extension: _note() for the rig's decision log
@@ -175,6 +347,20 @@ export class SnapMotion {
         this._trace = null;
         this._injections = new InjectionManager();
         const self = this;
+        // the snap preview pours out of the screen edge (GNOME's TilePreview; tiling-assistant's previews inherit this)
+        const pour = this._pour = new TilePour();
+        if (WindowManager.TilePreview?.prototype) {
+            this._injections.overrideMethod(WindowManager.TilePreview.prototype, 'ease', original => function (params) {
+                let mine = false;
+                try {
+                    mine = pour.take(this, params);
+                } catch (e) {
+                    console.warn(`Vitre snap preview: left to GNOME (${e.message})`);
+                }
+                if (!mine)
+                    original.call(this, params);
+            });
+        }
         this._injections.overrideMethod(Main.wm, '_prepareAnimationInfo', original => function (shellwm, actor, oldFrameRect, change) {
             let mine = false;
             try {
@@ -339,7 +525,7 @@ export class SnapMotion {
             lastR: from, lastReal: now, mt: now, fadeAt: null, destroyId: 0, moveId: 0, closeId: 0};
         if (e.held)
             e.ptr = this._pointer();
-        e.edges = edgesOf(from).map(v => makeEdge(v, v, 0, now, 0));
+        e.edges = chOf(from).map(v => makeEdge(v, v, 0, now));
         this._remember(e, change, from, counted);
         this._freeze(e);
         e.destroyId = actor.connect('destroy', () => this._drop(actor));
@@ -374,7 +560,7 @@ export class SnapMotion {
         e.us0 = GLib.get_monotonic_time();
         e.expect = this._predict(e, change, counted) ?? e.expect;
         if (e.fadeAt !== null && e.opSet && alive(e.actor))
-            e.actor.opacity = Math.round(255 * smoothstep(0, SNAP.fadeInMs, e.mt - e.fadeAt));
+            e.actor.opacity = Math.round(255 * this._fadeIn(e, e.mt));
     }
 
     // a change while the motion runs: turn from where the window is drawn, with its speed
@@ -549,27 +735,25 @@ export class SnapMotion {
             p.a0 = this._picAlpha(p, now);
             p.t0 = now;
             p.kind = 'old';
+            p.fade = makeFade(p.a0, 0, now, role('fade', {exit: true}));
         }
         const actor = new St.Widget({content, x: box.x, y: box.y, width: box.w, height: box.h, reactive: false});
         global.window_group.insert_child_above(actor, e.actor);
         const k = grow ? 1 : 0;
-        e.pics.push({actor, F: {...e.mapF}, B: box, kind: e.mode === 'fade' ? 'fade' : 'main', t0: now, a0: 1,
-            inMs: SNAP.swapInMs[k], outMs: SNAP.swapOutMs[k]});
+        const kind = e.mode === 'fade' ? 'fade' : 'main';
+        e.pics.push({actor, F: {...e.mapF}, B: box, kind, t0: now, a0: 1,
+            fade: kind === 'fade' ? makeFade(1, 0, now, REDUCED) : makeFade(1, 0, now, role('fade', {exit: true}), SNAP.swapInMs[k])});
         return true;
     }
 
     _picAlpha(p, now) {
-        if (p.kind === 'old')
-            return p.a0 * (1 - smoothstep(0, SNAP.refadeMs, now - p.t0));
-        if (p.kind === 'fade')
-            return 1 - smoothstep(SNAP.fadeFromMs, SNAP.fadeMs, now - p.t0);
-        return 1 - smoothstep(p.inMs, p.inMs + p.outMs, now - p.t0);
+        return fadeDone(p.fade, now) ? 0 : fadeAt(p.fade, now);
     }
 
     // ---- the motion ----------------------------------------------------------------------------------------------------
 
     _rectAt(e, now) {
-        return fromEdges(e.edges.map(edge => edgeAt(edge, now)));
+        return fromCh(e.edges.map(edge => edgeAt(edge, now)));
     }
 
     // Where the window heads now: its frame once the app has drawn it, the hold point short of it before, or (nothing known)
@@ -585,14 +769,14 @@ export class SnapMotion {
             return;
         const at = e.edges.map(edge => edgeAt(edge, now));
         const u = e.edges.map(edge => edgeSpeed(edge, now));
-        const to = edgesOf(target);
-        const travel = at.map((v, i) => Math.abs(to[i] - v));
-        const most = Math.max(...travel);
-        const still = u.every(v => Math.abs(v) < 0.02);
-        // from rest, the edge that travels least follows the one that travels most; on the move, every edge keeps its speed;
-        // in the user's hand, all edges together (the pointer keeps its place on the window)
-        e.edges = e.edges.map((_edge, i) => makeEdge(at[i], to[i], u[i], now,
-            (fresh || still) && !e.held && most > 0.5 && Math.abs(u[i]) < 0.02 ? SNAP.lagMs * (1 - travel[i] / most) : 0));
+        const to = chOf(target);
+        const most = Math.max(...to.map((v, i) => Math.abs(v - at[i])));
+        // position on glide (it leads), size on glide trail (it follows on viscosity: the window is carried, not scaled); every
+        // channel keeps its speed. In the user's hand the size comes back on glide itself (the window returns to its own size
+        // under the finger)
+        const lead = role('glide');
+        const trail = e.held ? lead : role('glide', {trail: true});
+        e.edges = e.edges.map((_edge, i) => makeEdge(at[i], to[i], u[i], now, i < 2 ? lead : trail));
         e.target = target;
         if (!e.started && most > 0.5) {
             e.started = true;
@@ -661,8 +845,8 @@ export class SnapMotion {
     // the whole motion moves with the window's frame (a window in the user's hand)
     _shift(e, dx, dy) {
         e.edges = e.edges.map((edge, i) => {
-            const d = i % 2 ? dy : dx;
-            return {...edge, s: edge.s + d, g: edge.g + d};
+            const d = i === 0 ? dx : i === 1 ? dy : 0;      // the size does not move with the hand
+            return {...edge, s: edge.s + d, g: edge.g + d, off: (edge.off ?? 0) + d};
         });
         e.target = shifted(e.target, dx, dy);
         e.final = shifted(e.final, dx, dy);
@@ -742,7 +926,7 @@ export class SnapMotion {
         a.translation_y = R.y - B.y - Py - sy * (F.y - B.y - Py);
         e.pics = e.pics.filter(p => {
             const alpha = this._picAlpha(p, now);
-            if (alpha <= 0 && now - p.t0 > p.inMs) {
+            if (alpha <= 0 && fadeDone(p.fade, now)) {
                 p.actor.destroy();
                 return false;
             }
@@ -760,8 +944,15 @@ export class SnapMotion {
 
     // ---- reduced motion: hold, then a fade in place (animations off: hold, then one cut) ---------------------------------
 
+    // reduced motion: the window's own fade in at its place (the 160 ms spring)
+    _fadeIn(e, now) {
+        e.fadeIn ??= makeFade(0, 1, e.fadeAt, REDUCED);
+        return fadeAt(e.fadeIn, now);
+    }
+
     _fadeStart(e, now) {
         e.fadeAt = now;
+        e.fadeIn = makeFade(0, 1, now, REDUCED);
         if (alive(e.actor)) {
             e.actor.opacity = 0;
             e.opSet = true;
@@ -778,12 +969,11 @@ export class SnapMotion {
                 this._heldMove(e, F, now);
             return;
         }
-        const k = now - e.fadeAt;
-        e.actor.opacity = Math.round(255 * smoothstep(0, SNAP.fadeInMs, k));
+        e.actor.opacity = Math.round(255 * this._fadeIn(e, now));
         e.opSet = true;
         e.pics = e.pics.filter(p => {
             const alpha = this._picAlpha(p, now);
-            if (alpha <= 0 && k > SNAP.fadeFromMs) {
+            if (alpha <= 0) {
                 p.actor.destroy();
                 return false;
             }
@@ -792,7 +982,7 @@ export class SnapMotion {
         });
         if (this._trace)
             this._trace.push({t: now, R: rectOf(e.win.get_frame_rect()), pics: e.pics.map(p => p.actor.opacity), live: e.actor.opacity});
-        if (k >= SNAP.fadeMs)
+        if (fadeDone(e.fadeIn, now) && e.pics.every(p => fadeDone(p.fade, now)))
             this._finish(e, 'faded');
     }
 
@@ -835,7 +1025,7 @@ export class SnapMotion {
         // nothing else started: carry on from where it was drawn
         e.killed = false;
         if (e.mode === 'fade' && e.fadeAt !== null) {
-            a.opacity = Math.round(255 * smoothstep(0, SNAP.fadeInMs, e.mt - e.fadeAt));
+            a.opacity = Math.round(255 * this._fadeIn(e, e.mt));
             e.opSet = true;
         } else if (e.mode === 'motion') {
             this._apply(e, e.mt);

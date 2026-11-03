@@ -18,23 +18,22 @@
 
 
 import GLib from 'gi://GLib';
-import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import { isActorAlive } from '../../core/Utils.js';
+import { Spring, role, EPS_PX } from '../../liquid/liquid.js';
 import PeekManager from '../../core/PeekManager.js';
 import { Settings } from '../../core/SettingsManager.js';
 import { resetMagnification } from './MagnifierReset.js';
 import { TimeoutTracker } from '../../core/TimeoutTracker.js';
 import { isContextMenuOpen, isAppGridOpen } from './MagnifierState.js';
-import { getDockButtons, getFixedSlots, easeOutCirc } from './MagnifierMath.js';
+import { getDockButtons, getFixedSlots } from './MagnifierMath.js';
 import { createTooltipActor, populateTooltipContent } from './MagnifierTooltipRenderer.js';
 import { TOOLTIP_GAP, clearTooltipDelay, hideTooltip, isInsideTooltip, isPointerInDockTooltipBridge } from './MagnifierTooltip.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
-const FLIP_DURATION = 300;
-const GAP_EASE_MS = 70;
 const TOOLTIP_DELAY_MS = 600;
 const MIN_ARROW_PADDING = 18;
 const HOVER_EDGE_PX = 8;
@@ -44,8 +43,26 @@ function smoothstep(edge0, edge1, x) {
     return t * t * (3 - 2 * t);
 }
 
-function approach(current, target, factor) {
-    return Math.abs(target - current) < 0.0015 ? target : current + (target - current) * factor;
+// liquid v3: every value the magnifier moves is a bead spring (liquid.js) on its owner, stepped by the wall-clock time between
+// calls (pointer events and the settle tick). A value someone else wrote meanwhile (a reset, a re-render) is where the spring
+// continues from, with its speed. Returns the new value; owner._liqMoving tells whether any of its springs still moves.
+const LIQ_EPS = {sx: 1e-4, sy: 1e-4, az: 0.02, ay: 0.02, ax: 0.02};
+function spring(owner, key, current, target, dt) {
+    const bag = owner._liq ??= {};
+    let s = bag[key];
+    const eps = LIQ_EPS[key] ?? EPS_PX;
+    if (!s) {
+        s = bag[key] = new Spring(current, role('bead'), eps);
+    } else if (Math.abs(s.x - current) > Math.max(eps * 4, 1e-3)) {
+        s.x = current;
+        if (s.rest)
+            s.v = 0;
+    }
+    s.set(target);
+    const x = s.step(dt);
+    if (!s.rest)
+        owner._liqMoving = true;
+    return x;
 }
 
 function calculateScaleCurve(dist, radius, zoomRange, style) {
@@ -140,7 +157,6 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
     const widthPushEnabled = Settings.hoverZoomWidth;
     const radiusMultiplier = Settings.hoverZoomRadius || 3.5;
     const gapFactorSetting = Settings.hoverZoomGapFactor || 2.0;
-    const smoothnessSetting = Settings.hoverZoomSmoothness || 0.26;
 
     const dominoTilt = Settings.hoverZoomDominoTilt || 14;
     const cylinderAngle = Settings.hoverZoomCylinderAngle || 32;
@@ -176,6 +192,8 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
     }
 
     const tFrame = now || Date.now();
+    const sdt = Math.min(1 / 30, Math.max(0, (tFrame - (dockActor._liqT ?? tFrame)) / 1000));
+    dockActor._liqT = tFrame;
     if (!dockActor._pointerState) {
         dockActor._pointerState = { x: cx, y: cy, t: tFrame, smoothVx: 0, smoothVy: 0 };
     }
@@ -445,14 +463,14 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
     const zoomOffset = effectiveCursor - mappedCursor;
     if (Number.isNaN(zoomOffset)) return;
 
-    const gapEase = 1 - Math.exp(-dt / GAP_EASE_MS);
-    const gapSpread = approach(dockActor._gapSpread || 0, dockActor._gapSpreadTarget || 0, gapEase);
+    dockActor._liqMoving = false;
+    const gapSpread = spring(dockActor, 'gap', dockActor._gapSpread || 0, dockActor._gapSpreadTarget || 0, sdt);
     dockActor._gapSpread = gapSpread;
 
     const lateralAxis = isVertical ? 'translation_y' : 'translation_x';
     const riseAxis = isVertical ? 'translation_x' : 'translation_y';
 
-    const SMOOTH_FACTOR = dockActor._isDragging ? 0.35 : Math.max(0.08, Math.min(0.60, smoothnessSetting));
+    // (hover-zoom-smoothness was the old per-frame smoothing factor; the bead spring is the motion now)
     let leftExp = 0;
     let rightExp = 0;
     let topExp = 0;
@@ -569,7 +587,7 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
     dockActor._clusterShift = clusterBoundaryShift;
     dockActor._isZoomActive = zoomEnabled && clusterEnvelope > 0.001;
 
-    let needsMoreFrames = false;
+    let needsMoreFrames = Boolean(dockActor._liqMoving);      // the gap spread's spring
 
     for (let i = 0; i < n; i++) {
         const b = btns[i];
@@ -584,17 +602,22 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
 
         const zoomTrans = zoomEnabled ? (scaledCenters[i] + zoomOffset) - centersByBtn[i] : 0;
 
+        // a reordered button flies home from its old place on a bead spring (it starts at the offset the reorder gave it)
         let flipTrans = 0;
+        b._liqMoving = false;
         if (b._flipOffset && b._flipStartTime) {
-            const elapsed = tFrame - b._flipStartTime;
-            if (elapsed < FLIP_DURATION) flipTrans = b._flipOffset * (1.0 - easeOutCirc(elapsed / FLIP_DURATION));
-            else {
+            if (b._liqFlipFrom !== b._flipStartTime) {
+                b._liqFlipFrom = b._flipStartTime;
+                (b._liq ??= {}).flip = new Spring(b._flipOffset, role('bead'), EPS_PX);
+            }
+            flipTrans = spring(b, 'flip', b._liq.flip.x, 0, sdt);
+            if (b._liq.flip.rest) {
                 b._flipOffset = 0;
                 b._flipStartTime = null;
             }
         }
 
-        b._gapOffset = approach(b._gapOffset || 0, b._gapTarget || 0, gapEase);
+        b._gapOffset = spring(b, 'gapOff', b._gapOffset || 0, b._gapTarget || 0, sdt);
 
         b.remove_transition('scale_x');
         b.remove_transition('scale_y');
@@ -620,20 +643,16 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
         const prevAngleY = Number.isFinite(b.rotation_angle_y) ? b.rotation_angle_y : 0.0;
         const prevAngleX = Number.isFinite(b.rotation_angle_x) ? b.rotation_angle_x : 0.0;
 
-        const smoothScaleX = approach(prevScaleX, targetScaleX, SMOOTH_FACTOR);
-        const smoothScaleY = approach(prevScaleY, targetScaleY, SMOOTH_FACTOR);
-        const smoothLateral = approach(prevLateral, targetLateral, SMOOTH_FACTOR);
-        const smoothRise = approach(prevRise, targetRise, SMOOTH_FACTOR);
-        const smoothAngleZ = approach(prevAngleZ, targetAngleZ, SMOOTH_FACTOR);
-        const smoothAngleY = approach(prevAngleY, targetAngleY, SMOOTH_FACTOR);
-        const smoothAngleX = approach(prevAngleX, targetAngleX, SMOOTH_FACTOR);
+        const smoothScaleX = spring(b, 'sx', prevScaleX, targetScaleX, sdt);
+        const smoothScaleY = spring(b, 'sy', prevScaleY, targetScaleY, sdt);
+        const smoothLateral = spring(b, 'lat', prevLateral, targetLateral, sdt);
+        const smoothRise = spring(b, 'rise', prevRise, targetRise, sdt);
+        const smoothAngleZ = spring(b, 'az', prevAngleZ, targetAngleZ, sdt);
+        const smoothAngleY = spring(b, 'ay', prevAngleY, targetAngleY, sdt);
+        const smoothAngleX = spring(b, 'ax', prevAngleX, targetAngleX, sdt);
 
-        if (Math.abs(targetScaleX - smoothScaleX) > 0.002 ||
-            Math.abs(targetScaleY - smoothScaleY) > 0.002 ||
-            Math.abs(targetLateral - smoothLateral) > 0.1 ||
-            Math.abs(targetRise - smoothRise) > 0.1) {
+        if (b._liqMoving)
             needsMoreFrames = true;
-        }
 
         if (zoomEnabled) {
             b.scale_x = smoothScaleX;
@@ -727,12 +746,13 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
                 const prevH = dockActor.bgActor.height || baseH;
                 const prevY = dockActor.bgActor.y;
 
-                const nextH = approach(prevH, targetH, SMOOTH_FACTOR);
-                const nextY = approach(prevY, targetY, SMOOTH_FACTOR);
+                const bg = dockActor.bgActor;
+                bg._liqMoving = false;
+                const nextH = spring(bg, 'len', prevH, targetH, sdt);
+                const nextY = spring(bg, 'pos', prevY, targetY, sdt);
 
-                if (Math.abs(targetH - nextH) > 0.2 || Math.abs(targetY - nextY) > 0.2) {
+                if (bg._liqMoving)
                     needsMoreFrames = true;
-                }
 
                 dockActor.bgActor.set_position(baseX, nextY);
                 dockActor.bgActor.set_size(baseW, nextH);
@@ -745,12 +765,13 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
                 const prevW = dockActor.bgActor.width || baseW;
                 const prevX = dockActor.bgActor.x;
 
-                const nextW = approach(prevW, targetW, SMOOTH_FACTOR);
-                const nextX = approach(prevX, targetX, SMOOTH_FACTOR);
+                const bg = dockActor.bgActor;
+                bg._liqMoving = false;
+                const nextW = spring(bg, 'len', prevW, targetW, sdt);
+                const nextX = spring(bg, 'pos', prevX, targetX, sdt);
 
-                if (Math.abs(targetW - nextW) > 0.2 || Math.abs(targetX - nextX) > 0.2) {
+                if (bg._liqMoving)
                     needsMoreFrames = true;
-                }
 
                 dockActor.bgActor.set_position(nextX, baseY);
                 dockActor.bgActor.set_size(nextW, baseH);
@@ -999,10 +1020,9 @@ export function applyRealtimeFrame(dockActor, cx, cy, isVertical, settings, now 
                 }
 
                 dockActor._magTooltip.remove_all_transitions();
-                dockActor._magTooltip.ease({
+                liquidEase(dockActor._magTooltip, {
                     opacity: 255,
-                    duration: 220,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                    duration: 220
                 });
             } else if (dockActor._tooltipReady && dockActor._magTooltip.visible && isActorAlive(dockActor._magTooltipBg)) {
                 const btnPos = btn.get_transformed_position();

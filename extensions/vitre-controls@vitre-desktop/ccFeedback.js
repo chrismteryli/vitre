@@ -5,7 +5,7 @@
  *                     capsule (lens) through which the track shows; it follows the pointer; release morphs back.
  *  - PillFeedback   : pill text area (the part that opens the submenu) shows a ">" at the pill's right end.
  *  - ToggleFeedback : circles and pill discs: press response (scale + brighten), on/off crossfade of the
- *                     disc fill and the glyph colour.
+ *                     disc fill and the glyph colour, and a bead kick of the whole tile (tiles.js).
  *  - ButtonFeedback : small round buttons (Now Playing transport, Sound output button): press response.
  * Every actor added here is registered with the extension's UndoJournal and removed on disable. */
 import Clutter from 'gi://Clutter';
@@ -14,6 +14,8 @@ import St from 'gi://St';
 
 import {FB, Tween, PressResponse, bindPress, centrePivot, setScale, pressGrow, lerp, lerpColor, cssRgba, animationsOn} from './feedback.js';
 import {GlassLayer, MARGIN} from './glass.js';
+import {motionMode} from './liquidClock.js';
+import {tileOf} from './tiles.js';
 
 const WHITE = {red: 255, green: 255, blue: 255, alpha: 255};
 
@@ -131,12 +133,12 @@ export class SliderFeedback {
 
     _syncHover() {
         const on = this._item.hover || this._dragging;
-        this._hov.to(on ? 1 : 0, on ? FB.hoverInMs : FB.hoverOutMs, 'linear');
+        this._hov.to(on ? 1 : 0, 'fade');
     }
 
     _onDrag(on) {
         this._dragging = on;
-        this._morph.to(on ? 1 : 0, FB.morphMs, 'easeOut');
+        this._morph.to(on ? 1 : 0, 'bead');
         this._syncHover();
     }
 
@@ -243,7 +245,7 @@ export class PillFeedback {
         this._tween = new Tween(menuButton, v => fade(this.chevron, v), 0, 'pillchevron');
         menuButton.connectObject('notify::hover', () => {
             const on = menuButton.hover;
-            this._tween.to(on ? 1 : 0, on ? FB.pillChevronInMs : FB.pillChevronOutMs, 'linear');
+            this._tween.to(on ? 1 : 0, 'fade');
         }, this);
         journal.add(() => this.destroy());
         journal.add(() => this.chevron.destroy());
@@ -407,7 +409,8 @@ export class ToggleFeedback {
         // ---- on/off crossfade: fill opacity and glyph colour -------------------------------------
         this._state = new Tween(item, v => this._applyState(v), item.checked ? 1 : 0, `state:${item.constructor.name}`);
         this._offColor = WHITE;
-        this._onColor = null;
+        // polish-tokens: ON is an accent fill with a white glyph (one toggle language), so the glyph stays white
+        this._onColor = WHITE;
         this._applyState(this._state.value);
         item.connectObject('notify::checked', () => {
             this._onColor ??= accentColor(item);
@@ -415,7 +418,10 @@ export class ToggleFeedback {
             if (animationsOn())
                 this._applyState(this._state.value, true);
             const target = item.checked ? 1 : 0;
-            this._state.to(target, FB.stateMs, 'linear', () => this._applyState(target));
+            this._state.to(target, 'fade', () => this._applyState(target));
+            // the tile itself gives a little (Motion Lab 2: a bead kick, a squash that keeps its area)
+            if (motionMode() === 'full' && item.mapped)
+                tileOf(item).kick();
         }, this);
         j.add(() => this.destroy());
     }

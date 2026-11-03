@@ -1,0 +1,137 @@
+pkgbase = vitre
+	pkgver = 0.2.0
+	pkgrel = 1
+	url = https://github.com/chrismteryli/vitre
+	arch = any
+	license = GPL-3.0-only
+	makedepends = python
+	makedepends = glib2
+	options = !strip
+	options = !debug
+	source = vitre-0.2.0.tar.gz::https://github.com/chrismteryli/vitre/archive/v0.2.0.tar.gz
+	source = MacTahoe-icon-theme-839848b9a8a38a92a6936e30c4abe35cc6f2546d.tar.gz::https://github.com/vinceliuice/MacTahoe-icon-theme/archive/839848b9a8a38a92a6936e30c4abe35cc6f2546d.tar.gz
+	source = vitre-stage.sh
+	source = make-mode.py
+	source = make-defaults.py
+	source = sanitize-staged.py
+	source = session-extensions.txt
+	source = vitre-mode.json.in
+	source = vitre-session
+	source = vitre.session
+	source = vitre.desktop
+	source = vitre.session.conf
+	source = vitre-user-setup
+	source = vitre-user-setup.service
+	source = dconf-profile-vitre
+	source = vitre-backgrounds.xml
+	source = README.vitre-session
+	source = 10-ubuntu-parity
+	source = make-parity.py
+	sha256sums = 3abaa2884c2befff45f544bc5b43d18c2352d6cc9a398e80302a7faf167be340
+	sha256sums = 00cb36a3883e40687ade9f57a0c1dd3e14fda84b73efc69aa86e2be67f32ab0a
+	sha256sums = e42ed68c02106d1caab1b96a7f8496f3651db662edea32fb07bcf46558f3b56e
+	sha256sums = 8a11a62f403e6a1778b35514605ad132d59d3d7992a9c4537bbff2378afc752e
+	sha256sums = 7ad7f5dc2620b74de2dc50e4d7769665d2f3acf2daae07209d99a79a2692c87d
+	sha256sums = bb669694dbe4463b20ed8cf653d449dc14f440a6e631b8916569bc2b552be79c
+	sha256sums = 1330f37a5d664c2680f6f9895869055d027af65409e257d87b31934825d99f20
+	sha256sums = 6ae5c8355d70e7ffc525217a66d68fbef62886d488b1c527a5fc18a1d6291fec
+	sha256sums = 31cfb2670089091048feead814f16ba38e8eb3a994d4e1b8673f6bb89be1d3f3
+	sha256sums = 3d1db8a4643b039316ea3b20de237272c3b7c94a08ea1a7194aebbf0a628fb4a
+	sha256sums = 232e06ccb90fc84fae0383c22e9cfe1b5d81f6b10a7b8f3b1247e16368ec208a
+	sha256sums = 9a6bb6e0e53a15ff7d1bab9ec8fd375dc33a31f9119815230c6eb16cbb9257cc
+	sha256sums = d115913912d691b65865040bc2c001b71ed193116c2b115a72ad561be4b374f4
+	sha256sums = 9aac88c11a53c2b28831becc4b9f2b621747362653f2c180e64b54fa91c602f8
+	sha256sums = 66dc6099f13172a6c8869dc6b4015408da27cfc9658a915ec60d210cd74af366
+	sha256sums = 0cbea7927cfa1e9b37f381938d90c91b957d211175cec900a28a71714e0dd842
+	sha256sums = 1919c1f26f11a863a4948d20dc2e962ee32236422dd143c2b691a9ad3e96037c
+	sha256sums = 429ecd95aa6e1cb7fd95fd75b6a51b15f6c6dd28178e82748cc7e9d610db7ef8
+	sha256sums = 74ab48104da56e31d6a1ecacf0a8a435cfcf314cddedc8434a9e12d30c2d0f49
+
+pkgname = vitre-desktop
+	pkgdesc = Vitre glass desktop for GNOME (meta package)
+	license = GPL-3.0-only
+	depends = vitre-session=0.2.0-1
+	depends = vitre-shell=0.2.0-1
+	depends = vitre-shell-extras=0.2.0-1
+	depends = vitre-theme=0.2.0-1
+	depends = vitre-icons=0.2.0-1
+	depends = vitre-icons-base=0.2.0-1
+	depends = vitre-cursor=0.2.0-1
+	depends = vitre-backgrounds=0.2.0-1
+	depends = gnome-shell>=1:51
+	depends = gnome-shell<1:52
+	depends = gnome-session
+	depends = inter-font
+	depends = ttf-jetbrains-mono
+	optdepends = vitre-system: Vitre boot splash (changes the splash for every user of the machine)
+
+pkgname = vitre-session
+	pkgdesc = Vitre session for GNOME Shell: a Vitre entry at the login screen
+	license = GPL-3.0-only
+	depends = vitre-theme=0.2.0-1
+	depends = gnome-shell>=1:51
+	depends = gnome-shell<1:52
+	depends = gnome-session
+	depends = dconf
+	depends = gnome-shell-extensions
+	optdepends = vitre-shell: the Vitre extensions the session names
+	optdepends = vitre-shell-extras: Vitre Dock and the third-party extensions
+	optdepends = vitre-icons: Vitre icon theme
+	optdepends = vitre-cursor: Vitre cursor theme
+	optdepends = vitre-backgrounds: Vitre wallpapers
+	optdepends = vitre-desktop: all of the above in one go
+	optdepends = gnome-shell-extension-appindicator: tray icons in the Vitre session
+	install = vitre-session.install
+	backup = etc/dconf/profile/vitre
+	backup = etc/dconf/db/vitre.d/00-vitre
+	backup = etc/dconf/db/vitre.d/10-gnome-parity
+
+pkgname = vitre-shell
+	pkgdesc = Vitre GNOME Shell extensions
+	license = GPL-3.0-only
+	depends = gnome-shell>=1:51
+	depends = gnome-shell<1:52
+	optdepends = vitre-shell-extras: Vitre Dock and the third-party extensions
+
+pkgname = vitre-shell-extras
+	pkgdesc = Vitre Dock and third-party GNOME Shell extensions used by Vitre
+	license = GPL-3.0-only
+	license = GPL-3.0-or-later
+	license = GPL-2.0-or-later
+	license = MIT
+	depends = gnome-shell>=1:51
+	depends = gnome-shell<1:52
+
+pkgname = vitre-theme
+	pkgdesc = Vitre glass theme (GTK 3, GTK 4, window frame and shell)
+	license = MIT
+	license = GPL-3.0-only
+	license = GPL-3.0-or-later
+	license = LGPL-2.1-or-later
+	optdepends = gnome-shell: the shell part of the theme
+	optdepends = inter-font: the font Vitre-Glass is drawn for
+
+pkgname = vitre-icons
+	pkgdesc = Vitre icon theme
+	license = GPL-3.0-only
+	depends = vitre-icons-base=0.2.0-1
+	depends = hicolor-icon-theme
+
+pkgname = vitre-icons-base
+	pkgdesc = Vitre base icon theme (VitreBase): MacTahoe-icon-theme without its app icons
+	license = GPL-3.0-only
+
+pkgname = vitre-cursor
+	pkgdesc = Vitre cursor theme
+	license = GPL-3.0-only
+	optdepends = adwaita-cursors: the cursors Vitre-Cursor does not draw
+
+pkgname = vitre-backgrounds
+	pkgdesc = Vitre wallpapers
+	license = GPL-3.0-only
+
+pkgname = vitre-system
+	pkgdesc = Vitre boot splash (optional; changes the splash for every user of the machine)
+	license = GPL-3.0-only
+	depends = plymouth
+	install = vitre-system.install

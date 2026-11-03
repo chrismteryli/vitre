@@ -1,0 +1,61 @@
+# Vitre system defaults, part 2: settings the Ubuntu session gets from Ubuntu's per-desktop overrides.
+#
+# /usr/share/glib-2.0/schemas/10_ubuntu-settings.gschema.override holds groups such as [org.gnome.nautilus.icon-view:ubuntu].
+# GSettings only applies a ":ubuntu" group when XDG_CURRENT_DESKTOP lists "ubuntu". The Vitre session says "Vitre:GNOME", so none
+# of them apply there, and the values below would fall back to plain GNOME. The look of Vitre was built and tuned in the Ubuntu
+# session, so the ones that change what you see or how it behaves are repeated here. Only keys that 00-vitre does not already set.
+# Not repeated: Ubuntu wallpaper, theme, icon and font names (Vitre sets its own), the Ubuntu dock settings (that extension is not
+# part of Vitre) and settings of apps Vitre does not touch (Rhythmbox, Empathy, GNOME Terminal: Vitre's menu opens Ptyxis).
+# tools/check-ubuntu-parity.py lists every ":ubuntu" key of the installed overrides and fails when one is neither set here or in
+# 00-vitre nor named in its list of deliberate omissions.
+#
+# Same rules as 00-vitre: only inside the Vitre session, a value you set yourself wins, `dconf reset <key>` gives the default back.
+
+[org/gnome/shell]
+start-in-overview=false
+always-show-log-out=true
+favorite-apps=['ubuntu-desktop-bootstrap_ubuntu-desktop-bootstrap.desktop', 'firefox_firefox.desktop', 'thunderbird_thunderbird.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Rhythmbox3.desktop', 'libreoffice-writer.desktop', 'snap-store_snap-store.desktop', 'org.gnome.Yelp.desktop']
+
+[org/gnome/settings-daemon/plugins/housekeeping]
+donation-reminder-enabled=false
+
+[org/gnome/shell/extensions/ding]
+show-trash=false
+show-volumes=false
+start-corner='bottom-right'
+arrangeorder='DESCENDINGNAME'
+
+[org/gnome/desktop/background]
+show-desktop-icons=true
+
+[org/gnome/mutter]
+attach-modal-dialogs=true
+focus-change-on-pointer-rest=true
+
+[org/gnome/desktop/interface]
+enable-hot-corners=false
+
+[org/gnome/desktop/peripherals/touchpad]
+tap-to-click=true
+click-method='default'
+
+[org/gnome/desktop/wm/keybindings]
+show-desktop=['<Primary><Super>d', '<Primary><Alt>d', '<Super>d']
+switch-applications=['<Super>Tab']
+switch-windows=['<Alt>Tab']
+switch-applications-backward=['<Shift><Super>Tab']
+switch-windows-backward=['<Shift><Alt>Tab']
+
+[org/gnome/desktop/wm/preferences]
+titlebar-uses-system-font=false
+action-middle-click-titlebar='lower'
+
+[org/gtk/settings/file-chooser]
+sort-directories-first=true
+startup-mode='cwd'
+
+[org/gnome/nautilus/icon-view]
+default-zoom-level='small'
+
+[org/gnome/nautilus/preferences]
+open-folder-on-dnd-hover=false

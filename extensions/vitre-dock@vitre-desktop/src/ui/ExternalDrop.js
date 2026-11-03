@@ -18,7 +18,6 @@
 
 
 import Gio from 'gi://Gio';
-import Clutter from 'gi://Clutter';
 import Shell from 'gi://Shell';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
@@ -27,12 +26,12 @@ import { Settings } from '../core/SettingsManager.js';
 import { resetMagnification } from './magnifier/MagnifierReset.js';
 import { getDockButtons, getFixedSlots } from './magnifier/MagnifierMath.js';
 import { startDragLoop, stopDragLoop } from './magnifier/MagnifierDragLoop.js';
+import {ease as liquidEase} from '../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
+import { pushOffset, rectOf } from './DropMotion.js';     // Vitre lab 2: the Dock makes room around the pointer
 
 
 const SHRINK_DURATION_MS = 160;
 const DOCK_EDGE_MARGIN = 10;
-const DEFAULT_ICON_SPACING = 6;
-const GAP_SLOTS = 1.0;
 const GAP_SLIDE_MS = 180;
 
 export function sourceDelegate(source) {
@@ -130,7 +129,12 @@ class ExternalDrop {
         [boxActor, actor, bgActor].filter(target => isActorAlive(target)).forEach(target => {
             if (!target._delegate) target._delegate = {};
             target._delegate.handleDragOver = source => this._handleDragOver(source);
-            target._delegate.acceptDrop = source => this._isDockIcon(source) || this._drop(source);
+            target._delegate.acceptDrop = (source, dragActor) => {
+                // a Dock icon let go in the Dock glides home from here (DragDrop.js finishDrag)
+                const button = sourceDelegate(source).button;
+                if (button && this._isDockIcon(source)) button._dropFrom = rectOf(dragActor);
+                return this._isDockIcon(source) || this._drop(source);
+            };
         });
     }
 
@@ -204,13 +208,12 @@ class ExternalDrop {
         const [x, y] = global.get_pointer();
         const scale = Math.min(1, Settings.iconSize / size);
         dragActor.set_pivot_point(0.5, 0.5);
-        dragActor.ease({
+        liquidEase(dragActor, {
             scale_x: scale,
             scale_y: scale,
             translation_x: x - (dragActor.x + dragActor.width / 2),
             translation_y: y - (dragActor.y + dragActor.height / 2),
-            duration: SHRINK_DURATION_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            duration: SHRINK_DURATION_MS
         });
     }
 
@@ -254,27 +257,24 @@ class ExternalDrop {
         const cursor = isVertical ? (y - top) / actor.scale_y : (x - left) / actor.scale_x;
         const index = slots.findIndex(i => cursor < centersByBtn[i]);
 
-        return { buttons, model, slots, target: index === -1 ? slots.length : index };
+        return { buttons, model, slots, cursor, target: index === -1 ? slots.length : index };
     }
 
-    _applyGap({ buttons, model, slots, target }) {
+    // Vitre (Motion Lab 2): the icons make room around the pointer, each pushed away from it by 14 px at the pointer, less
+    // with distance (falloff 70 px), on the bead spring; the Dock's background widens by the push at its ends
+    _applyGap({ buttons, model, slots, cursor }) {
         if (slots.length === 0) return;
 
         const centers = model.centersByBtn;
-        const pitch = slots.length > 1
-            ? (centers[slots[slots.length - 1]] - centers[slots[0]]) / (slots.length - 1)
-            : Settings.iconSize + (Settings.iconSpacing || DEFAULT_ICON_SPACING);
-        const half = (pitch * GAP_SLOTS) / 2;
-
-        const lastSlot = slots[slots.length - 1];
-        const anchor = target < slots.length ? model.btnToOrder[slots[target]] : model.btnToOrder[lastSlot] + 1;
-
-        this._dockUI.actor._gapSpreadTarget = half;
         buttons.forEach((btn, i) => {
-            btn._gapTarget = model.btnToOrder[i] >= anchor ? half : -half;
+            btn._gapTarget = isSlotButton(btn) && Number.isFinite(centers[i]) ? pushOffset(centers[i], cursor) : 0;
         });
+        const first = buttons[slots[0]];
+        const last = buttons[slots[slots.length - 1]];
+        const spread = Math.max(Math.abs(first?._gapTarget ?? 0), Math.abs(last?._gapTarget ?? 0));
+        this._dockUI.actor._gapSpreadTarget = spread;
 
-        if (!Settings.hoverZoom) this._slideGap(buttons, half);
+        if (!Settings.hoverZoom) this._slideGap(buttons, spread);
     }
 
     _slideGap(buttons, half) {
@@ -284,7 +284,7 @@ class ExternalDrop {
         buttons.forEach(btn => {
             if (btn._gapSlideTarget === btn._gapTarget) return;
             btn._gapSlideTarget = btn._gapTarget;
-            btn.ease({ [prop]: btn._gapTarget, duration: GAP_SLIDE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC });
+            liquidEase(btn, { [prop]: btn._gapTarget, duration: GAP_SLIDE_MS });
         });
 
         const bg = this._dockUI.bgActor;
@@ -292,13 +292,12 @@ class ExternalDrop {
         this._bgSpread = half;
 
         const blur = this._dockUI._dockBlur;
-        bg.ease({
+        liquidEase(bg, {
             x: isVertical ? bg._baseX : bg._baseX - half,
             y: isVertical ? bg._baseY - half : bg._baseY,
             width: isVertical ? bg._baseW : bg._baseW + half * 2,
             height: isVertical ? bg._baseH + half * 2 : bg._baseH,
             duration: GAP_SLIDE_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
             onUpdate: () => {
                 if (blur) blur.syncGeometry();
             },

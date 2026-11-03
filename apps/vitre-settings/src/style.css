@@ -1,0 +1,100 @@
+/* Vitre Settings: only what libadwaita does not already style. Colours come from the theme's named colours, so light,
+   dark and the Vitre-Glass override all apply. */
+
+.vitre-row-scale {
+    min-width: 140px;
+}
+
+/* rows whose control wraps under the title on a narrow window: spaced like an Adw.ActionRow */
+.vitre-wrap-row {
+    margin: 7px 12px;
+}
+.vitre-row-titles {
+    margin: 6px 0;
+}
+.vitre-row-titles > .subtitle {
+    font-size: smaller;
+    opacity: 0.55;
+}
+
+/* wallpaper chooser */
+.vitre-wallpapers {
+    padding: 6px 0;
+}
+.vitre-wallpapers > flowboxchild {
+    padding: 4px;
+    border-radius: 16px;
+    background: none;
+    outline-offset: 2px;
+}
+.vitre-wallpaper-frame {
+    border-radius: 12px;
+    padding: 3px;
+    box-shadow: 0 1px 3px alpha(black, 0.18);
+}
+.vitre-wallpapers > flowboxchild:hover .vitre-wallpaper-frame {
+    box-shadow: 0 0 0 2px alpha(currentColor, 0.15), 0 1px 3px alpha(black, 0.18);
+}
+.vitre-wallpapers > flowboxchild:selected .vitre-wallpaper-frame {
+    box-shadow: 0 0 0 3px var(--accent-bg-color);
+}
+.vitre-wallpapers > flowboxchild:selected {
+    background: none;
+    color: inherit;
+}
+
+/* About */
+.vitre-about-header {
+    margin: 12px 0 6px;
+}
+
+/* a command to copy (About, Uninstall) */
+.vitre-command {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background-color: alpha(currentColor, 0.07);
+    font-size: 0.92em;
+}
+
+/* B6: accent swatches (colours from libadwaita's own --accent-* variables, so they match what apps draw) */
+.vitre-accents {
+    margin: 2px 0;
+}
+.vitre-accent {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    border-radius: 999px;
+    color: white;
+    box-shadow: inset 0 0 0 1px alpha(black, 0.12);
+}
+.vitre-accent > image {
+    opacity: 0;
+}
+.vitre-accent:checked > image {
+    opacity: 1;
+}
+.vitre-accent:checked {
+    outline: 2px solid alpha(currentColor, 0);
+    box-shadow: 0 0 0 2px var(--window-bg-color), 0 0 0 4px var(--accent-bg-color);
+}
+.vitre-accent:focus-visible {
+    outline-offset: 3px;
+}
+.vitre-accent.blue { background: var(--accent-blue); --accent-bg-color: var(--accent-blue); }
+.vitre-accent.teal { background: var(--accent-teal); --accent-bg-color: var(--accent-teal); }
+.vitre-accent.green { background: var(--accent-green); --accent-bg-color: var(--accent-green); }
+.vitre-accent.yellow { background: var(--accent-yellow); --accent-bg-color: var(--accent-yellow); }
+.vitre-accent.orange { background: var(--accent-orange); --accent-bg-color: var(--accent-orange); }
+.vitre-accent.red { background: var(--accent-red); --accent-bg-color: var(--accent-red); }
+.vitre-accent.pink { background: var(--accent-pink); --accent-bg-color: var(--accent-pink); }
+.vitre-accent.purple { background: var(--accent-purple); --accent-bg-color: var(--accent-purple); }
+.vitre-accent.slate { background: var(--accent-slate); --accent-bg-color: var(--accent-slate); }
+.vitre-accent:hover {
+    filter: brightness(1.08);
+}
+
+/* B6: hour and minute */
+.vitre-time spinbutton {
+    min-width: 0;
+}

@@ -1,5 +1,10 @@
 import Meta from 'gi://Meta';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { lerp } from 'resource:///org/gnome/shell/misc/util.js';
+
+import { WorkspaceBackground } from 'resource:///org/gnome/shell/ui/workspace.js';
+const wb_proto = WorkspaceBackground.prototype;
 
 import { WorkspaceAnimationController } from 'resource:///org/gnome/shell/ui/workspaceAnimation.js';
 const wac_proto = WorkspaceAnimationController.prototype;
@@ -58,6 +63,7 @@ export const OverviewBlur = class OverviewBlur {
         });
 
         this.patch_workspace_switch();
+        this.patch_workspace_background();
     }
 
     patch_workspace_switch() {
@@ -98,6 +104,52 @@ export const OverviewBlur = class OverviewBlur {
         this.proto_patched = true;
     }
 
+    /// Replaces the hardcoded corner radius of the workspaces in the overview
+    /// with the one from the settings.
+    patch_workspace_background() {
+        if (this._original_updateBorderRadius)
+            return;
+
+        const original_update = wb_proto._updateBorderRadius;
+        this._original_updateBorderRadius = original_update;
+
+        const overview_blur = this;
+        this._patched_updateBorderRadius = function (...params) {
+            if (!overview_blur.enabled)
+                return original_update.apply(this, params);
+
+            const radius = overview_blur.settings.overview.WORKSPACE_CORNER_RADIUS;
+            const { scaleFactor } = St.ThemeContext.get_for_stage(global.stage);
+            this._bgManager.backgroundActor.content.rounded_clip_radius =
+                lerp(0, scaleFactor * radius, this._stateAdjustment.value);
+
+            // keep the shadow from the theme in sync with the clipped corners
+            const style = `border-radius: ${radius}px;`;
+            if (this.get_style() !== style)
+                this.set_style(style);
+        };
+
+        wb_proto._updateBorderRadius = this._patched_updateBorderRadius;
+        this.update_workspace_backgrounds();
+    }
+
+    /// Re-applies the corner radius to the already existing workspaces.
+    update_workspace_backgrounds() {
+        this.get_workspace_backgrounds().forEach(background => {
+            if (!this.enabled)
+                background.set_style(null);
+            background._updateBorderRadius();
+        });
+    }
+
+    get_workspace_backgrounds(actor = Main.layoutManager.overviewGroup) {
+        if (actor instanceof WorkspaceBackground)
+            return [actor];
+        return actor.get_children().flatMap(
+            child => this.get_workspace_backgrounds(child)
+        );
+    }
+
     prepare_workspace_switch() {
         this._log("prepare workspace switch");
         this.finish_workspace_switch();
@@ -116,7 +168,7 @@ export const OverviewBlur = class OverviewBlur {
     }
 
     finish_workspace_switch() {
-        if (this.animation_background_group.get_parent() === Main.uiGroup)
+        if (this.animation_background_group?.get_parent() === Main.uiGroup)
             Main.uiGroup.remove_child(this.animation_background_group);
     }
 
@@ -181,7 +233,7 @@ export const OverviewBlur = class OverviewBlur {
 
     remove_background_actors() {
         this.connections.disconnect_all_for(Main.layoutManager.overviewGroup);
-        if (this.overview_background_group.get_parent())
+        if (this.overview_background_group?.get_parent())
             Main.layoutManager.overviewGroup.remove_child(this.overview_background_group);
 
         this.overview_background_managers.forEach(background_manager =>
@@ -203,18 +255,16 @@ export const OverviewBlur = class OverviewBlur {
     }
 
     disable() {
-        if (!this.enabled)
-            return;
-
         this._log("removing blur from overview");
         this.enabled = false;
         this.finish_workspace_switch();
         this.restore_patched_proto();
+        this.restore_workspace_background();
 
         this.remove_background_actors();
-        this.overview_background_group.destroy();
+        this.overview_background_group?.destroy();
         this.overview_background_group = null;
-        this.animation_background_group.destroy();
+        this.animation_background_group?.destroy();
         this.animation_background_group = null;
 
         Main.uiGroup.remove_style_class_name("blurred-overview");
@@ -236,6 +286,18 @@ export const OverviewBlur = class OverviewBlur {
             this._patched_PrepareSwitch = null;
             this._patched_FinishSwitch = null;
         }
+    }
+
+    restore_workspace_background() {
+        if (!this._original_updateBorderRadius)
+            return;
+
+        if (wb_proto._updateBorderRadius === this._patched_updateBorderRadius)
+            wb_proto._updateBorderRadius = this._original_updateBorderRadius;
+        this._original_updateBorderRadius = null;
+        this._patched_updateBorderRadius = null;
+
+        this.update_workspace_backgrounds();
     }
 
     _log(str) {

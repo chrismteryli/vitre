@@ -1,23 +1,33 @@
 #!/usr/bin/env bash
 # Vitre installer: installs the Vitre desktop for the current user (no root, no system files).
-#   ./install.sh            install (takes a backup first; ./uninstall.sh puts everything back)
+#   ./install.sh            install or upgrade (takes a private backup of what it replaces and of the settings it owns first)
 #   ./install.sh --check    only check this system, change nothing
+# An upgrade (an earlier Vitre install is still on record) keeps every Vitre setting you already have and only adds the ones that are new.
 # Supported: GNOME Shell 51 (tested on Ubuntu 26.10), Wayland, x86_64 or arm64.
 set -euo pipefail
+# The backup is private (umask 077). What is installed keeps your normal umask, so the files in your home look as they always did.
+USER_UMASK="$(umask)"
+umask 077
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
-CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
+DATA="$(realpath -m -- "${XDG_DATA_HOME:-$HOME/.local/share}")"
+CONF="$(realpath -m -- "${XDG_CONFIG_HOME:-$HOME/.config}")"
 EXT_DIR="$DATA/gnome-shell/extensions"
 ICONS="$DATA/icons"
-STAMP="$(date +%Y%m%d-%H%M%S)"
-BACKUP="$DATA/vitre-backup/$STAMP"
+BACKUP_ROOT="$DATA/vitre-backup"
 CHECK_ONLY=0
 FORCE=0
 # The base icon theme (MacTahoe-icon-theme, GPL-3.0, vinceliuice) is fetched from its own project at this exact version
 # instead of being copied into Vitre.
 MACTAHOE_ICONS_REF="839848b9a8a38a92a6936e30c4abe35cc6f2546d"   # tag 2026-09-10
 MACTAHOE_ICONS_URL="https://github.com/vinceliuice/MacTahoe-icon-theme/archive/$MACTAHOE_ICONS_REF.tar.gz"
+# SHA-256 of the exact GitHub archive at MACTAHOE_ICONS_URL; verified before extraction or execution. GitHub makes the archive with
+# `git archive | gzip -n -6`, so both numbers can be rebuilt from a checkout at that ref:
+#   git archive --prefix=MacTahoe-icon-theme-<ref>/ <ref> | gzip -n -6 | sha256sum     -> MACTAHOE_ICONS_SHA256
+#   git archive --prefix=MacTahoe-icon-theme-<ref>/ <ref> | sha256sum                  -> MACTAHOE_ICONS_TAR_SHA256
+# The second one is the same archive without the compression: if GitHub ever changes how it compresses, the content check still holds.
+MACTAHOE_ICONS_SHA256="00cb36a3883e40687ade9f57a0c1dd3e14fda84b73efc69aa86e2be67f32ab0a"
+MACTAHOE_ICONS_TAR_SHA256="3c54833f2306d3c668b024f7df8d36a803852082fbcf688750e282aa2852d479"
 
 for a in "$@"; do
   case "$a" in
@@ -52,26 +62,49 @@ if [ ${#MISSING_FONTS[@]} -gt 0 ]; then
   if command -v apt >/dev/null; then echo "  install them with: sudo apt install fonts-inter fonts-jetbrains-mono"
   elif command -v dnf >/dev/null; then echo "  install them with: sudo dnf install rsms-inter-fonts jetbrains-mono-fonts"; fi
 fi
+# Vitre Settings is a GTK 4 app written in GJS: it needs gjs and libadwaita's typelib, which a GNOME 51 desktop has. Only the app depends on them.
+if ! command -v gjs >/dev/null || ! gjs -c "imports.gi.versions.Adw = '1'; imports.gi.Adw" >/dev/null 2>&1; then
+  echo "note: Vitre Settings needs gjs and libadwaita for GJS (Ubuntu: sudo apt install gjs gir1.2-adw-1). The rest of Vitre does not."
+fi
 [ "$CHECK_ONLY" -eq 1 ] && { echo "check only: nothing changed"; exit 0; }
 
 # ---- 2. backup -------------------------------------------------------------------------------------------------------
-mkdir -p "$BACKUP/files"
-dconf dump /org/gnome/ > "$BACKUP/dconf.ini"
+UPGRADE=0
+for old in "$BACKUP_ROOT"/[0-9]*; do
+  [ -d "$old" ] && [[ "$old" != *.undone ]] && UPGRADE=1
+done
+mkdir -p "$BACKUP_ROOT"
+BACKUP="$(mktemp -d "$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)-XXXXXX")"
+mkdir -p "$BACKUP/files" "$BACKUP/settings/before" "$BACKUP/settings/after"
 : > "$BACKUP/installed.txt"     # every path this install created (uninstall removes them)
 : > "$BACKUP/moved.txt"         # every path that existed and was moved into the backup (uninstall moves it back)
-echo "$HOME" > "$BACKUP/home.txt"
+: > "$BACKUP/settings/paths.txt"
+printf 'DATA\t%s\nCONF\t%s\nTHEMES\t%s\n' "$DATA" "$CONF" "$HOME/.themes" > "$BACKUP/roots.txt"
+MOVED_COUNT=0
+
+record_key() {  # remember the old value once; after the install, remember the value Vitre left behind
+  local path="$1" n
+  grep -qxF -- "$path" "$BACKUP/settings/paths.txt" && return
+  echo "$path" >> "$BACKUP/settings/paths.txt"
+  n="$(wc -l < "$BACKUP/settings/paths.txt")"
+  dconf read "$path" > "$BACKUP/settings/before/$n" 2>/dev/null || :
+}
 
 place() {   # place SRC DST: put a copy of SRC at DST, moving whatever was at DST into the backup first
   local src="$1" dst="$2"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
-    local keep="$BACKUP/files/$(echo "$dst" | sed "s|^$HOME/||; s|/|__|g")"
+    MOVED_COUNT=$((MOVED_COUNT + 1))
+    local keep="$BACKUP/files/$MOVED_COUNT"
     mv "$dst" "$keep"
     printf '%s\t%s\n' "$dst" "$keep" >> "$BACKUP/moved.txt"
   fi
-  mkdir -p "$(dirname "$dst")"
-  cp -a "$src" "$dst"
+  ( umask "$USER_UMASK"; mkdir -p "$(dirname "$dst")"; cp -a "$src" "$dst" )
   echo "$dst" >> "$BACKUP/installed.txt"
 }
+
+# one scratch folder for everything that is generated on the way (the menu entry, the base icon theme); removed on exit
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
 
 say "installing (backup in $BACKUP)"
 
@@ -83,10 +116,14 @@ done
 for e in "$HERE"/extensions/*/; do
   d="$EXT_DIR/$(basename "${e%/}")/schemas"
   if ls "$d"/*.gschema.xml >/dev/null 2>&1; then
-    glib-compile-schemas "$d" || echo "note: could not compile the settings schemas in $d (the packaged ones stay)"
+    ( umask "$USER_UMASK"; glib-compile-schemas "$d" ) || echo "note: could not compile the settings schemas in $d (the packaged ones stay)"
   fi
 done
-place "$HERE/themes/Vitre-Glass" "$HOME/.themes/Vitre-Glass"
+# Vitre-Glass and its accent colour variants (Vitre-Glass-Green, Vitre-Glass-Green-Light, ...): GTK 3 apps cannot read the accent or the
+# style, so Vitre Appearance switches between these by name
+for t in "$HERE"/themes/*/; do
+  t="${t%/}"; place "$t" "$HOME/.themes/$(basename "$t")"
+done
 place "$HERE/icons/Vitre-Icons" "$ICONS/Vitre-Icons"
 place "$HERE/icons/Vitre-Cursor" "$ICONS/Vitre-Cursor"
 for f in "$HERE"/icons/hicolor/scalable/apps/*.svg; do place "$f" "$ICONS/hicolor/scalable/apps/$(basename "$f")"; done
@@ -95,37 +132,58 @@ for v in gtk-4.0 gtk-3.0; do
   for f in "$HERE/gtk/$v"/*; do place "$f" "$CONF/$v/$(basename "$f")"; done
 done
 
+# Vitre Settings: the app, its menu entry (the launcher's path is filled in here) and its icons. The version file is what its About page
+# reads (the system packages keep it in /usr/share/vitre); $DATA/vitre is listed first so that uninstall removes the folder too.
+place "$HERE/apps/vitre-settings" "$DATA/vitre-settings"
+LAUNCHER="$DATA/vitre-settings/org.vitre.Settings"
+case "$LAUNCHER" in *[[:space:]]*) LAUNCHER="\"$LAUNCHER\"" ;; esac     # an Exec line needs quotes around a path with spaces
+ENTRY="$(<"$HERE/apps/org.vitre.Settings.desktop.in")"
+printf '%s\n' "${ENTRY//@LAUNCHER@/$LAUNCHER}" > "$STAGE/org.vitre.Settings.desktop"
+place "$STAGE/org.vitre.Settings.desktop" "$DATA/applications/org.vitre.Settings.desktop"
+chmod 644 "$DATA/applications/org.vitre.Settings.desktop"
+place "$HERE/icons/hicolor/symbolic/apps/org.vitre.Settings-symbolic.svg" "$ICONS/hicolor/symbolic/apps/org.vitre.Settings-symbolic.svg"
+[ -e "$DATA/vitre" ] || echo "$DATA/vitre" >> "$BACKUP/installed.txt"
+place "$HERE/VERSION" "$DATA/vitre/VERSION"
+
 # The base of Vitre-Icons: the glyphs, folders and file types of the MacTahoe icon theme, installed as its own copy named VitreBase
 # WITHOUT MacTahoe's app icons (some of them are drawn after other companies' apps). An app without original Vitre art then keeps its own
 # icon. It is fetched from its own project at a fixed version. VITRE_ICONS_SRC=<a checkout of MacTahoe-icon-theme> uses a local copy.
 if [ ! -d "$ICONS/VitreBase-dark" ]; then
-  T="$(mktemp -d)"
-  trap 'rm -rf "$T"' EXIT
+  T="$STAGE/base"
+  mkdir -p "$T"
   if [ -n "${VITRE_ICONS_SRC:-}" ]; then
     [ -x "$VITRE_ICONS_SRC/install.sh" ] || fail "VITRE_ICONS_SRC must be a checkout of MacTahoe-icon-theme (a folder with install.sh)"
     SRC="$VITRE_ICONS_SRC"
   else
+    [[ "$MACTAHOE_ICONS_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "MACTAHOE_ICONS_SHA256 must contain the verified SHA-256 for $MACTAHOE_ICONS_URL (or set VITRE_ICONS_SRC to a local checkout)"
     say "fetching the base icon theme from github.com/vinceliuice/MacTahoe-icon-theme"
     command -v curl >/dev/null || fail "curl is needed to fetch the icon theme"
-    curl -fsSL "$MACTAHOE_ICONS_URL" | tar -xz -C "$T"
+    ARCHIVE="$STAGE/MacTahoe-icon-theme.tar.gz"
+    curl -fsSL "$MACTAHOE_ICONS_URL" -o "$ARCHIVE"
+    # nothing of the download is unpacked or run before it matches a pinned digest: the file as served, else its decompressed content
+    got="$(sha256sum "$ARCHIVE" | cut -d' ' -f1)"
+    if [ "$got" != "$MACTAHOE_ICONS_SHA256" ]; then
+      got_tar="$(gzip -dc "$ARCHIVE" 2>/dev/null | sha256sum | cut -d' ' -f1)"
+      [ "$got_tar" = "$MACTAHOE_ICONS_TAR_SHA256" ] || fail "the MacTahoe archive checksum did not match; refusing to execute it"
+    fi
+    tar -xzf "$ARCHIVE" -C "$T" --no-same-owner
     SRC="$(echo "$T"/MacTahoe-icon-theme-*)"
   fi
   mkdir -p "$T/out"
-  (cd "$SRC" && ./install.sh -d "$T/out" -n VitreBase -t default >/dev/null)
+  (umask "$USER_UMASK"; cd "$SRC" && ./install.sh -d "$T/out" -n VitreBase -t default >/dev/null)
   for n in VitreBase VitreBase-dark VitreBase-light; do
     [ -d "$T/out/$n" ] || fail "the base icon theme did not install ($n is missing)"
     rm -rf "$T/out/$n/apps" "$T/out/$n/apps@2x"
     find "$T/out/$n" -xtype l -delete
-    command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -f -t -q "$T/out/$n" 2>/dev/null || true
+    command -v gtk-update-icon-cache >/dev/null && ( umask "$USER_UMASK"; gtk-update-icon-cache -f -t -q "$T/out/$n" ) 2>/dev/null || true
     place "$T/out/$n" "$ICONS/$n"
   done
 fi
-command -v gtk-update-icon-cache >/dev/null && for n in Vitre-Icons Vitre-Cursor; do gtk-update-icon-cache -f -t -q "$ICONS/$n" 2>/dev/null || true; done
+command -v gtk-update-icon-cache >/dev/null && for n in Vitre-Icons Vitre-Cursor; do ( umask "$USER_UMASK"; gtk-update-icon-cache -f -t -q "$ICONS/$n" ) 2>/dev/null || true; done
 
 # ---- 4. settings -----------------------------------------------------------------------------------------------------
-# Vitre Dock is a fork of Dhruva with its own settings path. If you already use Dhruva, its settings are copied there first (only keys
-# that Vitre Dock's schema has; your Dhruva settings stay where they are). Vitre's own settings are loaded after that, so where Vitre sets a
-# key its value wins and every other key stays as you had it. The backup above holds the old state of both paths.
+# Vitre Dock is a fork of Dhruva with its own settings path. On a first install, copy only keys its schema has; Vitre's defaults then win.
+# An upgrade leaves every existing Vitre choice alone and adds only newly introduced defaults.
 OLD_DOCK=/org/gnome/shell/extensions/dhruva/
 NEW_DOCK=/org/gnome/shell/extensions/vitre-dock/
 DOCK_SCHEMAS="$EXT_DIR/vitre-dock@vitre-desktop/schemas"
@@ -138,11 +196,31 @@ if [ -n "$OLD_KEYS" ] && [ -d "$DOCK_SCHEMAS" ]; then
     grep -qxF -- "$k" <<< "$NEW_KEYS" || continue
     v="$(dconf read "$OLD_DOCK$k" 2>/dev/null || true)"
     [ -n "$v" ] || continue
-    dconf write "$NEW_DOCK$k" "$v" && copied=$((copied + 1))
+    record_key "$NEW_DOCK$k"
+    if [ "$UPGRADE" -eq 0 ] || [ -z "$(dconf read "$NEW_DOCK$k" 2>/dev/null || true)" ]; then
+      dconf write "$NEW_DOCK$k" "$v" && copied=$((copied + 1))
+    fi
   done <<< "$OLD_KEYS"
   echo "Dhruva settings found: $copied copied to Vitre Dock"
 fi
-sed "s|@HOME@|$HOME|g" "$HERE/settings/vitre.ini" | dconf load /org/gnome/
+while IFS=$'\t' read -r path value; do
+  [ -n "$path" ] || continue
+  record_key "$path"
+  if [ "$UPGRADE" -eq 0 ] || [ -z "$(dconf read "$path" 2>/dev/null || true)" ]; then
+    dconf write "$path" "${value//@HOME@/$HOME}"
+  fi
+done < <(python3 - "$HERE/settings/vitre.ini" <<'EOF'
+import sys
+section = None
+for line in open(sys.argv[1]):
+    line = line.rstrip('\n')
+    if line.startswith('[') and line.endswith(']'):
+        section = line[1:-1]
+    elif '=' in line and section and not line.startswith('#'):
+        key, value = line.split('=', 1)
+        print(f'/org/gnome/{section}/{key}\t{value}')
+EOF
+)
 
 enabled="$(gsettings get org.gnome.shell enabled-extensions)"
 disabled="$(gsettings get org.gnome.shell disabled-extensions)"
@@ -162,9 +240,16 @@ new_disabled = [u for u in disabled if u not in ours] + [u for u in conflicts if
 print(repr(new_enabled))
 print(repr(new_disabled))
 EOF
+for key in enabled-extensions disabled-extensions disable-user-extensions; do record_key "/org/gnome/shell/$key"; done
 gsettings set org.gnome.shell enabled-extensions "$(sed -n 1p "$BACKUP/new-lists.txt")"
 gsettings set org.gnome.shell disabled-extensions "$(sed -n 2p "$BACKUP/new-lists.txt")"
 gsettings set org.gnome.shell disable-user-extensions false
+
+n=0
+while IFS= read -r path; do
+  n=$((n + 1))
+  dconf read "$path" > "$BACKUP/settings/after/$n" 2>/dev/null || :
+done < "$BACKUP/settings/paths.txt"
 
 say "Vitre is installed."
 echo "Sign out and back in to start it (GNOME loads extensions at sign-in)."

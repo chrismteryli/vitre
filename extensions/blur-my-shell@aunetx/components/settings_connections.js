@@ -11,7 +11,8 @@ function when_enabled(component, callback) {
 
 function connect_toggle(extension, settings, component, user_session = true) {
     connect(settings, 'BLUR', () => {
-        const allowed = !user_session || extension._user_session_mode_enabled;
+        const allowed = !extension._paused
+            && (!user_session || extension._user_session_mode_enabled);
         if (settings.BLUR && allowed)
             component.enable();
         else
@@ -41,6 +42,10 @@ export function connect_component_settings(extension) {
         overview,
         () => overview.update_components_classname()
     ));
+    connect(settings.overview, 'WORKSPACE_CORNER_RADIUS', when_enabled(
+        overview,
+        () => overview.update_workspace_backgrounds()
+    ));
 
     connect_toggle(extension, settings.appfolder, appfolder);
     connect(settings.appfolder, 'PIPELINE', when_enabled(
@@ -68,7 +73,7 @@ export function connect_component_settings(extension) {
             () => panel.update_corner_radius()
         ))
     );
-    ['UNBLUR_IN_OVERVIEW', 'STYLE_PANEL'].forEach(property =>
+    ['UNBLUR_IN_OVERVIEW', 'MATCH_THEME_IN_OVERVIEW', 'STYLE_PANEL'].forEach(property =>
         connect(settings.panel, property, when_enabled(
             panel,
             () => panel.connect_to_windows_and_overview()
@@ -154,6 +159,8 @@ export function connect_component_settings(extension) {
                 applications.update_all_windows();
         }
     ));
+
+    connect(settings, 'POWER_SAVER', () => extension._update_power_saver());
 
     connect_toggle(extension, settings.lockscreen, lockscreen, false);
     connect(settings.lockscreen, 'PIPELINE', when_enabled(

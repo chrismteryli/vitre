@@ -12,12 +12,16 @@
  *   glass.js, glassField.js, dripField.js, dripMotion.js, liquidDrip.js, dripStyle.js: the shared Vitre glass and stretch
  *                modules, byte-identical copies (liquidDrip.js is vitre-menus' copy)
  *
- * Nothing of GNOME is replaced: no method is hooked. While the Control Center is open from the button its menu's
+ *   hotCorner.js the hot corner's motion (Motion Lab 2): GNOME's corner ripples played as a bead, a ring and a flash
+ *
+ * Nothing of GNOME is replaced for the capsule: no method is hooked (hotCorner.js wraps Ripples.playAnimation for the hot
+ * corners' own ripples only). While the Control Center is open from the button its menu's
  * sourceActor (and vitre-controls' record of its source) point at the button; both are put back when it has closed.
  * disable() removes every actor, barrier, signal handler, timer, accelerator grab and compositor hold it made. */
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {CornerWatch} from './corner.js';
+import {HotCornerMotion} from './hotCorner.js';
 
 export default class VitreCornerExtension extends Extension {
     enable() {
@@ -28,9 +32,20 @@ export default class VitreCornerExtension extends Extension {
             console.error(`Vitre Corner: not started: ${e?.message ?? e}`);
             this._teardown();
         }
+        // the hot corner's motion (Motion Lab 2): on its own, so a failure leaves GNOME's ripples and the capsule as they are
+        try {
+            this._hot = new HotCornerMotion();
+            this._hot.enable();
+        } catch (e) {
+            console.error(`Vitre Corner: hot corner motion not started: ${e?.message ?? e}`);
+            this._hot?.destroy();
+            this._hot = null;
+        }
     }
 
     disable() {
+        this._hot?.destroy();
+        this._hot = null;
         this._teardown();
     }
 

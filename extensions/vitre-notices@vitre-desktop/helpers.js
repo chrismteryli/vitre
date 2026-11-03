@@ -8,57 +8,19 @@ export const pt = v => Math.round(v * K);
 // Notification Center geometry, plan A9 section 1.2 (the reference points in comments).
 export const NCGEO = {
     width: pt(331),          // 331 pt -> 381
-    rightMargin: pt(11.5),   // 11.5 pt -> 13
-    topGap: pt(20),          // 20 pt -> 23
-    gap: pt(16.5),           // 16.5 pt -> 19
+    rightMargin: 12,         // 11.5 pt -> 13 -> 12 (4 px grid, as Control Center)
+    topGap: 24,              // 20 pt -> 23 -> 24
+    gap: 20,                 // 16.5 pt -> 19 -> 20
     smallW: pt(157),         // 157 pt -> 181
     smallH: pt(156),         // 156 pt -> 179
     mediumH: pt(158),        // 158 pt -> 182
-    widgetRadius: pt(22),    // 22 pt -> 25
-    cardRadius: pt(20),      // 20 pt -> 23
+    widgetRadius: 24,        // 22 pt -> 25 -> r-2xl
+    cardRadius: 24,          // 20 pt -> 23 -> r-2xl
     appIcon: pt(32),         // 32 pt -> 37
-    bottomMargin: pt(11.5),
-    // the scroll view clips at its box: 3 px of room so the cards' rim is not cut at the edges
-    clipPad: 3,
+    bottomMargin: 12,
+    // the scroll view clips at its box: 2 px of room so the cards' rim is not cut at the edges (= .nc-scroll padding)
+    clipPad: 2,
 };
-
-// Open curve, fitted to Fable's frame-stepped table (tools/fit_nc_curve.py, max error 0.005):
-// visible fraction p(s) = 1 - (1 + B s) exp(-W s), s in ms since the start of motion.
-export const CURVE = {W: 0.0205, B: 0.011, T0: 0.5, DURATION: 340};
-
-export function curveRaw(s) {
-    if (s <= 0)
-        return 0;
-    return 1 - (1 + CURVE.B * s) * Math.exp(-CURVE.W * s);
-}
-
-// The raw curve is 0.9957 at 340 ms; a cubic blend closes the last 0.4 % so the motion ends
-// exactly at rest (max deviation from the table stays under 0.005).
-export function curve(s) {
-    const t = Math.min(Math.max(s, 0), CURVE.DURATION);
-    if (s >= CURVE.DURATION)
-        return 1;
-    const gap = 1 - curveRaw(CURVE.DURATION);
-    return Math.min(1, curveRaw(t) + gap * Math.pow(t / CURVE.DURATION, 3));
-}
-
-// Inverse of the curve: the time at which the motion has covered fraction x.
-export function curveInverse(x) {
-    if (x <= 0)
-        return 0;
-    if (x >= 1)
-        return CURVE.DURATION;
-    let lo = 0;
-    let hi = CURVE.DURATION;
-    for (let i = 0; i < 40; i++) {
-        const mid = (lo + hi) / 2;
-        if (curve(mid) < x)
-            lo = mid;
-        else
-            hi = mid;
-    }
-    return (lo + hi) / 2;
-}
 
 // Where the column goes: right edge 13 px from the monitor edge, 23 px under the bar.
 export function columnOrigin(area, width) {

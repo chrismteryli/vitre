@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Vitre
+Comment=This session logs you into Vitre
+Exec=/usr/bin/vitre-session
+TryExec=/usr/bin/vitre-session
+Type=Application
+DesktopNames=Vitre;GNOME
+X-GDM-SessionRegisters=true
+X-GDM-CanRunHeadless=true

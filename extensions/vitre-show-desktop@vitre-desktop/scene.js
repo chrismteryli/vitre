@@ -1,9 +1,11 @@
 import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import {edgeOffset, nearestEdge, positionAt, segment} from './motion.js';
+import {edgeOffset, nearestEdge} from './motion.js';
+import {Spring, Fade, role, epsFor, REDUCED, EPS_OPACITY} from './liquid.js';
+import {Ticker, motionMode} from './liquidClock.js';
 
-// Motion constants (12 px strip, 410 ms hide, 500 ms return, cubic-bezier(0.20, 0, 0.20, 1))
-// live in motion.js with their sources. POSITION_EPSILON only decides "already there".
+// The 12 px strip lives in motion.js; the motion is a liquid.js spring (see animateTo). POSITION_EPSILON only decides
+// "already there".
 const POSITION_EPSILON = 0.0002;
 
 function rect(value) {
@@ -24,7 +26,8 @@ export class DesktopScene {
         this._generation = 0;
         this._animation = null;
         this._position = 0;
-        this._elapsed = 0;
+        this._spring = null;            // the windows' position (0 home .. 1 parked at the edges), liquid.js
+        this._veil = null;              // reduced motion: their opacity (a Fade)
         this._entries = new Map();
         this._rootSignals = [];
         this._onRestore = onRestore;
@@ -122,10 +125,22 @@ export class DesktopScene {
 
     _render() {
         const progress = this._position;
+        const op = this._veil ? Math.round(255 * this._veil.x) : 255;
         for (const entry of this._entries.values()) {
-            for (const {actor, startX, startY} of entry.copies)
+            for (const {actor, startX, startY} of entry.copies) {
                 actor.set_position(startX + entry.dx * progress, startY + entry.dy * progress);
+                if (actor.opacity !== op)
+                    actor.opacity = op;
+            }
         }
+    }
+
+    // the longest travel of any window (px): the position spring rests under a quarter of a pixel of it
+    _span() {
+        let most = 1;
+        for (const entry of this._entries.values())
+            most = Math.max(most, Math.abs(entry.dx), Math.abs(entry.dy));
+        return most;
     }
 
     _setReactive(reactive) {
@@ -140,9 +155,7 @@ export class DesktopScene {
         this._animation = null;
         if (!animation)
             return;
-        for (const id of animation.signals)
-            animation.timeline.disconnect(id);
-        animation.timeline.stop();
+        animation.ticker.stop();
     }
 
     _complete(generation) {
@@ -151,41 +164,73 @@ export class DesktopScene {
             return;
         this._stopTimeline();
         this._position = animation.target;
+        this._spring?.snap(animation.target);
+        if (this._veil)
+            this._veil.snap(1);
         this._render();
+        this._veil = null;
         this._setReactive(animation.target === 1);
         animation.callback?.();
     }
 
-    animateTo(target, callback, reducedMotion = false) {
+    // instant: no motion at all (animations off, a forced re-park); reduced motion is read here and cross-fades
+    animateTo(target, callback, instant = false) {
         if (this._destroyed)
             throw new Error('Desktop window scene has been destroyed');
         if (target !== 0 && target !== 1)
             throw new Error('Desktop scene target must be 0 or 1');
-        // The displayed position is the last rendered one, so a reversal never jumps.
-        // It resumes the target's own curve at the matching progress (motion.js).
+        // The displayed position is the last rendered one, and the spring keeps its speed, so a reversal never jumps.
         ++this._generation;
         this._stopTimeline();
         this._setReactive(false);
-        const seg = segment(this._position, target);
-        const timeline = new Clutter.Timeline({actor: this._root, duration: seg.duration});
-        const animation = {timeline, signals: [], generation: this._generation, seg, target, callback};
+        const mode = motionMode();
+        const reduced = mode === 'reduced';
+        const animation = {ticker: null, generation: this._generation, target, callback};
         this._animation = animation;
-        if (reducedMotion || !this._root.visible || !this._root.is_mapped() ||
+        if (instant || mode === 'off' || !this._root.visible || !this._root.is_mapped() ||
             Math.abs(this._position - target) < POSITION_EPSILON) {
             this._complete(animation.generation);
             return;
         }
-        // Frame-clock time, not wall time: the windows land where the frame is shown,
-        // and the duration is the reference's absolute one (no slow-down factor).
-        animation.signals.push(timeline.connect('new-frame', (_timeline, elapsed) => {
+        const s = this._spring ??= new Spring(this._position, role('glide'), epsFor(this._span()));
+        s.eps = epsFor(this._span());
+        if (Math.abs(s.x - this._position) > 1e-6)
+            s.snap(this._position);
+        if (reduced) {
+            // no travel: they fade out where they are, are moved, and fade in there (the 160 ms spring each way)
+            s.snap(this._position);
+            this._veil ??= new Fade(1, REDUCED, EPS_OPACITY);
+            this._veil.set(0, REDUCED);
+        } else {
+            this._veil = null;
+            s.set(target, target === 1 ? role('glide', {exit: true}) : role('glide'));
+        }
+        animation.ticker = new Ticker(dt => {
             if (this._destroyed || this._animation !== animation)
-                return;
-            this._elapsed = elapsed;
-            this._position = positionAt(seg, target, elapsed);
+                return false;
+            if (reduced) {
+                const v = this._veil.step(dt);
+                if (v === 0 && this._position !== target) {
+                    this._position = target;
+                    s.snap(target);
+                    this._veil.set(1, REDUCED);
+                }
+                this._render();
+                if (this._position === target && this._veil.rest && this._veil.x === 1) {
+                    this._complete(animation.generation);
+                    return false;
+                }
+                return true;
+            }
+            this._position = s.step(dt);
             this._render();
-        }));
-        animation.signals.push(timeline.connect('completed', () => this._complete(animation.generation)));
-        timeline.start();
+            if (s.rest) {
+                this._complete(animation.generation);
+                return false;
+            }
+            return true;
+        }, {actor: this._root});
+        animation.ticker.start();
     }
 
     remove(win) {

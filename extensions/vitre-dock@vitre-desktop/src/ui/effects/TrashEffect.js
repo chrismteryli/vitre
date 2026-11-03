@@ -18,8 +18,8 @@
 
 
 import St from 'gi://St';
-import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const PUFF_COUNT = 9;
@@ -41,7 +41,7 @@ function track(actor) {
 }
 
 function easeAndDispose(actor, params) {
-    actor.ease({
+    liquidEase(actor, {
         ...params,
         onStopped: () => {
             const idx = _activeActors.indexOf(actor);
@@ -75,7 +75,6 @@ function spawnPuff(x, y, iconSize, index) {
         scale_y: 1.6,
         opacity: 0,
         duration,
-        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
     });
 }
 
@@ -92,7 +91,6 @@ export function playTrashEffect(app, x, y, iconSize) {
             scale_y: ICON_POP_SCALE,
             opacity: 0,
             duration: ICON_POP_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
     }
 

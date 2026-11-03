@@ -19,3 +19,9 @@
     border-radius: 5px;
     background-color: rgba(255, 255, 255, 0.08);
 }
+/* Polish 2026-11-01: the band's cell (every parked window gets the same one; the picture is fitted and centred in it). Clear
+   glass on the plate (tokens G1: tint 0.10, hairline 0.16, highlight 0.22); the radius (r-s 8) is set from the extension. */
+.stage-band-cell {
+    background-color: rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}

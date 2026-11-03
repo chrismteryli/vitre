@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.vitre-appearance" path="/org/gnome/shell/extensions/vitre-appearance/">
+    <key name="mode" type="s">
+      <choices>
+        <choice value="manual"/>
+        <choice value="sunset"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'manual'</default>
+      <summary>When the style changes</summary>
+      <description>manual: only by hand. sunset: dark from sunset to sunrise. custom: at light-time and dark-time.</description>
+    </key>
+    <key name="light-time" type="i">
+      <range min="0" max="1439"/>
+      <default>420</default>
+      <summary>Light from (minutes after midnight)</summary>
+      <description>With mode custom, the style turns light at this time. Also used by sunset when no location is known.</description>
+    </key>
+    <key name="dark-time" type="i">
+      <range min="0" max="1439"/>
+      <default>1140</default>
+      <summary>Dark from (minutes after midnight)</summary>
+      <description>With mode custom, the style turns dark at this time. Also used by sunset when no location is known.</description>
+    </key>
+    <key name="pair-wallpaper" type="b">
+      <default>true</default>
+      <summary>The wallpaper follows the style</summary>
+      <description>On: a wallpaper that comes in a light and a dark picture (name-light.png, name-dark.png) shows the one that matches the style. Off: the picture stays the same in both styles.</description>
+    </key>
+    <key name="follow-legacy-theme" type="b">
+      <default>true</default>
+      <summary>GTK 3 apps follow the accent and the style</summary>
+      <description>GTK 3 apps cannot read the accent colour or the style, so the GTK theme name carries them (Vitre-Glass, Vitre-Glass-Green-Light and so on). Only changed while a Vitre-Glass theme is in use.</description>
+    </key>
+    <key name="hold-until" type="x">
+      <default>0</default>
+      <summary>Manual style held until (internal)</summary>
+      <description>Seconds since 1970. When the style is changed by hand, the schedule leaves it alone until its next switch. 0 = no hold.</description>
+    </key>
+    <key name="last-coordinates" type="(dd)">
+      <default>(91.0, 181.0)</default>
+      <summary>Last location from Location Services (internal)</summary>
+      <description>Latitude and longitude rounded to two decimals, used only while Location Services is on. (91, 181) = none.</description>
+    </key>
+    <key name="status" type="(sxxb)">
+      <default>('', 0, 0, false)</default>
+      <summary>What the schedule did (internal, read by Vitre Settings)</summary>
+      <description>(source, last switch, next switch, next is dark): source is location, timezone, none, custom or manual; times in seconds since 1970, 0 = none.</description>
+    </key>
+  </schema>
+</schemalist>

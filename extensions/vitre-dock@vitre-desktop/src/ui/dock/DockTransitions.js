@@ -18,12 +18,12 @@
 
 
 import GLib from 'gi://GLib';
-import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { Settings } from '../../core/SettingsManager.js';
 import { isActorAlive, markActorDisposed } from '../../core/Utils.js';
 import { isPointerWithinDockBounds } from '../magnifier/MagnifierMath.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const MOVE_MS = 300;
@@ -125,14 +125,13 @@ function spawnExitGhost(dockUI, actor, rect) {
     const ghosts = ghostSet(dockUI);
     ghosts.add(actor);
 
-    actor.ease({
+    liquidEase(actor, {
         opacity: 0,
         scale_x: scale * EXIT_END_SCALE,
         scale_y: scale * EXIT_END_SCALE,
         translation_x: edgeX * EDGE_DRIFT_PX,
         translation_y: edgeY * EDGE_DRIFT_PX,
         duration: EXIT_MS,
-        mode: Clutter.AnimationMode.EASE_IN_QUAD,
         onStopped: () => {
             ghosts.delete(actor);
             actor.destroy();
@@ -183,11 +182,10 @@ function playSlide(actor, oldRect, dockScale) {
     actor.remove_transition('translation-y');
     actor.translation_x += dx;
     actor.translation_y += dy;
-    actor.ease({
+    liquidEase(actor, {
         translation_x: 0,
         translation_y: 0,
         duration: MOVE_MS,
-        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
     });
     return true;
 }
@@ -202,18 +200,16 @@ function playEnter(actor, dockPos) {
     actor.translation_x = edgeX * EDGE_DRIFT_PX;
     actor.translation_y = edgeY * EDGE_DRIFT_PX;
 
-    actor.ease({
+    liquidEase(actor, {
         opacity: 255,
         duration: ENTER_FADE_MS,
-        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
     });
-    actor.ease({
+    liquidEase(actor, {
         scale_x: 1.0,
         scale_y: 1.0,
         translation_x: 0,
         translation_y: 0,
         duration: ENTER_MS,
-        mode: Clutter.AnimationMode.EASE_OUT_BACK,
     });
 }
 
@@ -227,12 +223,11 @@ function playIndicatorPop(actor) {
     indicator.set_pivot_point(0.5, 0.5);
     indicator.opacity = 0;
     indicator.set_scale(0.2 * targetX, 0.2 * targetY);
-    indicator.ease({ opacity: 255, duration: INDICATOR_POP_MS / 2, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
-    indicator.ease({
+    liquidEase(indicator, { opacity: 255, duration: INDICATOR_POP_MS / 2 });
+    liquidEase(indicator, {
         scale_x: targetX,
         scale_y: targetY,
         duration: INDICATOR_POP_MS,
-        mode: Clutter.AnimationMode.EASE_OUT_BACK,
     });
 }
 
@@ -257,7 +252,7 @@ function playBackgroundResize(dockUI, oldRect, dockScale) {
     bg.remove_all_transitions();
     bg.set_position(from.x, from.y);
     bg.set_size(from.width, from.height);
-    bg.ease({ ...to, duration: BG_RESIZE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC });
+    liquidEase(bg, { ...to, duration: BG_RESIZE_MS });
     return true;
 }
 
@@ -282,21 +277,18 @@ function playPendingAttention(dockUI) {
 
 function playSquashStretch(actor) {
     const step = ATTENTION_MS / 4;
-    actor.ease({
+    liquidEase(actor, {
         scale_x: 1.14,
         scale_y: 0.84,
         duration: step,
-        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        onComplete: () => actor.ease({
+        onComplete: () => liquidEase(actor, {
             scale_x: 0.92,
             scale_y: 1.12,
             duration: step,
-            mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
-            onComplete: () => actor.ease({
+            onComplete: () => liquidEase(actor, {
                 scale_x: 1.0,
                 scale_y: 1.0,
                 duration: step * 2,
-                mode: Clutter.AnimationMode.EASE_OUT_BACK,
             }),
         }),
     });

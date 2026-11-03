@@ -1,0 +1,206 @@
+# Maintainer: Vitre <noreply@github.com>
+#
+# Vitre 0.2.0 for Arch (AUR). Written 2026-10-22; NOT built on Arch yet (see README.md, "Not tested").
+#
+# Split package, one build: ten packages, the same split as the .debs and the RPMs in ../fedora. The reason: the boot
+# splash (vitre-system) changes the machine for every user, so it has to stay its own optional package, and a split lets people install
+# only the session, or the extensions, without a second build.
+#
+#   vitre-desktop         meta package: everything below except vitre-system (optional)
+#   vitre-session         the "Vitre" entry at the login screen: shell session mode, Wayland session, gnome-session definition,
+#                         dconf defaults that only that session reads, per-user GTK step
+#   vitre-shell           the vitre-* GNOME Shell extensions
+#   vitre-shell-extras    Vitre Dock and the third-party extensions Vitre uses
+#   vitre-theme           Vitre-Glass (GTK 3, GTK 4, window frame, shell) and the GTK stylesheets of the per-user step
+#   vitre-icons           the Vitre icon theme
+#   vitre-icons-base      VitreBase: MacTahoe-icon-theme without its app icons, built from the pinned ref (nothing is fetched at install)
+#   vitre-cursor          the Vitre cursor set
+#   vitre-backgrounds     the wallpapers
+#   vitre-system          optional: the Vitre boot splash (the login screen theme is not possible here, see README.md)
+#
+# All files are laid out by vitre-stage.sh, which the Fedora spec runs as well.
+#
+# GNOME Shell on Arch has an epoch (1:51.1-1), so the version ranges below carry it: a plain 'gnome-shell<52' would never match.
+
+pkgbase=vitre
+pkgname=(
+  vitre-desktop
+  vitre-session
+  vitre-shell
+  vitre-shell-extras
+  vitre-theme
+  vitre-icons
+  vitre-icons-base
+  vitre-cursor
+  vitre-backgrounds
+  vitre-system
+)
+pkgver=0.2.0
+pkgrel=1
+# the base icon theme, at the exact ref that install.sh pins (tag 2026-09-10)
+_mactahoe=839848b9a8a38a92a6936e30c4abe35cc6f2546d
+arch=(any)
+url='https://github.com/chrismteryli/vitre'
+license=(GPL-3.0-only)   # each package below sets its own, narrower list
+makedepends=(
+  python
+  glib2   # glib-compile-schemas
+)
+options=(!strip !debug)
+source=("$pkgbase-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
+        "MacTahoe-icon-theme-$_mactahoe.tar.gz::https://github.com/vinceliuice/MacTahoe-icon-theme/archive/$_mactahoe.tar.gz"
+        # session files, copied from the .debs' sources by packaging/sync-common.sh (keep them identical across fedora/ and arch/)
+        vitre-stage.sh
+        make-mode.py
+        make-defaults.py
+        sanitize-staged.py
+        session-extensions.txt
+        vitre-mode.json.in
+        vitre-session
+        vitre.session
+        vitre.desktop
+        vitre.session.conf
+        vitre-user-setup
+        vitre-user-setup.service
+        dconf-profile-vitre
+        vitre-backgrounds.xml
+        README.vitre-session
+        10-ubuntu-parity
+        make-parity.py)
+# The first two are the GitHub tag archive and the MacTahoe ref (filled in after v0.2.0 was published; `updpkgsums` from pacman-contrib
+# recomputes them). The others are local files; `python3 -I ../check-distro.py --fix-sums` rewrites those after sync-common.sh changed one.
+sha256sums=('3abaa2884c2befff45f544bc5b43d18c2352d6cc9a398e80302a7faf167be340'
+            '00cb36a3883e40687ade9f57a0c1dd3e14fda84b73efc69aa86e2be67f32ab0a'
+            'e42ed68c02106d1caab1b96a7f8496f3651db662edea32fb07bcf46558f3b56e'
+            '8a11a62f403e6a1778b35514605ad132d59d3d7992a9c4537bbff2378afc752e'
+            '7ad7f5dc2620b74de2dc50e4d7769665d2f3acf2daae07209d99a79a2692c87d'
+            'bb669694dbe4463b20ed8cf653d449dc14f440a6e631b8916569bc2b552be79c'
+            '1330f37a5d664c2680f6f9895869055d027af65409e257d87b31934825d99f20'
+            '6ae5c8355d70e7ffc525217a66d68fbef62886d488b1c527a5fc18a1d6291fec'
+            '31cfb2670089091048feead814f16ba38e8eb3a994d4e1b8673f6bb89be1d3f3'
+            '3d1db8a4643b039316ea3b20de237272c3b7c94a08ea1a7194aebbf0a628fb4a'
+            '232e06ccb90fc84fae0383c22e9cfe1b5d81f6b10a7b8f3b1247e16368ec208a'
+            '9a6bb6e0e53a15ff7d1bab9ec8fd375dc33a31f9119815230c6eb16cbb9257cc'
+            'd115913912d691b65865040bc2c001b71ed193116c2b115a72ad561be4b374f4'
+            '9aac88c11a53c2b28831becc4b9f2b621747362653f2c180e64b54fa91c602f8'
+            '66dc6099f13172a6c8869dc6b4015408da27cfc9658a915ec60d210cd74af366'
+            '0cbea7927cfa1e9b37f381938d90c91b957d211175cec900a28a71714e0dd842'
+            '1919c1f26f11a863a4948d20dc2e962ee32236422dd143c2b691a9ad3e96037c'
+            '429ecd95aa6e1cb7fd95fd75b6a51b15f6c6dd28178e82748cc7e9d610db7ef8'
+            '74ab48104da56e31d6a1ecacf0a8a435cfcf314cddedc8434a9e12d30c2d0f49')
+
+build() {
+  cd "$srcdir"
+  VITRE_SRC="$srcdir/$pkgbase-$pkgver" \
+  MACTAHOE_SRC="$srcdir/MacTahoe-icon-theme-$_mactahoe" \
+  VITRE_COMMON="$srcdir" \
+    bash "$srcdir/vitre-stage.sh" "$srcdir/stage"
+}
+
+# copy one staged package tree into $pkgdir (the ownership of the build user is not carried over)
+_stage() {
+  cp -a --no-preserve=ownership "$srcdir/stage/$1/." "$pkgdir/"
+}
+
+package_vitre-desktop() {
+  pkgdesc='Vitre glass desktop for GNOME (meta package)'
+  license=(GPL-3.0-only)
+  depends=("vitre-session=$pkgver-$pkgrel"
+           "vitre-shell=$pkgver-$pkgrel"
+           "vitre-shell-extras=$pkgver-$pkgrel"
+           "vitre-theme=$pkgver-$pkgrel"
+           "vitre-icons=$pkgver-$pkgrel"
+           "vitre-icons-base=$pkgver-$pkgrel"
+           "vitre-cursor=$pkgver-$pkgrel"
+           "vitre-backgrounds=$pkgver-$pkgrel"
+           'gnome-shell>=1:51'
+           'gnome-shell<1:52'
+           gnome-session
+           inter-font
+           ttf-jetbrains-mono)
+  optdepends=("vitre-system: Vitre boot splash (changes the splash for every user of the machine)")
+  _stage vitre-desktop
+}
+
+package_vitre-session() {
+  pkgdesc='Vitre session for GNOME Shell: a Vitre entry at the login screen'
+  license=(GPL-3.0-only)
+  depends=("vitre-theme=$pkgver-$pkgrel"
+           'gnome-shell>=1:51'
+           'gnome-shell<1:52'
+           gnome-session
+           dconf
+           gnome-shell-extensions)   # provides the user-theme extension
+  optdepends=("vitre-shell: the Vitre extensions the session names"
+              "vitre-shell-extras: Vitre Dock and the third-party extensions"
+              "vitre-icons: Vitre icon theme"
+              "vitre-cursor: Vitre cursor theme"
+              "vitre-backgrounds: Vitre wallpapers"
+              "vitre-desktop: all of the above in one go"
+              'gnome-shell-extension-appindicator: tray icons in the Vitre session')
+  install=vitre-session.install
+  backup=(etc/dconf/profile/vitre
+          etc/dconf/db/vitre.d/00-vitre
+          etc/dconf/db/vitre.d/10-gnome-parity)
+  _stage vitre-session
+}
+
+package_vitre-shell() {
+  pkgdesc='Vitre GNOME Shell extensions'
+  license=(GPL-3.0-only)
+  depends=('gnome-shell>=1:51'
+           'gnome-shell<1:52')
+  optdepends=('vitre-shell-extras: Vitre Dock and the third-party extensions')
+  _stage vitre-shell
+}
+
+package_vitre-shell-extras() {
+  pkgdesc='Vitre Dock and third-party GNOME Shell extensions used by Vitre'
+  license=(GPL-3.0-only GPL-3.0-or-later GPL-2.0-or-later MIT)
+  depends=('gnome-shell>=1:51'
+           'gnome-shell<1:52')
+  _stage vitre-shell-extras
+}
+
+package_vitre-theme() {
+  pkgdesc='Vitre glass theme (GTK 3, GTK 4, window frame and shell)'
+  license=(MIT GPL-3.0-only GPL-3.0-or-later LGPL-2.1-or-later)
+  optdepends=('gnome-shell: the shell part of the theme'
+              'inter-font: the font Vitre-Glass is drawn for')
+  _stage vitre-theme
+}
+
+package_vitre-icons() {
+  pkgdesc='Vitre icon theme'
+  license=(GPL-3.0-only)
+  depends=("vitre-icons-base=$pkgver-$pkgrel"
+           hicolor-icon-theme)
+  _stage vitre-icons
+}
+
+package_vitre-icons-base() {
+  pkgdesc='Vitre base icon theme (VitreBase): MacTahoe-icon-theme without its app icons'
+  license=(GPL-3.0-only)
+  _stage vitre-icons-base
+}
+
+package_vitre-cursor() {
+  pkgdesc='Vitre cursor theme'
+  license=(GPL-3.0-only)
+  optdepends=('adwaita-cursors: the cursors Vitre-Cursor does not draw')
+  _stage vitre-cursor
+}
+
+package_vitre-backgrounds() {
+  pkgdesc='Vitre wallpapers'
+  license=(GPL-3.0-only)
+  _stage vitre-backgrounds
+}
+
+package_vitre-system() {
+  pkgdesc='Vitre boot splash (optional; changes the splash for every user of the machine)'
+  license=(GPL-3.0-only)
+  depends=(plymouth)
+  install=vitre-system.install
+  _stage vitre-system
+}

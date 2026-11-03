@@ -19,7 +19,6 @@
 
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
-import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { Settings } from '../../core/SettingsManager.js';
@@ -31,6 +30,7 @@ import { VortexMinimize, VortexRestore } from './VortexEffect.js';
 import { OrigamiMinimize, OrigamiRestore } from './OrigamiEffect.js';
 import { isActorAlive, captureActorRect } from '../../core/Utils.js';
 import { MagicLampMinimize, MagicLampRestore } from './GenieEffect.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 const MIN_EFFECT_NAME = 'we-minimize-effect';
@@ -273,12 +273,11 @@ export function setupWindowEffects(settings, dockUI) {
 
                 const fadeDuration = Math.max(120, Math.round(_getEffectDuration() * 0.5));
                 actor.set_pivot_point(0.5, 0.5);
-                actor.ease({
+                liquidEase(actor, {
                     opacity: 0,
                     scale_x: 0.95,
                     scale_y: 0.95,
                     duration: fadeDuration,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     onComplete: () => {
                         _removeAnimatingActor(actor);
                         if (isActorAlive(actor)) {
@@ -375,12 +374,11 @@ export function setupWindowEffects(settings, dockUI) {
                 actor.set_pivot_point(0.5, 0.5);
                 actor.set_scale(0.95, 0.95);
 
-                actor.ease({
+                liquidEase(actor, {
                     opacity: 255,
                     scale_x: 1.0,
                     scale_y: 1.0,
                     duration: fadeDuration,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     onComplete: () => {
                         _removeAnimatingActor(actor);
                         if (isActorAlive(actor)) {

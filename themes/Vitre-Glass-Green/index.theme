@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=Vitre-Glass-Green
+Comment=Vitre Glass, green accent, dark style (GTK 3 and GTK 4 only; switched by Vitre Appearance). See ../Vitre-Glass/NOTICE.txt.
+Encoding=UTF-8
+
+[X-GNOME-Metatheme]
+GtkTheme=Vitre-Glass-Green
+MetacityTheme=Vitre-Glass
+IconTheme=Vitre-Icons
+CursorTheme=Vitre-Cursor
+ButtonLayout=close,minimize,maximize:menu

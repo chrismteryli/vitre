@@ -1,13 +1,12 @@
 /* Notification Center hover and click feedback (plan A13). Constants live in feedback.js.
- *  - CardFeedback    : every notification card: its hover buttons (close "x", expand) fade in over 120 ms when
- *                      the pointer is over the card; pressing the card scales it and brightens its glass.
- *  - installStackMotion: a notification stack expands and collapses on the Notification Center slide curve
- *                      (fast start, decelerating, no overshoot) instead of GNOME's 200 ms ease-out-quad.
+ *  - CardFeedback    : every notification card: its hover buttons (close "x", expand) fade in (fade role) when the
+ *                      pointer is over the card; pressing the card scales it and brightens its glass (bead role).
+ *  - installStackMotion: a notification stack expands on the pour spring and collapses on its exit spring (liquid.js),
+ *                      instead of GNOME's 200 ms ease-out-quad.
  * ESTIMATES: the reference's own text describes the behaviour; no motion constants were measured. */
 import {NotificationMessageGroup} from 'resource:///org/gnome/shell/ui/messageList.js';
 
 import {FB, Tween, PressResponse, bindPress, centrePivot, setScale, pressGrow} from './feedback.js';
-import {CURVE, curve} from './helpers.js';
 
 export class CardFeedback {
     // message: the notification card (St.Button); layer: its GlassLayer; holders: the faders around the
@@ -38,7 +37,7 @@ export class CardFeedback {
                 h.opacity = Math.round(255 * v);
         }, 0, 'xfade');
         message.connectObject('notify::hover', () => {
-            this._fade.to(message.hover ? 1 : 0, FB.xFadeMs, 'linear');
+            this._fade.to(message.hover ? 1 : 0, 'fade');
         }, this);
 
         centrePivot([message]);
@@ -95,7 +94,7 @@ function drive(group, target) {
         tweens.set(group, tween);
     }
     return new Promise(resolve => {
-        tween.to(target, FB.stackMs, p => curve(p * CURVE.DURATION), resolve);
+        tween.to(target, target > layout.expansion ? 'pour' : 'exit', resolve);
     });
 }
 

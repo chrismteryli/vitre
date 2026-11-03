@@ -1,0 +1,15 @@
+{
+  "uuid": "vitre-appearance@vitre-desktop",
+  "name": "Vitre Appearance",
+  "description": "Light and dark on a schedule: at sunset and sunrise (from GNOME's location when Location Services is on, else from the time zone) or at times you pick. The wallpaper follows with its light or dark picture. A style you set by hand is kept until the next scheduled switch. Also gives GTK 3 apps the accent colour and the style, which GTK 3 cannot read by itself.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 1,
+  "session-modes": [
+    "user",
+    "unlock-dialog"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.vitre-appearance",
+  "url": "https://github.com/chrismteryli/vitre"
+}

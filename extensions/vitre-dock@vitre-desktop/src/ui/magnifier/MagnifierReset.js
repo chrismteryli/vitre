@@ -18,13 +18,13 @@
 
 
 import GLib from 'gi://GLib';
-import Clutter from 'gi://Clutter';
 
 import { isActorAlive } from '../../core/Utils.js';
 import { getDockButtons } from './MagnifierMath.js';
 import { Settings } from '../../core/SettingsManager.js';
 import { TimeoutTracker } from '../../core/TimeoutTracker.js';
 import { clearTooltipDelay, hideTooltip } from './MagnifierTooltip.js';
+import {ease as liquidEase} from '../../liquid/liquidClock.js';     // liquid v3: every ease is a liquid.js spring (bead role; opacity: fade)
 
 
 export function resetMagnification(dockActor, duration = 200, lockEngine = false) {
@@ -77,7 +77,7 @@ export function resetMagnification(dockActor, duration = 200, lockEngine = false
         b._flipOffset = 0;
         b._flipStartTime = null;
 
-        b.ease({
+        liquidEase(b, {
             scale_x: 1.0,
             scale_y: 1.0,
             translation_x: 0,
@@ -85,8 +85,7 @@ export function resetMagnification(dockActor, duration = 200, lockEngine = false
             rotation_angle_z: 0,
             rotation_angle_y: 0,
             rotation_angle_x: 0,
-            duration,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            duration
         });
 
         const appBox = b.get_child ? b.get_child() : null;
@@ -102,33 +101,30 @@ export function resetMagnification(dockActor, duration = 200, lockEngine = false
                 c.rotation_angle_x = 0;
 
                 if (c._isIndicator) {
-                    c.ease({
+                    liquidEase(c, {
                         scale_x: c._baseScaleX !== undefined ? c._baseScaleX : 1.0,
                         scale_y: c._baseScaleY !== undefined ? c._baseScaleY : 1.0,
                         translation_x: c._baseTx || 0,
                         translation_y: c._baseTy || 0,
-                        duration,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                        duration
                     });
                 } else if (c._isHoverBg) {
                     const targetSx = c._baseScaleX ? c._baseScaleX : 1.0;
                     const targetSy = c._baseScaleY ? c._baseScaleY : 1.0;
-                    c.ease({
+                    liquidEase(c, {
                         scale_x: targetSx,
                         scale_y: targetSy,
                         translation_x: 0,
                         translation_y: 0,
-                        duration,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                        duration
                     });
                 } else {
-                    c.ease({
+                    liquidEase(c, {
                         scale_x: 1.0,
                         scale_y: 1.0,
                         translation_x: c._baseTx ? c._baseTx : 0,
                         translation_y: c._baseTy ? c._baseTy : 0,
-                        duration,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                        duration
                     });
                 }
             }
@@ -157,13 +153,12 @@ export function resetMagnification(dockActor, duration = 200, lockEngine = false
                 dockActor._dockUI._dockBlur.syncGeometry();
             }
         } else {
-            dockActor.bgActor.ease({
+            liquidEase(dockActor.bgActor, {
                 x: baseX,
                 y: baseY,
                 width: baseW,
                 height: baseH,
                 duration,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 onUpdate: () => {
                     if (dockActor._dockUI && dockActor._dockUI._dockBlur) {
                         dockActor._dockUI._dockBlur.syncGeometry();

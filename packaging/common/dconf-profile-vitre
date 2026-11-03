@@ -1,0 +1,8 @@
+# dconf profile of the Vitre session (/usr/bin/vitre-session sets DCONF_PROFILE=vitre).
+# Order is precedence, first wins: the user's own settings, then the machine-wide databases an administrator maintains (local, site:
+# the same two the standard "user" profile reads; dconf ignores a database that does not exist), then the Vitre defaults. So an
+# administrator's choice beats a Vitre default, and Vitre defaults beat the GSettings schema defaults and Ubuntu's overrides.
+user-db:user
+system-db:local
+system-db:site
+system-db:vitre

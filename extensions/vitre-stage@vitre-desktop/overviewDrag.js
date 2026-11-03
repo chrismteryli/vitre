@@ -9,18 +9,16 @@
 // Both need the swipe-depth hook (the strip stays painted in the overview, manager._railStays, and manager._gridSync puts the
 // grid right after a change). Without it the overview behaves as before and nothing here does anything.
 
-import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {ease as liquidEase, stopAnimate} from './liquidClock.js';
 
 const ZONE_PAD = 10;            // the drop zone reaches this far past the strip's column
 const HOVER_WIDTH = 190;        // a window carried over the strip shrinks to about this wide (thumbnails are 134)
-const HOVER_MS = 170;
-const GLOW_MS = 200;
 const REVEAL_CLICK = 1.03;      // a window that lands in the grid presses 3 % and comes back
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -180,6 +178,11 @@ export class OverviewDrag {
 
     _zoneRect() {
         const m = this._m;
+        if (m._band) {
+            // the strip at the bottom: the band, and a little above it
+            const S = m._stripRect();
+            return {x: S.x, y: S.y - ZONE_PAD, width: S.width, height: S.height + ZONE_PAD};
+        }
         const area = m._workArea();
         return {x: area.x, y: area.y, width: m._look.stripWidth + ZONE_PAD, height: area.height};
     }
@@ -234,7 +237,7 @@ export class OverviewDrag {
         const glow = this._glow;
         if (glow?.visible) {
             glow.remove_all_transitions();
-            glow.ease({opacity: 0, duration: GLOW_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD, onStopped: () => {
+            liquidEase(glow, {opacity: 0, onStopped: () => {
                 if (!glow.is_finalized?.() && !this._drag)
                     glow.hide();
             }});
@@ -246,8 +249,9 @@ export class OverviewDrag {
         if (on === this._hover)
             return;
         this._hover = on;
-        const ms = HOVER_MS, mode = Clutter.AnimationMode.EASE_OUT_QUAD;
-        this._glow?.ease({opacity: on ? 255 : 0, duration: GLOW_MS, mode});
+        // liquid v3: the glow on the fade role, the carried window on the bead spring
+        if (this._glow)
+            liquidEase(this._glow, {opacity: on ? 255 : 0});
         const live = actor && !actor.is_finalized?.() && actor.get_parent();
         if (on && live) {
             const [pw] = (actor.get_transformed_size());
@@ -258,19 +262,18 @@ export class OverviewDrag {
             this._hoverBase = {actor, sx: actor.scale_x, sy: actor.scale_y, opacity: actor.opacity};
             actor.remove_transition('scale-x');
             actor.remove_transition('scale-y');
-            actor.ease({
+            liquidEase(actor, {
                 scale_x: actor.scale_x * k, scale_y: actor.scale_y * k,
                 translation_x: (1 - k) * (px - actor.x), translation_y: (1 - k) * (py - actor.y),
-                opacity: Math.max(actor.opacity, 190), duration: HOVER_MS, mode,
+                opacity: Math.max(actor.opacity, 190),
             });
         } else if (!on && this._hoverBase) {
             const base = this._hoverBase;
             this._hoverBase = null;
             const a = base.actor;
             if (a && !a.is_finalized?.() && a.get_parent()) {
-                a.ease({
+                liquidEase(a, {
                     scale_x: base.sx, scale_y: base.sy, translation_x: 0, translation_y: 0, opacity: base.opacity,
-                    duration: HOVER_MS, mode,
                 });
             }
         }
@@ -282,6 +285,7 @@ export class OverviewDrag {
         this._hover = false;
         const a = base?.actor;
         if (a && !a.is_finalized?.()) {
+            stopAnimate(a);
             a.remove_all_transitions();
             a.translation_x = 0;
             a.translation_y = 0;

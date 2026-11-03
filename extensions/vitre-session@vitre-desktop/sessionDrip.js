@@ -1,7 +1,7 @@
 /* Shared plumbing for the two Vitre session surfaces (lock screen intro, end-session drip): a frame clock and a
  * "glass sheet" (the A17 glass field placed in an arbitrary parent). Adapted from vitre-menus@vitre-desktop
- * liquidDrip.js (DripController: wall-clock timeline, manual clock for the rig, parked field); dripField.js, glass.js
- * and dripMotion.js next to this file are byte-identical copies of the liquid-menus v1 files.
+ * liquidDrip.js (DripController: wall-clock timeline, manual clock for the rig, parked field); dripField.js and glass.js
+ * next to this file are copies of the liquid-menus v1 files. The motion itself is vitreMotion.js on liquid.js springs.
  *
  * Nothing here is allowed to take a surface down: every callback the owner passes in is wrapped by the caller, and
  * destroy() is safe to call twice or on a half-built object.

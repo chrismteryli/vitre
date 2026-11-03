@@ -1,0 +1,13 @@
+{
+  "uuid": "vitre-tray@vitre-desktop",
+  "name": "Vitre Tray",
+  "description": "Keeps a tray item that is gone before its icon loads (an app's second launch that loses the single-instance lock and quits, for example Claude's) from flashing a loading glyph in the top bar and from logging warnings. A new tray button stays hidden until its icon has loaded, or for at most 1.5 s. Works on top of Ubuntu AppIndicators; disabling puts everything back.",
+  "shell-version": [
+    "51"
+  ],
+  "version": 1,
+  "session-modes": [
+    "user"
+  ],
+  "url": "https://github.com/chrismteryli/vitre"
+}
